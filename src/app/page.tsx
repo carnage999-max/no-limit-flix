@@ -1,20 +1,28 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile } from '@/components';
+import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton } from '@/components';
 import type { MoviePick } from '@/types';
 
 const MOOD_OPTIONS = [
-  'Thrilling',
-  'Heartwarming',
-  'Mind-bending',
-  'Funny',
-  'Dark',
-  'Uplifting',
-  'Intense',
-  'Relaxing',
-  'Romantic',
-  'Epic',
+  { label: 'Thrilling', emoji: '🚀' },
+  { label: 'Heartwarming', emoji: '❤️' },
+  { label: 'Mind-bending', emoji: '🌀' },
+  { label: 'Funny', emoji: '😂' },
+  { label: 'Dark', emoji: '🌑' },
+  { label: 'Uplifting', emoji: '✨' },
+  { label: 'Intense', emoji: '🔥' },
+  { label: 'Relaxing', emoji: '🌿' },
+  { label: 'Romantic', emoji: '💖' },
+  { label: 'Epic', emoji: '⚔️' },
+  { label: 'Magical', emoji: '✨' },
+  { label: 'Gritty', emoji: '🚬' },
+  { label: 'Futuristic', emoji: '🤖' },
+  { label: 'Nostalgic', emoji: '🎞️' },
+  { label: 'Artistic', emoji: '🎨' },
+  { label: 'Spooky', emoji: '👻' },
+  { label: 'Mysterious', emoji: '🕵️' },
+  { label: 'Action-packed', emoji: '🎦' },
 ];
 
 const FEEDBACK_OPTIONS = [
@@ -27,15 +35,14 @@ const FEEDBACK_OPTIONS = [
 
 export default function HomePage() {
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
-  const [freeText, setFreeText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[] } | null>(null);
+  const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  const handleMoodToggle = (mood: string, selected: boolean) => {
+  const handleMoodToggle = (moodLabel: string, selected: boolean) => {
     setSelectedMoods(prev =>
-      selected ? [...prev, mood] : prev.filter(m => m !== mood)
+      selected ? [...prev, moodLabel] : prev.filter(m => m !== moodLabel)
     );
   };
 
@@ -48,13 +55,12 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           moods: selectedMoods,
-          freeText,
           constraints: {},
         }),
       });
 
       const data = await response.json();
-      setResults({ hero: data.hero, alternates: data.alternates });
+      setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
       setSessionId(data.sessionId);
 
       // Auto-scroll to results
@@ -70,7 +76,6 @@ export default function HomePage() {
 
   const handleSurprise = async () => {
     setSelectedMoods([]);
-    setFreeText('');
     await handlePickForMe();
   };
 
@@ -90,7 +95,7 @@ export default function HomePage() {
       });
 
       const data = await response.json();
-      setResults({ hero: data.hero, alternates: data.alternates });
+      setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
     } catch (error) {
       console.error('Error re-picking:', error);
     } finally {
@@ -186,7 +191,7 @@ export default function HomePage() {
               lineHeight: '1.6',
             }}
           >
-            Tell us your mood, we'll find the perfect match
+            Select your moods, we'll find the perfect match
           </p>
 
           {/* Mood Chips */}
@@ -196,70 +201,72 @@ export default function HomePage() {
               flexWrap: 'wrap',
               gap: '0.75rem',
               justifyContent: 'center',
-              marginBottom: '2rem',
+              marginBottom: '3rem',
+              maxWidth: '800px',
+              margin: '0 auto 3rem'
             }}
           >
             {MOOD_OPTIONS.map((mood) => (
               <MoodChip
-                key={mood}
-                label={mood}
-                onToggle={(selected) => handleMoodToggle(mood, selected)}
+                key={mood.label}
+                label={mood.label}
+                emoji={mood.emoji}
+                onToggle={(selected) => handleMoodToggle(mood.label, selected)}
               />
             ))}
           </div>
 
-          {/* Optional Text Input */}
-          <div style={{ marginBottom: '2rem' }}>
-            <input
-              type="text"
-              placeholder="Or describe what you're looking for... (optional)"
-              value={freeText}
-              onChange={(e) => setFreeText(e.target.value)}
-              className="animate-scale-in"
-              style={{
-                width: '100%',
-                maxWidth: '600px',
-                padding: '1rem 1.5rem',
-                fontSize: '1rem',
-                background: 'rgba(167, 171, 180, 0.05)',
-                border: '2px solid rgba(167, 171, 180, 0.2)',
-                borderRadius: '9999px',
-                color: '#F3F4F6',
-                outline: 'none',
-                transition: 'all 0.3s',
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#D4AF37';
-                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.08)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
-                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-              }}
-            />
-          </div>
-
-          {/* CTAs */}
+          {/* Primary CTA */}
           <div
             style={{
               display: 'flex',
-              gap: '1rem',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '1.5rem',
+              marginTop: '1rem'
             }}
           >
-            <ButtonPrimary onClick={handlePickForMe} disabled={isLoading}>
-              {isLoading ? 'Finding your match...' : 'Pick for me'}
-            </ButtonPrimary>
-            <ButtonSecondary onClick={handleSurprise} disabled={isLoading}>
-              Surprise me
-            </ButtonSecondary>
+            {selectedMoods.length > 0 ? (
+              <ButtonPrimary
+                onClick={handlePickForMe}
+                disabled={isLoading}
+                className="animate-slide-up"
+                style={{
+                  padding: '1.25rem 4rem',
+                  fontSize: '1.125rem',
+                  transform: 'scale(1.1)',
+                  boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)'
+                }}
+              >
+                {isLoading ? 'Finding magic...' : `Find ${selectedMoods.length > 0 ? selectedMoods[0] : ''} Films`}
+              </ButtonPrimary>
+            ) : (
+              <ButtonSecondary onClick={handleSurprise} disabled={isLoading}>
+                Surprise me
+              </ButtonSecondary>
+            )}
+
+            {selectedMoods.length > 0 && (
+              <button
+                onClick={handleSurprise}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#A7ABB4',
+                  fontSize: '0.875rem',
+                  textDecoration: 'underline',
+                  cursor: 'pointer'
+                }}
+              >
+                Actually, just surprise me
+              </button>
+            )}
           </div>
 
           {/* Microcopy */}
           <p
             style={{
-              marginTop: '3rem',
+              marginTop: '4rem',
               fontSize: '0.875rem',
               color: '#A7ABB4',
               fontStyle: 'italic',
@@ -271,10 +278,9 @@ export default function HomePage() {
       </section>
 
       {/* Results Section */}
-      {results && (
+      {(results || isLoading) && (
         <section
           ref={resultsRef}
-          className="snap-section"
           style={{
             minHeight: '100vh',
             padding: '4rem 2rem',
@@ -286,125 +292,146 @@ export default function HomePage() {
               margin: '0 auto',
             }}
           >
-            {/* Hero Pick */}
-            <div
-              className="animate-slide-up"
-              style={{ marginBottom: '3rem' }}
-            >
+            {/* Header / Tags */}
+            <div style={{ marginBottom: '3rem' }}>
               <h2
                 style={{
                   fontSize: 'clamp(1.75rem, 5vw, 2.5rem)',
                   fontWeight: '600',
                   color: '#F3F4F6',
+                  marginBottom: '1rem',
+                }}
+              >
+                {isLoading ? 'Finding your perfect match...' : 'Your Matching Films'}
+              </h2>
+
+              {!isLoading && results?.explanationTokens && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {results.explanationTokens.map(tag => (
+                    <span key={tag} style={{
+                      padding: '0.4rem 1rem',
+                      borderRadius: '9999px',
+                      background: 'rgba(212, 175, 55, 0.1)',
+                      border: '1px solid rgba(212, 175, 55, 0.3)',
+                      color: '#D4AF37',
+                      fontSize: '0.875rem',
+                      fontWeight: '500'
+                    }}>
+                      # {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Hero Pick */}
+            <div
+              className="animate-slide-up"
+              style={{ marginBottom: '3rem' }}
+            >
+              <h3
+                style={{
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  color: '#A7ABB4',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
                   marginBottom: '1.5rem',
                 }}
               >
-                Your Perfect Match
-              </h2>
-              <HeroCard movie={results.hero} />
+                The Highlight
+              </h3>
+              {isLoading ? <HeroSkeleton /> : results?.hero && <HeroCard movie={results.hero} />}
             </div>
 
             {/* Alternate Picks */}
-            {results.alternates.length > 0 && (
-              <div className="animate-slide-up" style={{ marginBottom: '3rem' }}>
-                <h3
+            <div className="animate-slide-up" style={{ marginBottom: '3rem' }}>
+              <h3
+                style={{
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  color: '#A7ABB4',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: '1.5rem',
+                }}
+              >
+                Other Recommendations
+              </h3>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: '1.5rem',
+                }}
+              >
+                {isLoading ? (
+                  Array(4).fill(0).map((_, i) => <TileSkeleton key={i} />)
+                ) : (
+                  results?.alternates?.map((movie) => (
+                    <TitleTile key={movie.id} movie={movie} />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {!isLoading && results && (
+              /* Feedback Chips - Re-pick */
+              <div className="animate-fade-in">
+                <p
                   style={{
-                    fontSize: 'clamp(1.5rem, 4vw, 2rem)',
-                    fontWeight: '600',
-                    color: '#F3F4F6',
-                    marginBottom: '1.5rem',
+                    fontSize: '1rem',
+                    color: '#A7ABB4',
+                    marginBottom: '1rem',
+                    textAlign: 'center',
                   }}
                 >
-                  Or Try These
-                </h3>
+                  Not quite right? Let us know what to adjust:
+                </p>
                 <div
                   style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-                    gap: '1.5rem',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '0.75rem',
+                    justifyContent: 'center',
                   }}
                 >
-                  {results.alternates.map((movie) => (
-                    <TitleTile key={movie.id} movie={movie} />
+                  {FEEDBACK_OPTIONS.map((feedback) => (
+                    <button
+                      key={feedback}
+                      onClick={() => handleRepick(feedback)}
+                      disabled={isLoading}
+                      style={{
+                        padding: '0.625rem 1.5rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.9375rem',
+                        fontWeight: '500',
+                        border: '2px solid #A7ABB4',
+                        background: 'transparent',
+                        color: '#A7ABB4',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        transform: 'scale(1)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#F3F4F6';
+                        e.currentTarget.style.color = '#F3F4F6';
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = '#A7ABB4';
+                        e.currentTarget.style.color = '#A7ABB4';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                    >
+                      {feedback}
+                    </button>
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Feedback Chips - Re-pick */}
-            <div className="animate-fade-in">
-              <p
-                style={{
-                  fontSize: '1rem',
-                  color: '#A7ABB4',
-                  marginBottom: '1rem',
-                  textAlign: 'center',
-                }}
-              >
-                Not quite right?
-              </p>
-              <div
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '0.75rem',
-                  justifyContent: 'center',
-                }}
-              >
-                {FEEDBACK_OPTIONS.map((feedback) => (
-                  <button
-                    key={feedback}
-                    onClick={() => handleRepick(feedback)}
-                    disabled={isLoading}
-                    style={{
-                      padding: '0.625rem 1.5rem',
-                      borderRadius: '9999px',
-                      fontSize: '0.9375rem',
-                      fontWeight: '500',
-                      border: '2px solid #A7ABB4',
-                      background: 'transparent',
-                      color: '#A7ABB4',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#F3F4F6';
-                      e.currentTarget.style.color = '#F3F4F6';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#A7ABB4';
-                      e.currentTarget.style.color = '#A7ABB4';
-                    }}
-                  >
-                    {feedback}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
         </section>
-      )}
-
-      {/* Loading State */}
-      {isLoading && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(11, 11, 13, 0.9)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-          }}
-        >
-          <div className="loading-shimmer" style={{
-            width: '200px',
-            height: '4px',
-            borderRadius: '2px',
-          }} />
-        </div>
       )}
     </div>
   );

@@ -7,7 +7,7 @@ export interface Movie {
     runtime: number;
     poster: string;
     backdrop?: string;
-    permanenceBadge: 'Permanent Core' | 'Long-Term' | 'Licensed';
+    genres: string[];
 }
 
 export interface MoviePick extends Movie {

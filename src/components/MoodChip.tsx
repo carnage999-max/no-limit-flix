@@ -4,11 +4,12 @@ import { useState } from 'react';
 
 interface MoodChipProps {
     label: string;
+    emoji?: string;
     selected?: boolean;
     onToggle?: (selected: boolean) => void;
 }
 
-export default function MoodChip({ label, selected = false, onToggle }: MoodChipProps) {
+export default function MoodChip({ label, emoji, selected = false, onToggle }: MoodChipProps) {
     const [isSelected, setIsSelected] = useState(selected);
 
     const handleClick = () => {
@@ -49,7 +50,10 @@ export default function MoodChip({ label, selected = false, onToggle }: MoodChip
                 e.currentTarget.style.transform = 'scale(1)';
             }}
         >
-            {label}
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {emoji && <span>{emoji}</span>}
+                {label}
+            </span>
         </button>
     );
 }

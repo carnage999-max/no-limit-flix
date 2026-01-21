@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import PermanenceBadge from './PermanenceBadge';
+
 import type { Movie } from '@/types';
 
 interface TitleTileProps {
@@ -49,16 +49,6 @@ export default function TitleTile({ movie }: TitleTileProps) {
                         }}
                     />
 
-                    {/* Permanence Badge Overlay */}
-                    <div
-                        style={{
-                            position: 'absolute',
-                            top: '0.75rem',
-                            right: '0.75rem',
-                        }}
-                    >
-                        <PermanenceBadge type={movie.permanenceBadge} />
-                    </div>
                 </div>
 
                 {/* Title Info */}
@@ -67,6 +57,21 @@ export default function TitleTile({ movie }: TitleTileProps) {
                         padding: '1rem',
                     }}
                 >
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.6rem' }}>
+                        {movie.genres.slice(0, 3).map(genre => (
+                            <span key={genre} style={{
+                                padding: '0.2rem 0.6rem',
+                                borderRadius: '9999px',
+                                background: 'rgba(167, 171, 180, 0.1)',
+                                color: '#A7ABB4',
+                                fontSize: '0.65rem',
+                                fontWeight: '600',
+                                border: '1px solid rgba(167, 171, 180, 0.2)'
+                            }}>
+                                {genre}
+                            </span>
+                        ))}
+                    </div>
                     <h3
                         style={{
                             fontSize: '1.125rem',
