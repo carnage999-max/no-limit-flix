@@ -95,7 +95,7 @@ export async function searchMoviesByMood(moods: string[]) {
     });
 
     const results = discoveryData.results || [];
-    const movies = results.slice(0, 5);
+    const movies = results.slice(0, 10);
 
     // Fetch full details for home page picks to get genres, providers, trailers
     const detailedMovies = await Promise.all(movies.map(async (movie: any) => {

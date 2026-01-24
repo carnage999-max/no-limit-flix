@@ -29,6 +29,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
                 style={{
                     borderRadius: '0.75rem',
                     background: 'rgba(167, 171, 180, 0.05)',
+                    minWidth: 0,
                 }}
             >
                 {/* Poster Image */}
@@ -54,27 +55,23 @@ export default function TitleTile({ movie }: TitleTileProps) {
                 {/* Title Info */}
                 <div
                     style={{
-                        padding: '1rem',
+                        padding: 'clamp(0.5rem, 2vw, 1rem)',
                     }}
                 >
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.6rem' }}>
-                        {movie.genres.slice(0, 3).map(genre => (
-                            <span key={genre} style={{
-                                padding: '0.2rem 0.6rem',
-                                borderRadius: '9999px',
-                                background: 'rgba(167, 171, 180, 0.1)',
-                                color: '#A7ABB4',
-                                fontSize: '0.65rem',
-                                fontWeight: '600',
-                                border: '1px solid rgba(167, 171, 180, 0.2)'
-                            }}>
-                                {genre}
-                            </span>
-                        ))}
-                    </div>
+                    {movie.genres.length > 0 && (
+                        <p style={{
+                            fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)',
+                            color: '#D4AF37',
+                            fontStyle: 'italic',
+                            marginBottom: '0.5rem',
+                            lineHeight: 1.4
+                        }}>
+                            {movie.genres.slice(0, 3).join(', ')}
+                        </p>
+                    )}
                     <h3
                         style={{
-                            fontSize: '1.125rem',
+                            fontSize: 'clamp(0.875rem, 2vw, 1.125rem)',
                             fontWeight: '600',
                             color: '#F3F4F6',
                             marginBottom: '0.25rem',
@@ -87,7 +84,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
                     </h3>
                     <p
                         style={{
-                            fontSize: '0.875rem',
+                            fontSize: 'clamp(0.75rem, 1.5vw, 0.875rem)',
                             color: '#A7ABB4',
                         }}
                     >

@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
         const response: AIPickResponse = {
             sessionId,
             hero: movies[0],
-            alternates: movies.slice(1, 5),
+            alternates: movies.slice(1, 10),
             explanationTokens: tags,
         };
 

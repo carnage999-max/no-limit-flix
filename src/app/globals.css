@@ -323,3 +323,22 @@ a:focus-visible {
 .hover-glow:hover {
   box-shadow: 0 0 20px rgba(246, 211, 101, 0.3);
 }
+
+/* ============================================
+   RESPONSIVE GRID LAYOUTS
+   ============================================ */
+
+/* Desktop breakpoint - increase columns for smaller cards */
+@media (min-width: 768px) {
+  .grid-compact-responsive {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
+  
+  .grid-standard-responsive {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+  
+  .grid-large-responsive {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}

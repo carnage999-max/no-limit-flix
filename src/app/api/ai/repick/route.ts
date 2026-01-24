@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
         const response: RepickResponse = {
             hero: movies[0],
-            alternates: movies.slice(1, 5),
+            alternates: movies.slice(1, 10),
             explanationTokens: [...feedback, ...tags.filter(t => !feedback.includes(t))],
         };
 

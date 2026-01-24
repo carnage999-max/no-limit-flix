@@ -26,6 +26,11 @@ export interface AIPickRequest {
     moods: string[];
     freeText?: string;
     constraints?: Record<string, unknown>;
+    adjustments?: {
+        tension_bias?: number;
+        pacing_bias?: number;
+        intensity_bias?: number;
+    };
 }
 
 export interface AIPickResponse {
