@@ -9,6 +9,10 @@ interface InterpretRequest {
 
 interface InterpretResponse {
     mood_tags: string[];
+    tmdb_genres?: string[];
+    keywords?: string[];
+    year_range?: [number, number];
+    sort_by?: string;
     adjustments: {
         tension_bias?: number;
         pacing_bias?: number;
@@ -52,41 +56,49 @@ export async function POST(request: NextRequest) {
 async function interpretMoodWithDeepSeek(freeText: string): Promise<InterpretResponse> {
     const systemPrompt = `You are a mood interpretation assistant for a movie discovery app.
 
-Your ONLY job is to convert user free-text mood descriptions into:
-1. Structured mood tags (from a predefined list)
-2. Numerical adjustment hints for content filtering
+Your ONLY job is to convert user free-text mood descriptions into structured search parameters for the TMDB API.
 
-AVAILABLE MOOD TAGS (use ONLY these):
+OUTPUT FORMAT (JSON ONLY):
+{
+  "mood_tags": ["List", "of", "UI", "Tags"],
+  "tmdb_genres": ["Action", "Comedy", "etc"],
+  "keywords": ["specific", "descriptive", "keywords"],
+  "year_range": [min_year, max_year] or null,
+  "sort_by": "popularity.desc" or "vote_average.desc" or "primary_release_date.desc",
+  "adjustments": {
+    "tension_bias": 0.0,
+    "pacing_bias": 0.0,
+    "intensity_bias": 0.0
+  }
+}
+
+AVAILABLE UI MOOD TAGS (Select 1-3):
 - Thrilling, Heartwarming, Mind-bending, Funny, Dark, Uplifting, Intense, Relaxing, Romantic, Epic, Magical, Gritty, Futuristic, Nostalgic, Artistic, Spooky, Mysterious, Action-packed
 
-ADJUSTMENT HINTS (range: -1.0 to 1.0):
-- tension_bias: negative = less tense, positive = more tense
-- pacing_bias: negative = slower, positive = faster
-- intensity_bias: negative = lighter, positive = heavier
+AVAILABLE TMDB GENRES:
+- Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Family, Fantasy, History, Horror, Music, Mystery, Romance, Sci-Fi, TV Movie, Thriller, War, Western
 
 CRITICAL RULES:
-- Return ONLY valid JSON
-- Use ONLY the mood tags listed above
-- Select 1-3 most relevant tags
-- Adjustments should be subtle (-0.3 to 0.3 range typically)
-- Do NOT invent movie titles
-- Do NOT recommend specific movies
-- Do NOT add commentary
+1. "keywords" are CRITICAL. Infer specific subjects (e.g., "vampire", "space", "zombie").
+2. "tmdb_genres" should match standard TMDB genres.
+3. "year_range": Infer from context.
+4. DO NOT output internal 'thinking' or 'reasoning' blocks if possible. Just the JSON.
+5. Return ONLY valid JSON.
 
-Example input: "something chill to unwind after work"
+Example input: "I want a scary 80s movie about aliens"
 Example output:
 {
-  "mood_tags": ["Relaxing", "Heartwarming"],
-  "adjustments": {
-    "tension_bias": -0.3,
-    "pacing_bias": -0.2,
-    "intensity_bias": -0.2
-  }
+  "mood_tags": ["Spooky", "Nostalgic", "Thrilling"],
+  "tmdb_genres": ["Horror", "Sci-Fi"],
+  "keywords": ["alien", "creature", "space"],
+  "year_range": [1980, 1989],
+  "sort_by": "vote_average.desc",
+  "adjustments": { "tension_bias": 0.8, "intensity_bias": 0.5 }
 }`;
 
     const userPrompt = `Interpret this mood description: "${freeText}"
 
-Return ONLY valid JSON with mood_tags and adjustments.`;
+Return ONLY valid JSON.`;
 
     const openrouter = new OpenRouter({
         apiKey: OPENROUTER_API_KEY
@@ -99,18 +111,35 @@ Return ONLY valid JSON with mood_tags and adjustments.`;
             { role: 'user', content: userPrompt }
         ],
         temperature: 0.3,
-        maxTokens: 500
+        maxTokens: 1000
     });
 
     const messageContent = completion.choices?.[0]?.message?.content;
     const content = typeof messageContent === 'string' ? messageContent : '{}';
 
+    console.log("DeepSeek Raw Content:", content); // Debug logging
+
     // Parse the JSON response
     let parsed: InterpretResponse;
     try {
-        parsed = JSON.parse(content);
+        // Remove <think>...</think> blocks if present
+        let cleanContent = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+        // Remove markdown code blocks
+        cleanContent = cleanContent.replace(/```json\n?|\n?```/g, '').trim();
+
+        // Find the first '{' and last '}'
+        const start = cleanContent.indexOf('{');
+        const end = cleanContent.lastIndexOf('}');
+
+        if (start !== -1 && end !== -1) {
+            const jsonStr = cleanContent.substring(start, end + 1);
+            parsed = JSON.parse(jsonStr);
+        } else {
+            parsed = JSON.parse(cleanContent);
+        }
     } catch (e) {
-        // If DeepSeek returns malformed JSON, use fallback
+        console.error("Failed to parse AI response. Content length:", content.length);
         throw new Error('Invalid JSON from OpenRouter DeepSeek');
     }
 
@@ -126,10 +155,27 @@ function sanitizeInterpretation(raw: any): InterpretResponse {
         'Spooky', 'Mysterious', 'Action-packed'
     ];
 
+    const validTmdbGenres = [
+        'Action', 'Adventure', 'Animation', 'Comedy', 'Crime',
+        'Documentary', 'Drama', 'Family', 'Fantasy', 'History',
+        'Horror', 'Music', 'Mystery', 'Romance', 'Sci-Fi',
+        'TV Movie', 'Thriller', 'War', 'Western'
+    ];
+
     // Filter to only valid mood tags
     const mood_tags = (raw.mood_tags || [])
         .filter((tag: string) => validMoodTags.includes(tag))
-        .slice(0, 3); // Max 3 tags
+        .slice(0, 3);
+
+    const tmdb_genres = (raw.tmdb_genres || [])
+        .filter((g: string) => validTmdbGenres.includes(g));
+
+    const keywords = (raw.keywords || []).slice(0, 5); // Limit keywords
+
+    let year_range = raw.year_range;
+    if (year_range && (!Array.isArray(year_range) || year_range.length !== 2)) {
+        year_range = undefined;
+    }
 
     // Clamp adjustments to safe ranges
     const adjustments: InterpretResponse['adjustments'] = {};
@@ -144,47 +190,86 @@ function sanitizeInterpretation(raw: any): InterpretResponse {
         adjustments.intensity_bias = Math.max(-1, Math.min(1, raw.adjustments.intensity_bias));
     }
 
-    return { mood_tags, adjustments };
+    return {
+        mood_tags,
+        tmdb_genres,
+        keywords,
+        year_range,
+        sort_by: raw.sort_by || 'popularity.desc',
+        adjustments
+    };
 }
 
 function getFallbackInterpretation(freeText: string): InterpretResponse {
     const text = freeText.toLowerCase();
     const mood_tags: string[] = [];
+    const tmdb_genres: string[] = [];
+    const keywords: string[] = [];
     const adjustments: InterpretResponse['adjustments'] = {};
 
-    // Simple keyword matching as fallback
+    // Robust Keyword Matching
     if (text.includes('chill') || text.includes('relax') || text.includes('calm')) {
         mood_tags.push('Relaxing');
+        keywords.push('relaxing');
         adjustments.tension_bias = -0.3;
         adjustments.pacing_bias = -0.2;
     }
-    if (text.includes('excit') || text.includes('thrill') || text.includes('action')) {
+    if (text.includes('excit') || text.includes('thrill') || text.includes('action') || text.includes('fast')) {
         mood_tags.push('Thrilling');
+        tmdb_genres.push('Action');
         adjustments.tension_bias = 0.3;
         adjustments.intensity_bias = 0.2;
     }
-    if (text.includes('funny') || text.includes('laugh') || text.includes('comedy')) {
+    if (text.includes('funny') || text.includes('laugh') || text.includes('comedy') || text.includes('humor')) {
         mood_tags.push('Funny');
+        tmdb_genres.push('Comedy');
         adjustments.intensity_bias = -0.1;
     }
-    if (text.includes('dark') || text.includes('serious') || text.includes('heavy')) {
+    if (text.includes('dark') || text.includes('serious') || text.includes('heavy') || text.includes('grim')) {
         mood_tags.push('Dark');
+        tmdb_genres.push('Drama', 'Thriller');
         adjustments.intensity_bias = 0.3;
     }
-    if (text.includes('romantic') || text.includes('love') || text.includes('heart')) {
-        mood_tags.push('Romantic');
+    if (text.includes('scary') || text.includes('horror') || text.includes('spooky') || text.includes('ghost')) {
+        mood_tags.push('Spooky');
+        tmdb_genres.push('Horror');
+        adjustments.tension_bias = 0.5;
     }
-    if (text.includes('mind') || text.includes('complex') || text.includes('think')) {
+    if (text.includes('romantic') || text.includes('love') || text.includes('heart') || text.includes('date')) {
+        mood_tags.push('Romantic');
+        tmdb_genres.push('Romance');
+    }
+    if (text.includes('mind') || text.includes('complex') || text.includes('think') || text.includes('mystery')) {
         mood_tags.push('Mind-bending');
+        tmdb_genres.push('Sci-Fi', 'Mystery');
+    }
+    if (text.includes('family') || text.includes('kid') || text.includes('child')) {
+        mood_tags.push('Heartwarming');
+        tmdb_genres.push('Family');
+    }
+    if (text.includes('cartoon') || text.includes('anime') || text.includes('animation')) {
+        mood_tags.push('Artistic');
+        tmdb_genres.push('Animation');
     }
 
-    // Default if no matches
+    // Default if no matches found at all
     if (mood_tags.length === 0) {
+        if (text.length > 0) {
+            // If they typed something we didn't catch, try to map it to a keyword
+            keywords.push(text.split(' ')[0]); // simplistic
+        }
         mood_tags.push('Uplifting');
     }
 
+    // Remove duplicates
+    const uniqueMoods = [...new Set(mood_tags)];
+    const uniqueGenres = [...new Set(tmdb_genres)];
+
     return {
-        mood_tags: mood_tags.slice(0, 3),
+        mood_tags: uniqueMoods.slice(0, 3),
+        tmdb_genres: uniqueGenres.slice(0, 3),
+        keywords,
+        sort_by: 'popularity.desc',
         adjustments
     };
 }

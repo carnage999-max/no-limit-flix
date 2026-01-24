@@ -31,6 +31,12 @@ export interface AIPickRequest {
         pacing_bias?: number;
         intensity_bias?: number;
     };
+    searchParams?: {
+        tmdb_genres?: string[];
+        keywords?: string[];
+        year_range?: [number, number];
+        sort_by?: string;
+    };
 }
 
 export interface AIPickResponse {
@@ -43,6 +49,12 @@ export interface AIPickResponse {
 export interface RepickRequest {
     sessionId: string;
     feedback: string[];
+    currentSearchParams?: {
+        tmdb_genres?: string[];
+        keywords?: string[];
+        year_range?: [number, number];
+        sort_by?: string;
+    };
 }
 
 export interface RepickResponse {
@@ -59,12 +71,37 @@ export interface Collection {
     movies: Movie[];
 }
 
+export interface SimilarRequest {
+    referenceTitle: string;
+    moodTags?: string[];
+    constraints?: Record<string, unknown>;
+}
+
+export interface SimilarResponse {
+    sessionId: string;
+    hero: MoviePick;
+    alternates: MoviePick[];
+    explanationTokens: string[];
+    confidenceScore: number;
+    inferredParams?: {
+        tmdb_genres?: string[];
+        keywords?: string[];
+        year_range?: [number, number];
+        sort_by?: string;
+    };
+}
+
 export type FilterLength = 'Short' | 'Medium' | 'Long';
 export type FilterIntensity = 'Low' | 'Medium' | 'High';
 export type FilterTone = 'Light' | 'Neutral' | 'Heavy';
 
-export interface CollectionFilters {
-    length?: FilterLength;
-    intensity?: FilterIntensity;
-    tone?: FilterTone;
+export interface ActorRequest {
+    actorName: string;
+    moodTags: string[];
+}
+
+export interface ActorResponse {
+    hero: MoviePick;
+    alternates: MoviePick[];
+    explanationTokens: string[];
 }

@@ -5,10 +5,10 @@ import type { AIPickRequest, AIPickResponse } from '@/types';
 export async function POST(request: NextRequest) {
     try {
         const body: AIPickRequest = await request.json();
-        const { moods = [], freeText = '' } = body;
+        const { moods = [], searchParams } = body;
 
         // Search using TMDb
-        const { movies, tags } = await searchMoviesByMood(moods);
+        const { movies, tags } = await searchMoviesByMood(moods, searchParams);
 
         if (movies.length === 0) {
             return NextResponse.json(

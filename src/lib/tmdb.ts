@@ -20,14 +20,31 @@ export async function fetchFromTMDB(endpoint: string, params: Record<string, str
         ...params,
     });
 
-    const response = await fetch(`${TMDB_BASE_URL}${endpoint}?${queryParams}`, {
-        next: { revalidate: 3600 }
-    });
+    let lastError;
+    for (let i = 0; i < 3; i++) {
+        try {
+            const response = await fetch(`${TMDB_BASE_URL}${endpoint}?${queryParams}`, {
+                next: { revalidate: 3600 },
+                signal: AbortSignal.timeout(8000) // 8s timeout to fail fast and retry
+            });
 
-    if (!response.ok) {
-        throw new Error(`TMDB API error: ${response.statusText}`);
+            if (!response.ok) {
+                if (response.status >= 500) throw new Error(`TMDB Server Error: ${response.status}`);
+                throw new Error(`TMDB API error: ${response.statusText}`);
+            }
+            return await response.json();
+        } catch (e: any) {
+            lastError = e;
+            const isTimeout = e.name === 'TimeoutError' || e.code === 'ETIMEDOUT' || e.cause?.code === 'ETIMEDOUT';
+            if (isTimeout || e.message.includes('Server Error') || e.message.includes('fetch failed')) {
+                // Wait before retry (exponentialish)
+                await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                continue;
+            }
+            throw e; // Throw immediately for other errors (auth, 404, etc)
+        }
     }
-    return response.json();
+    throw lastError;
 }
 
 export function getImageUrl(path: string | null, size: 'w500' | 'original' = 'w500') {
@@ -61,52 +78,177 @@ export async function getMovieDetails(id: string) {
     };
 }
 
-export async function searchMoviesByMood(moods: string[]) {
-    const genreMap: Record<string, number> = {
-        'Thrilling': 53,
-        'Heartwarming': 10751,
-        'Mind-bending': 878,
-        'Funny': 35,
-        'Dark': 27,
-        'Uplifting': 10751,
-        'Intense': 28,
-        'Relaxing': 99,
-        'Romantic': 10749,
-        'Epic': 12,
-        'Magical': 14,
-        'Gritty': 80,
-        'Futuristic': 878,
-        'Nostalgic': 36,
-        'Artistic': 18,
-        'Spooky': 27,
-        'Mysterious': 9648,
-        'Action-packed': 28
+export async function searchKeywords(query: string) {
+    const data = await fetchFromTMDB('/search/keyword', { query });
+    return data.results || [];
+}
+
+export async function searchMovie(query: string) {
+    const data = await fetchFromTMDB('/search/movie', { query });
+    return data.results?.[0] || null;
+}
+
+export async function searchPerson(query: string) {
+    const data = await fetchFromTMDB('/search/person', { query });
+    return data.results?.[0] || null;
+}
+
+const TMDB_GENRE_NAME_TO_ID: Record<string, number> = {
+    'Action': 28, 'Adventure': 12, 'Animation': 16, 'Comedy': 35, 'Crime': 80,
+    'Documentary': 99, 'Drama': 18, 'Family': 10751, 'Fantasy': 14, 'History': 36,
+    'Horror': 27, 'Music': 10402, 'Mystery': 9648, 'Romance': 10749, 'Sci-Fi': 878, 'Science Fiction': 878,
+    'TV Movie': 10770, 'Thriller': 53, 'War': 10752, 'Western': 37
+};
+
+export interface SearchOptions {
+    keywords?: string[];
+    tmdb_genres?: string[]; // Direct TMDB genre names
+    year_range?: [number, number];
+    sort_by?: string;
+}
+
+export async function searchMoviesByMood(moods: string[], options: SearchOptions = {}) {
+    // 1. Map Custom Moods to Genres (Legacy support)
+    const customMoodMap: Record<string, number> = {
+        'Thrilling': 53, 'Heartwarming': 10751, 'Mind-bending': 878, 'Funny': 35,
+        'Dark': 27, 'Uplifting': 10751, 'Intense': 28, 'Relaxing': 99,
+        'Romantic': 10749, 'Epic': 12, 'Magical': 14, 'Gritty': 80,
+        'Futuristic': 878, 'Nostalgic': 36, 'Artistic': 18, 'Spooky': 27,
+        'Mysterious': 9648, 'Action-packed': 28
     };
 
-    const genreIds = moods.map(m => genreMap[m]).filter(Boolean);
+    let genreIds = moods.map(m => customMoodMap[m]).filter(Boolean);
 
-    // Discovery mode (Mood only)
-    const discoveryData = await fetchFromTMDB('/discover/movie', {
-        with_genres: genreIds.join(','),
+    // 2. Add specific TMDB genres if provided
+    if (options.tmdb_genres) {
+        const extraIds = options.tmdb_genres.map(g => TMDB_GENRE_NAME_TO_ID[g]).filter(Boolean);
+        genreIds = [...new Set([...genreIds, ...extraIds])];
+    }
+
+    // 3. Resolve Keywords
+    let keywordIds: string[] = [];
+    if (options.keywords && options.keywords.length > 0) {
+        // limit to first 3 keywords to save requests
+        const keywordsToSearch = options.keywords.slice(0, 3);
+
+        for (const k of keywordsToSearch) {
+            try {
+                const results = await searchKeywords(k);
+                if (results.length > 0) {
+                    keywordIds.push(results[0].id.toString());
+                }
+            } catch (e) {
+                console.warn(`Failed to search keyword: ${k}`, e);
+            }
+        }
+    }
+
+    // 4. Build Discovery Params Logic
+    const buildParams = (relaxed: boolean) => {
+        const p: any = {
+            sort_by: options.sort_by || 'popularity.desc',
+            'vote_count.gte': '100',
+            region: 'US',
+            include_adult: 'false',
+        };
+
+        if (genreIds.length > 0) {
+            p.with_genres = genreIds.join(',');
+        }
+
+        // Only include specific constraints if NOT relaxed
+        if (!relaxed) {
+            if (keywordIds.length > 0) {
+                p.with_keywords = keywordIds.join(',');
+            }
+            if (options.year_range) {
+                if (options.year_range[0]) p['primary_release_date.gte'] = `${options.year_range[0]}-01-01`;
+                if (options.year_range[1]) p['primary_release_date.lte'] = `${options.year_range[1]}-12-31`;
+            }
+        }
+        return p;
+    };
+
+    // Initial Search (Strict)
+    let discoveryData = await fetchFromTMDB('/discover/movie', buildParams(false));
+    let results = discoveryData.results || [];
+
+    // Retry Search (Relaxed) if no results found and we had restrictive filters
+    if (results.length === 0 && (keywordIds.length > 0 || options.year_range)) {
+        console.log('No results found for strict terms. Retrying with relaxed constraints...');
+        discoveryData = await fetchFromTMDB('/discover/movie', buildParams(true));
+        results = discoveryData.results || [];
+    }
+
+    // FINAL EMERGENCY FALLBACK: Trending
+    if (results.length === 0) {
+        console.log('Zero results even after relaxation. Fetching trending movies as fallback.');
+        try {
+            // Fallback to trending so user always sees SOMETHING
+            const trending = await fetchFromTMDB('/trending/movie/week');
+            results = trending.results || [];
+        } catch (e) {
+            console.error("Critical: Failed to fetch trending fallback", e);
+        }
+    }
+
+    const movies = results.slice(0, 10);
+
+    // Fetch full details for home page picks - SEQUENTIAL to avoid Rate Limit/Timeout
+    const validMovies: any[] = [];
+
+    for (const movie of movies) {
+        try {
+            const details = await getMovieDetails(movie.id);
+            if (details) validMovies.push(details);
+        } catch (e) {
+            console.error(`Failed to fetch details for movie ${movie.id}`, e);
+        }
+    }
+
+    return {
+        movies: validMovies,
+        tags: [...moods, ...(options.keywords || [])]
+    };
+}
+
+export async function searchMoviesByActor(actorId: string, moods: string[]) {
+    // Reuse the legacy mood mapping for simplicity
+    const customMoodMap: Record<string, number> = {
+        'Thrilling': 53, 'Heartwarming': 10751, 'Mind-bending': 878, 'Funny': 35,
+        'Dark': 27, 'Uplifting': 10751, 'Intense': 28, 'Relaxing': 99,
+        'Romantic': 10749, 'Epic': 12, 'Magical': 14, 'Gritty': 80,
+        'Futuristic': 878, 'Nostalgic': 36, 'Artistic': 18, 'Spooky': 27,
+        'Mysterious': 9648, 'Action-packed': 28
+    };
+
+    const genreIds = moods.map(m => customMoodMap[m]).filter(Boolean);
+
+    const params: any = {
+        with_cast: actorId,
         sort_by: 'popularity.desc',
-        'vote_count.gte': '100',
+        'vote_count.gte': '50', // Lower threshold for actor deep cuts
         region: 'US',
         include_adult: 'false'
-    });
+    };
 
+    if (genreIds.length > 0) {
+        params.with_genres = genreIds.join(',');
+    }
+
+    const discoveryData = await fetchFromTMDB('/discover/movie', params);
     const results = discoveryData.results || [];
     const movies = results.slice(0, 10);
 
-    // Fetch full details for home page picks to get genres, providers, trailers
-    const detailedMovies = await Promise.all(movies.map(async (movie: any) => {
+    const validMovies: any[] = [];
+    for (const movie of movies) {
         try {
-            return await getMovieDetails(movie.id);
+            const details = await getMovieDetails(movie.id);
+            if (details) validMovies.push(details);
         } catch (e) {
-            return null;
+            // ignore error
         }
-    }));
-
-    const validMovies = detailedMovies.filter(Boolean) as any[];
+    }
 
     return {
         movies: validMovies,

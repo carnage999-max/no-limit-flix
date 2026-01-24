@@ -36,10 +36,12 @@ const FEEDBACK_OPTIONS = [
 type ViewSize = 'compact' | 'standard' | 'large';
 
 export default function HomePage() {
+  const [searchMode, setSearchMode] = useState<'vibe' | 'title' | 'actor'>('vibe');
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [vibeText, setVibeText] = useState('');
   const [isInterpreting, setIsInterpreting] = useState(false);
   const [adjustments, setAdjustments] = useState<AIPickRequest['adjustments']>({});
+  const [searchParams, setSearchParams] = useState<AIPickRequest['searchParams']>({});
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -47,18 +49,94 @@ export default function HomePage() {
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // ... (keep handleMoodToggle) ...
   const handleMoodToggle = (moodLabel: string, selected: boolean) => {
-    // If manually toggling, we might want to clear adjustments or keep them depending on logic.
-    // For now, let's keep them mixed.
     setSelectedMoods(prev =>
       selected ? [...prev, moodLabel] : prev.filter(m => m !== moodLabel)
     );
   };
 
-  const handleInterpretVibe = async (e?: React.FormEvent) => {
+  const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!vibeText.trim()) return;
 
+    if (searchMode === 'vibe') {
+      await handleInterpretVibe();
+    } else if (searchMode === 'title') {
+      await handleTitleSearch();
+    } else {
+      await handleActorSearch();
+    }
+  };
+
+  const handleActorSearch = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/ai/actor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actorName: vibeText,
+          moodTags: selectedMoods
+        }),
+      });
+
+      if (!response.ok) throw new Error('Search failed');
+
+      const data = await response.json();
+      setResults({
+        hero: data.hero,
+        alternates: data.alternates,
+        explanationTokens: data.explanationTokens
+      });
+      setSessionId(null);
+
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+
+    } catch (error) {
+      console.error("Actor search error", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleTitleSearch = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/ai/similar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          referenceTitle: vibeText,
+          moodTags: selectedMoods
+        }),
+      });
+
+      if (!response.ok) throw new Error('Search failed');
+
+      const data = await response.json();
+      setResults({
+        hero: data.hero,
+        alternates: data.alternates,
+        explanationTokens: data.explanationTokens
+      });
+      setSessionId(data.sessionId);
+      if (data.inferredParams) setSearchParams(data.inferredParams);
+
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+
+    } catch (error) {
+      console.error("Title search error", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleInterpretVibe = async () => {
     setIsInterpreting(true);
 
     try {
@@ -74,25 +152,22 @@ export default function HomePage() {
 
       // Update state with interpreted results
       if (data.mood_tags && Array.isArray(data.mood_tags)) {
-        // Merge with existing or replace? "Select 1-3 most relevant" implies replacement of "current vibe"
-        // But let's replace to be clear what the AI chose.
         const validMoods = data.mood_tags.filter((t: string) => MOOD_OPTIONS.some(m => m.label === t));
         setSelectedMoods(validMoods);
       }
 
-      if (data.adjustments) {
-        setAdjustments(data.adjustments);
-      }
+      if (data.adjustments) setAdjustments(data.adjustments);
 
-      // Optional: Auto-search after successful interpretation? 
-      // Instructions say "Auto-scroll to results after AI response" but that's for "pick". 
-      // For interpretation, it might normally just fill the UI.
-      // IF the user pressed enter, we probably want to search.
-      // Let's call search automatically if we got moods.
+      const newSearchParams = {
+        tmdb_genres: data.tmdb_genres,
+        keywords: data.keywords,
+        year_range: data.year_range,
+        sort_by: data.sort_by
+      };
+      setSearchParams(newSearchParams);
+
       if (data.mood_tags?.length > 0) {
-        // We need to wait for state update or pass directly.
-        // React state updates are async, so pass directly to a modified handlePick.
-        await handlePickForMe(data.mood_tags, data.adjustments);
+        await handlePickForMe(data.mood_tags, data.adjustments, newSearchParams);
       }
 
     } catch (error) {
@@ -102,11 +177,17 @@ export default function HomePage() {
     }
   };
 
-  const handlePickForMe = async (overrideMoods?: string[], overrideAdjustments?: AIPickRequest['adjustments']) => {
+  // ... (keep handlePickForMe, handleSurprise, handleRepick) ...
+  const handlePickForMe = async (
+    overrideMoods?: string[],
+    overrideAdjustments?: AIPickRequest['adjustments'],
+    overrideSearchParams?: AIPickRequest['searchParams']
+  ) => {
     setIsLoading(true);
 
     const moodsToUse = overrideMoods || selectedMoods;
     const adjustmentsToUse = overrideAdjustments || adjustments;
+    const searchParamsToUse = overrideSearchParams || searchParams;
 
     try {
       const response = await fetch('/api/ai/pick', {
@@ -115,6 +196,7 @@ export default function HomePage() {
         body: JSON.stringify({
           moods: moodsToUse,
           adjustments: adjustmentsToUse, // Pass adjustments to backend
+          searchParams: searchParamsToUse,
           constraints: {},
         }),
       });
@@ -151,6 +233,7 @@ export default function HomePage() {
         body: JSON.stringify({
           sessionId,
           feedback: [feedback],
+          currentSearchParams: searchParams,
         }),
       });
 
@@ -251,17 +334,69 @@ export default function HomePage() {
               lineHeight: '1.6',
             }}
           >
-            Select your moods, we'll find the perfect match
+            {searchMode === 'vibe' ? "Select your moods, we'll find the perfect match" :
+              searchMode === 'title' ? "Enter a movie you love, we'll find its soulmates" :
+                "Find movies starring your favorite actor"}
           </p>
 
-          {/* Vibe Search Input */}
+          {/* Search Toggle */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', gap: '0.5rem' }}>
+            <button
+              onClick={() => setSearchMode('vibe')}
+              style={{
+                padding: '0.5rem 1.5rem',
+                borderRadius: '2rem',
+                border: searchMode === 'vibe' ? '1px solid #D4AF37' : '1px solid transparent',
+                background: searchMode === 'vibe' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                color: searchMode === 'vibe' ? '#D4AF37' : '#A7ABB4',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              ✨ Match My Vibe
+            </button>
+            <button
+              onClick={() => setSearchMode('title')}
+              style={{
+                padding: '0.5rem 1.5rem',
+                borderRadius: '2rem',
+                border: searchMode === 'title' ? '1px solid #D4AF37' : '1px solid transparent',
+                background: searchMode === 'title' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                color: searchMode === 'title' ? '#D4AF37' : '#A7ABB4',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              🎬 Similar Movies
+            </button>
+            <button
+              onClick={() => setSearchMode('actor')}
+              style={{
+                padding: '0.5rem 1.5rem',
+                borderRadius: '2rem',
+                border: searchMode === 'actor' ? '1px solid #D4AF37' : '1px solid transparent',
+                background: searchMode === 'actor' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                color: searchMode === 'actor' ? '#D4AF37' : '#A7ABB4',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+            >
+              👤 Actor Search
+            </button>
+          </div>
+
+          {/* Vibe/Title/Actor Search Input */}
           <div className="animate-slide-up" style={{ maxWidth: '600px', margin: '0 auto 3rem', position: 'relative' }}>
-            <form onSubmit={handleInterpretVibe} style={{ position: 'relative' }}>
+            <form onSubmit={handleSearch} style={{ position: 'relative' }}>
               <input
                 type="text"
                 value={vibeText}
                 onChange={(e) => setVibeText(e.target.value)}
-                placeholder="Describe your vibe... (e.g. 'Chill sci-fi with a twist')"
+                placeholder={
+                  searchMode === 'vibe' ? "Describe your vibe... (e.g. 'Chill sci-fi with a twist')" :
+                    searchMode === 'title' ? "Enter a movie title... (e.g. 'Inception')" :
+                      "Enter an actor's name... (e.g. 'Ryan Gosling')"
+                }
                 disabled={isInterpreting || isLoading}
                 style={{
                   width: '100%',
@@ -305,18 +440,18 @@ export default function HomePage() {
                   transition: 'all 0.2s',
                 }}
               >
-                {isInterpreting ? (
+                {isInterpreting || isLoading ? (
                   <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" opacity="0.2" />
                     <path d="M21 12c0 4.97-4.03 9-9 9m9-9H3" />
-                  </svg> // Simple arrow or icon
+                  </svg>
                 )}
               </button>
             </form>
             <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.875rem', color: '#A7ABB4', opacity: 0.7 }}>
-              Powered by DeepSeek R1
+              Powered by DeepSeek R1 • No Limit Flix
             </p>
           </div>
 
@@ -354,7 +489,7 @@ export default function HomePage() {
           >
             {selectedMoods.length > 0 ? (
               <ButtonPrimary
-                onClick={() => handlePickForMe()}
+                onClick={() => handleSearch()}
                 disabled={isLoading}
                 className="animate-slide-up"
                 style={{
@@ -364,7 +499,9 @@ export default function HomePage() {
                   boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)'
                 }}
               >
-                {isLoading ? 'Finding magic...' : `Find ${selectedMoods.length > 0 ? selectedMoods[0] : ''} Films`}
+                {isLoading ? 'Finding magic...' : (
+                  searchMode === 'title' ? `Find Movies like ${vibeText || 'this'}` : `Find ${selectedMoods.length > 0 ? selectedMoods[0] : ''} Films`
+                )}
               </ButtonPrimary>
             ) : (
               <ButtonSecondary onClick={handleSurprise} disabled={isLoading}>
@@ -421,16 +558,29 @@ export default function HomePage() {
             {/* Header / Tags */}
             <div style={{ marginBottom: '3rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
-                <h2
-                  style={{
-                    fontSize: 'clamp(1.75rem, 5vw, 2.5rem)',
-                    fontWeight: '600',
-                    color: '#F3F4F6',
-                    margin: 0,
-                  }}
-                >
-                  {isLoading ? 'Finding your perfect match...' : 'Your Matching Films'}
-                </h2>
+                <div>
+                  <h2
+                    style={{
+                      fontSize: 'clamp(1.75rem, 5vw, 2.5rem)',
+                      fontWeight: '600',
+                      color: '#F3F4F6',
+                      margin: 0,
+                      marginBottom: '0.5rem'
+                    }}
+                  >
+                    {isLoading ? 'Finding your perfect match...' : 'Your Matching Films'}
+                  </h2>
+                  {!isLoading && results?.explanationTokens && results.explanationTokens.length > 0 && (
+                    <p style={{
+                      color: '#A7ABB4',
+                      fontSize: '1rem',
+                      maxWidth: '700px',
+                      lineHeight: '1.5'
+                    }}>
+                      Matches based on: <span style={{ color: '#D4AF37' }}>{results.explanationTokens.slice(0, 5).join(', ')}</span>...
+                    </p>
+                  )}
+                </div>
 
                 {/* Fixed View Size Toggle */}
                 {!isLoading && results && (
@@ -440,7 +590,7 @@ export default function HomePage() {
                     right: '2rem',
                     zIndex: 100
                   }}>
-                    {/* Dropdown Menu */}
+                    {/* (Dropdown Menu same as before) */}
                     {isViewMenuOpen && (
                       <div style={{
                         position: 'absolute',
@@ -560,24 +710,6 @@ export default function HomePage() {
                     >
                       ⊞
                     </button>
-                  </div>
-                )}
-
-                {!isLoading && results?.explanationTokens && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    {results.explanationTokens.map(tag => (
-                      <span key={tag} style={{
-                        padding: '0.4rem 1rem',
-                        borderRadius: '9999px',
-                        background: 'rgba(212, 175, 55, 0.1)',
-                        border: '1px solid rgba(212, 175, 55, 0.3)',
-                        color: '#D4AF37',
-                        fontSize: '0.875rem',
-                        fontWeight: '500'
-                      }}>
-                        # {tag}
-                      </span>
-                    ))}
                   </div>
                 )}
               </div>
