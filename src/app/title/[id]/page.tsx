@@ -33,8 +33,10 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
             <main style={{ minHeight: '100vh', background: '#0B0B0D' }}>
                 <div style={{ height: '60vh', background: '#111' }} />
                 <div style={{ maxWidth: '1200px', margin: '-200px auto 0', padding: '0 2rem 4rem', position: 'relative', zIndex: 1 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 300px) 1fr', gap: '3rem' }}>
-                        <Skeleton height="450px" borderRadius="1rem" />
+                    <div className="detail-grid">
+                        <div style={{ width: '100%', maxWidth: '350px', margin: '0 auto' }}>
+                            <Skeleton height="500px" borderRadius="1rem" />
+                        </div>
                         <div>
                             <Skeleton width="150px" height="1.5rem" className="mb-4" />
                             <Skeleton width="60%" height="3.5rem" className="mb-4" />
@@ -98,15 +100,9 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                         zIndex: 1,
                     }}
                 >
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'minmax(0, 300px) 1fr',
-                            gap: '3rem',
-                        }}
-                    >
+                    <div className="detail-grid">
                         {/* Poster */}
-                        <div className="animate-slide-up">
+                        <div className="animate-slide-up" style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
                             <img
                                 src={movie.poster}
                                 alt={movie.title}
@@ -140,7 +136,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
 
                             <h1
                                 style={{
-                                    fontSize: 'clamp(2rem, 5vw, 3.5rem)',
+                                    fontSize: 'clamp(2rem, 5vw, 4rem)',
                                     fontWeight: '700',
                                     color: '#F3F4F6',
                                     marginBottom: '0.75rem',

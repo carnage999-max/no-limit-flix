@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
 import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
+import { useSearch } from '@/context/SearchContext';
 
 const MOOD_OPTIONS = [
+  // ... (keep options) ...
   { label: 'Thrilling', emoji: '🚀' },
   { label: 'Heartwarming', emoji: '❤️' },
   { label: 'Mind-bending', emoji: '🌀' },
@@ -33,19 +35,20 @@ const FEEDBACK_OPTIONS = [
   'Try something lighter',
 ];
 
-type ViewSize = 'compact' | 'standard' | 'large';
-
 export default function HomePage() {
-  const [searchMode, setSearchMode] = useState<'vibe' | 'title' | 'actor'>('vibe');
-  const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
-  const [vibeText, setVibeText] = useState('');
-  const [isInterpreting, setIsInterpreting] = useState(false);
-  const [adjustments, setAdjustments] = useState<AIPickRequest['adjustments']>({});
-  const [searchParams, setSearchParams] = useState<AIPickRequest['searchParams']>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [viewSize, setViewSize] = useState<ViewSize>('standard');
+  const {
+    searchMode, setSearchMode,
+    selectedMoods, setSelectedMoods,
+    vibeText, setVibeText,
+    isInterpreting, setIsInterpreting,
+    adjustments, setAdjustments,
+    searchParams, setSearchParams,
+    isLoading, setIsLoading,
+    results, setResults,
+    sessionId, setSessionId,
+    viewSize, setViewSize
+  } = useSearch();
+
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -340,17 +343,26 @@ export default function HomePage() {
           </p>
 
           {/* Search Toggle */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem', gap: '0.5rem' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            gap: '0.5rem',
+            marginBottom: '1.5rem',
+            width: '100%'
+          }}>
             <button
               onClick={() => setSearchMode('vibe')}
               style={{
-                padding: '0.5rem 1.5rem',
+                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                 borderRadius: '2rem',
+                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
                 border: searchMode === 'vibe' ? '1px solid #D4AF37' : '1px solid transparent',
                 background: searchMode === 'vibe' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
                 color: searchMode === 'vibe' ? '#D4AF37' : '#A7ABB4',
                 cursor: 'pointer',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap'
               }}
             >
               ✨ Match My Vibe
@@ -358,13 +370,15 @@ export default function HomePage() {
             <button
               onClick={() => setSearchMode('title')}
               style={{
-                padding: '0.5rem 1.5rem',
+                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                 borderRadius: '2rem',
+                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
                 border: searchMode === 'title' ? '1px solid #D4AF37' : '1px solid transparent',
                 background: searchMode === 'title' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
                 color: searchMode === 'title' ? '#D4AF37' : '#A7ABB4',
                 cursor: 'pointer',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap'
               }}
             >
               🎬 Similar Movies
@@ -372,13 +386,15 @@ export default function HomePage() {
             <button
               onClick={() => setSearchMode('actor')}
               style={{
-                padding: '0.5rem 1.5rem',
+                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                 borderRadius: '2rem',
+                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
                 border: searchMode === 'actor' ? '1px solid #D4AF37' : '1px solid transparent',
                 background: searchMode === 'actor' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
                 color: searchMode === 'actor' ? '#D4AF37' : '#A7ABB4',
                 cursor: 'pointer',
-                transition: 'all 0.2s'
+                transition: 'all 0.2s',
+                whiteSpace: 'nowrap'
               }}
             >
               👤 Actor Search
@@ -460,10 +476,11 @@ export default function HomePage() {
             style={{
               display: 'flex',
               flexWrap: 'wrap',
-              gap: '0.75rem',
+              gap: 'clamp(0.25rem, 1.5vw, 0.75rem)',
               justifyContent: 'center',
               marginBottom: '3rem',
               maxWidth: '800px',
+              width: '100%',
               margin: '0 auto 3rem'
             }}
           >

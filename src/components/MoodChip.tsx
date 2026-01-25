@@ -23,9 +23,9 @@ export default function MoodChip({ label, emoji, selected = false, onToggle }: M
             onClick={handleClick}
             className="transition-all duration-200"
             style={{
-                padding: '0.625rem 1.5rem',
+                padding: 'clamp(0.35rem, 1.5vw, 0.625rem) clamp(0.6rem, 2vw, 1.5rem)',
                 borderRadius: '9999px',
-                fontSize: '0.9375rem',
+                fontSize: 'clamp(0.7rem, 2vw, 0.9375rem)',
                 fontWeight: '500',
                 border: isSelected ? '2px solid #D4AF37' : '2px solid #A7ABB4',
                 background: isSelected

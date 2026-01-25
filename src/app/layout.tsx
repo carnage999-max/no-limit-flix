@@ -30,6 +30,10 @@ export const viewport = {
   themeColor: "#0B0B0D",
 };
 
+import { SearchProvider } from "@/context/SearchContext";
+
+// ... (keep metadata exports)
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,8 +42,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="antialiased">
-        <Navbar />
-        {children}
+        <SearchProvider>
+          <Navbar />
+          {children}
+        </SearchProvider>
       </body>
     </html>
   );
