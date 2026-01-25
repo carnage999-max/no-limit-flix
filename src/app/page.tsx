@@ -1,12 +1,11 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
 
 const MOOD_OPTIONS = [
-  // ... (keep options) ...
   { label: 'Thrilling', emoji: '🚀' },
   { label: 'Heartwarming', emoji: '❤️' },
   { label: 'Mind-bending', emoji: '🌀' },
@@ -52,6 +51,13 @@ export default function HomePage() {
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
   const resultsRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll on mount if results exist (for "Back to Results" behavior)
+  useEffect(() => {
+    if (results && resultsRef.current) {
+      resultsRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, []);
+
   // ... (keep handleMoodToggle) ...
   const handleMoodToggle = (moodLabel: string, selected: boolean) => {
     setSelectedMoods(prev =>
@@ -59,16 +65,42 @@ export default function HomePage() {
     );
   };
 
+  const [searchError, setSearchError] = useState<string | null>(null);
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!vibeText.trim()) return;
+    if (isLoading || isInterpreting) return;
 
-    if (searchMode === 'vibe') {
-      await handleInterpretVibe();
-    } else if (searchMode === 'title') {
-      await handleTitleSearch();
-    } else {
-      await handleActorSearch();
+    setSearchError(null);
+    setResults(null); // Clear previous results on new search
+
+    console.log("Search Flow Start:", { mode: searchMode, text: vibeText, moods: selectedMoods });
+
+    try {
+      if (searchMode === 'vibe') {
+        if (vibeText.trim()) {
+          await handleInterpretVibe();
+        } else if (selectedMoods.length > 0) {
+          await handlePickForMe();
+        } else {
+          setSearchError("Please select a mood or describe your vibe.");
+        }
+      } else if (searchMode === 'title') {
+        if (!vibeText.trim()) {
+          setSearchError("Please enter a movie title.");
+          return;
+        }
+        await handleTitleSearch();
+      } else if (searchMode === 'actor') {
+        if (!vibeText.trim()) {
+          setSearchError("Please enter an actor's name.");
+          return;
+        }
+        await handleActorSearch();
+      }
+    } catch (err: any) {
+      console.error("Search Handler Error:", err);
+      setSearchError(err.message || "An unexpected error occurred. Please try again.");
     }
   };
 
@@ -84,7 +116,10 @@ export default function HomePage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Search failed');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Actor search failed');
+      }
 
       const data = await response.json();
       setResults({
@@ -98,8 +133,6 @@ export default function HomePage() {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
 
-    } catch (error) {
-      console.error("Actor search error", error);
     } finally {
       setIsLoading(false);
     }
@@ -117,7 +150,10 @@ export default function HomePage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Search failed');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Title search failed');
+      }
 
       const data = await response.json();
       setResults({
@@ -132,8 +168,6 @@ export default function HomePage() {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
 
-    } catch (error) {
-      console.error("Title search error", error);
     } finally {
       setIsLoading(false);
     }
@@ -154,23 +188,29 @@ export default function HomePage() {
       const data = await response.json();
 
       // Update state with interpreted results
-      if (data.mood_tags && Array.isArray(data.mood_tags)) {
+      if (data.mood_tags && Array.isArray(data.mood_tags) && data.mood_tags.length > 0) {
         const validMoods = data.mood_tags.filter((t: string) => MOOD_OPTIONS.some(m => m.label === t));
         setSelectedMoods(validMoods);
-      }
 
-      if (data.adjustments) setAdjustments(data.adjustments);
+        if (data.adjustments) setAdjustments(data.adjustments);
 
-      const newSearchParams = {
-        tmdb_genres: data.tmdb_genres,
-        keywords: data.keywords,
-        year_range: data.year_range,
-        sort_by: data.sort_by
-      };
-      setSearchParams(newSearchParams);
+        const newSearchParams = {
+          tmdb_genres: data.tmdb_genres,
+          keywords: data.keywords,
+          year_range: data.year_range,
+          sort_by: data.sort_by
+        };
+        setSearchParams(newSearchParams);
 
-      if (data.mood_tags?.length > 0) {
-        await handlePickForMe(data.mood_tags, data.adjustments, newSearchParams);
+        // Chain to Pick
+        await handlePickForMe(validMoods, data.adjustments, newSearchParams);
+      } else {
+        // If AI fails to interpret specific moods, try a direct search with keywords if present
+        const fallbackParams = {
+          keywords: data.keywords || [vibeText],
+          tmdb_genres: data.tmdb_genres,
+        };
+        await handlePickForMe([], {}, fallbackParams);
       }
 
     } catch (error) {
@@ -192,6 +232,8 @@ export default function HomePage() {
     const adjustmentsToUse = overrideAdjustments || adjustments;
     const searchParamsToUse = overrideSearchParams || searchParams;
 
+    console.log("Picking for:", { moods: moodsToUse });
+
     try {
       const response = await fetch('/api/ai/pick', {
         method: 'POST',
@@ -204,6 +246,11 @@ export default function HomePage() {
         }),
       });
 
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch picks');
+      }
+
       const data = await response.json();
       setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
       setSessionId(data.sessionId);
@@ -212,8 +259,9 @@ export default function HomePage() {
       setTimeout(() => {
         resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching picks:', error);
+      setSearchError(error.message || 'No movies found matching your criteria.');
     } finally {
       setIsLoading(false);
     }
@@ -226,7 +274,7 @@ export default function HomePage() {
 
   const handleRepick = async (feedback: string) => {
     if (!sessionId) return;
-
+    setSearchError(null);
     setIsLoading(true);
 
     try {
@@ -240,10 +288,13 @@ export default function HomePage() {
         }),
       });
 
+      if (!response.ok) throw new Error('Failed to adjust picks');
+
       const data = await response.json();
       setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error re-picking:', error);
+      setSearchError(error.message);
     } finally {
       setIsLoading(false);
     }
@@ -352,7 +403,7 @@ export default function HomePage() {
             width: '100%'
           }}>
             <button
-              onClick={() => setSearchMode('vibe')}
+              onClick={() => { setSearchMode('vibe'); setSearchError(null); }}
               style={{
                 padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                 borderRadius: '2rem',
@@ -368,7 +419,7 @@ export default function HomePage() {
               ✨ Match My Vibe
             </button>
             <button
-              onClick={() => setSearchMode('title')}
+              onClick={() => { setSearchMode('title'); setSearchError(null); }}
               style={{
                 padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                 borderRadius: '2rem',
@@ -384,7 +435,7 @@ export default function HomePage() {
               🎬 Similar Movies
             </button>
             <button
-              onClick={() => setSearchMode('actor')}
+              onClick={() => { setSearchMode('actor'); setSearchError(null); }}
               style={{
                 padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                 borderRadius: '2rem',
@@ -407,7 +458,7 @@ export default function HomePage() {
               <input
                 type="text"
                 value={vibeText}
-                onChange={(e) => setVibeText(e.target.value)}
+                onChange={(e) => { setVibeText(e.target.value); setSearchError(null); }}
                 placeholder={
                   searchMode === 'vibe' ? "Describe your vibe... (e.g. 'Chill sci-fi with a twist')" :
                     searchMode === 'title' ? "Enter a movie title... (e.g. 'Inception')" :
@@ -418,7 +469,7 @@ export default function HomePage() {
                   width: '100%',
                   padding: '1.25rem 3.5rem 1.25rem 1.5rem',
                   background: 'rgba(167, 171, 180, 0.05)',
-                  border: '1px solid rgba(167, 171, 180, 0.2)',
+                  border: searchError ? '1px solid #F43F5E' : '1px solid rgba(167, 171, 180, 0.2)',
                   borderRadius: '9999px', // Pill shape
                   fontSize: '1.125rem',
                   color: '#F3F4F6',
@@ -427,19 +478,27 @@ export default function HomePage() {
                   backdropFilter: 'blur(10px)'
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#D4AF37';
-                  e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
+                  if (!searchError) {
+                    e.currentTarget.style.borderColor = '#D4AF37';
+                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
+                    e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
+                  }
                 }}
                 onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
-                  e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                  e.currentTarget.style.boxShadow = 'none';
+                  if (!searchError) {
+                    e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
+                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
                 }}
               />
               <button
                 type="submit"
-                disabled={!vibeText.trim() || isInterpreting || isLoading}
+                disabled={
+                  isInterpreting ||
+                  isLoading ||
+                  (searchMode === 'vibe' ? (!vibeText.trim() && selectedMoods.length === 0) : !vibeText.trim())
+                }
                 style={{
                   position: 'absolute',
                   right: '0.75rem',
@@ -447,8 +506,8 @@ export default function HomePage() {
                   transform: 'translateY(-50%)',
                   background: 'none',
                   border: 'none',
-                  color: vibeText.trim() ? '#D4AF37' : 'rgba(167, 171, 180, 0.3)',
-                  cursor: vibeText.trim() ? 'pointer' : 'default',
+                  color: vibeText.trim() || (searchMode === 'vibe' && selectedMoods.length > 0) ? '#D4AF37' : 'rgba(167, 171, 180, 0.3)',
+                  cursor: vibeText.trim() || (searchMode === 'vibe' && selectedMoods.length > 0) ? 'pointer' : 'default',
                   padding: '0.5rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -466,6 +525,13 @@ export default function HomePage() {
                 )}
               </button>
             </form>
+
+            {searchError && (
+              <p className="animate-fade-in" style={{ textAlign: 'center', marginTop: '1rem', color: '#F43F5E', fontSize: '0.9375rem', fontWeight: '500' }}>
+                ⚠️ {searchError}
+              </p>
+            )}
+
             <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.875rem', color: '#A7ABB4', opacity: 0.7 }}>
               Powered by DeepSeek R1 • No Limit Flix
             </p>
@@ -489,6 +555,7 @@ export default function HomePage() {
                 key={mood.label}
                 label={mood.label}
                 emoji={mood.emoji}
+                selected={selectedMoods.includes(mood.label)}
                 onToggle={(selected) => handleMoodToggle(mood.label, selected)}
               />
             ))}
