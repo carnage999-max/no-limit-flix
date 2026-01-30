@@ -10,9 +10,12 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { COLLECTIONS } from '../lib/constants';
+import { useFavorites } from '../context/FavoritesContext';
+import { TitleTile } from '../components';
 
 export const LibraryScreen = () => {
   const navigation = useNavigation<any>();
+  const { favorites } = useFavorites();
 
   return (
     <View style={styles.container}>
@@ -21,6 +24,41 @@ export const LibraryScreen = () => {
         <Text style={styles.subtitle}>
           Explore curated collections that never rotate
         </Text>
+
+        {/* Favorites Section */}
+        {favorites.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>My Favorites</Text>
+              <Text style={styles.sectionCount}>{favorites.length} {favorites.length === 1 ? 'film' : 'films'}</Text>
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.favoritesScroll}
+            >
+              {favorites.map((movie) => (
+                <View key={movie.id} style={styles.favoriteItem}>
+                  <TitleTile 
+                    movie={movie} 
+                    onPress={(movieId: string) => navigation.navigate('TitleDetail', { id: movieId, movie })}
+                    width={140}
+                  />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {favorites.length === 0 && (
+          <View style={styles.emptyFavorites}>
+            <Ionicons name="heart-outline" size={64} color={COLORS.silver} style={{ opacity: 0.3 }} />
+            <Text style={styles.emptyTitle}>No Favorites Yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Tap the heart icon on any movie to add it to your favorites
+            </Text>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Curated Collections</Text>
@@ -111,13 +149,48 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 40,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.gold.mid,
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginBottom: 16,
+  },
+  sectionCount: {
+    fontSize: 12,
+    color: COLORS.silver,
+    fontWeight: '600',
+  },
+  favoritesScroll: {
+    paddingRight: SPACING.xl,
+  },
+  favoriteItem: {
+    marginRight: 12,
+  },
+  emptyFavorites: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 40,
+    marginBottom: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: COLORS.silver,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   collectionsGrid: {
     gap: 16,

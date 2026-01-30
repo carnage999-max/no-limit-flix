@@ -1,8 +1,10 @@
 import React from 'react';
 import { TouchableOpacity, Image, Text, View, StyleSheet, Dimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { MoviePick } from '../types';
 import { COLORS, SPACING } from '../theme/tokens';
 import { PermanenceBadge } from './PermanenceBadge';
+import { useFavorites } from '../context/FavoritesContext';
 
 const { width } = Dimensions.get('window');
 const TILE_WIDTH = (width - SPACING.xl * 2 - SPACING.md) / 2;
@@ -14,6 +16,14 @@ interface TitleTileProps {
 }
 
 export const TitleTile: React.FC<TitleTileProps> = ({ movie, onPress, width: customWidth }) => {
+  const { isFavorite, toggleFavorite } = useFavorites();
+  const isFav = isFavorite(movie.id);
+
+  const handleFavoritePress = (e: any) => {
+    e.stopPropagation();
+    toggleFavorite(movie);
+  };
+
   return (
     <TouchableOpacity 
       style={[styles.container, customWidth ? { width: customWidth } : null]} 
@@ -25,6 +35,17 @@ export const TitleTile: React.FC<TitleTileProps> = ({ movie, onPress, width: cus
         <View style={styles.badgeOverlay}>
            <PermanenceBadge type={movie.permanence} />
         </View>
+        <TouchableOpacity 
+          style={styles.favoriteButton}
+          onPress={handleFavoritePress}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name={isFav ? "heart" : "heart-outline"} 
+            size={20} 
+            color={isFav ? "#EF4444" : COLORS.text}
+          />
+        </TouchableOpacity>
       </View>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{movie.title}</Text>
@@ -56,6 +77,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     left: 8,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(11, 11, 13, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   info: {
     marginTop: 8,

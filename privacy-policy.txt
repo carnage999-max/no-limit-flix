@@ -1,0 +1,122 @@
+# Privacy Policy
+
+**Global Privacy Policy — Gold Standard Edition**
+**Last Updated:** [Insert Date]
+
+## Introduction
+
+This Global Privacy Policy (the “Policy”) describes how **No Limit Flix®** (“Company,” “we,” “our,” or “us”) collects, uses, discloses, and safeguards personal information across all current and future websites, subdomains, mobile applications, and online services (collectively, the “Services”).
+
+This Policy is designed to meet or exceed global privacy standards, including but not limited to the **General Data Protection Regulation (GDPR)**, **California Consumer Privacy Act / CPRA**, **Virginia Consumer Data Protection Act**, **PIPEDA**, and **LGPD**. It applies to all users regardless of geographic location.
+
+---
+
+## 1. Scope and Applicability
+
+This Policy applies to all visitors and users of our Services. By accessing or using the Services, you acknowledge and consent to the practices described in this Policy.
+
+---
+
+## 2. Information We Collect
+
+We collect only information necessary to operate and improve the Services, including:
+
+* Basic identifiers (such as email address if provided)
+* Device and usage data (browser type, pages viewed, interactions)
+* Session-based preference inputs (e.g., mood selections)
+* Voluntarily submitted communications
+
+We do **not** collect payment information, biometric data, or health data as part of the Services.
+
+---
+
+## 3. Automated and AI-Assisted Processing
+
+No Limit Flix® uses AI-assisted and rule-based systems to interpret user inputs and generate content discovery recommendations. These processes are session-based and do not rely on long-term behavioral profiling.
+
+Automated systems are used solely to improve relevance, usability, and platform performance and are designed with transparency and human oversight in mind.
+
+---
+
+## 4. How We Use Information
+
+Information is used for:
+
+* Delivering and operating the Services
+* Improving recommendations and platform performance
+* Communicating updates or support responses
+* Ensuring security, integrity, and compliance
+
+All processing is conducted on a lawful basis as required by applicable regulations.
+
+---
+
+## 5. Disclosure and Data Sharing
+
+We do **not sell** personal data.
+
+Information may be shared with trusted service providers (such as hosting, analytics, and infrastructure partners) solely for operational purposes. All partners are contractually required to maintain appropriate data protection safeguards.
+
+We may disclose information where required by law or legal process.
+
+---
+
+## 6. International Data Transfers
+
+Data may be processed in jurisdictions outside your country of residence, including the United States. Where applicable, transfers are safeguarded using recognized legal mechanisms such as Standard Contractual Clauses or equivalent protections.
+
+---
+
+## 7. Data Retention
+
+Personal information is retained only for as long as necessary to fulfill the purposes described in this Policy or as required by law. Session-based data is minimized and routinely cleared.
+
+---
+
+## 8. Children’s Privacy
+
+No Limit Flix® is not intended for children under 13 (or under 16 where applicable). We do not knowingly collect personal information from children without verifiable parental consent.
+
+---
+
+## 9. Your Rights
+
+Depending on your jurisdiction, you may have the right to:
+
+* Access your data
+* Correct inaccurate information
+* Request deletion
+* Restrict or object to processing
+* Request data portability
+* Withdraw consent where applicable
+
+Requests can be made using the contact details below.
+
+---
+
+## 10. Security and Safeguards
+
+We employ industry-standard administrative, technical, and organizational measures to protect information, including encryption, access controls, and continuous monitoring.
+
+---
+
+## 11. Cookies and Tracking Technologies
+
+We use cookies and similar technologies for functionality, analytics, and performance. Users may manage cookie preferences through browser settings.
+
+---
+
+## 12. Data Protection Contact
+
+Privacy inquiries and requests may be sent to:
+**privacy@[insertdomain].com**
+
+---
+
+## 13. Updates to This Policy
+
+This Policy may be updated periodically. The latest version will always be available on our website with a revised “Last Updated” date.
+
+© [Insert Year] No Limit Flix®. All rights reserved.
+
+---

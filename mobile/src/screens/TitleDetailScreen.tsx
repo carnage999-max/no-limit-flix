@@ -17,8 +17,11 @@ import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
 import { ButtonPrimary, PermanenceBadge, TrailerPlayer } from '../components';
 import { apiClient } from '../lib/api';
 import { MoviePick } from '../types';
+import { useFavorites } from '../context/FavoritesContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
+const AUTOPLAY_KEY = '@nolimitflix_autoplay';
 
 const getYoutubeId = (url?: string) => {
   if (!url) return null;
@@ -31,6 +34,7 @@ export const TitleDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { id, movie: passedMovie } = route.params || {};
+  const { isFavorite, toggleFavorite } = useFavorites();
 
   const [movie, setMovie] = React.useState<MoviePick | null>(passedMovie || null);
   // Only skip loading if we have the full details (explanation and watchProviders)
@@ -38,12 +42,35 @@ export const TitleDetailScreen = () => {
   const [isPlayingTrailer, setIsPlayingTrailer] = React.useState(false);
 
   const videoId = getYoutubeId(movie?.trailerUrl);
+  const isFav = movie ? isFavorite(movie.id) : false;
+
+  const handleToggleFavorite = () => {
+    if (movie) {
+      toggleFavorite(movie);
+    }
+  };
 
   React.useEffect(() => {
     if ((!movie?.explanation || !movie?.watchProviders) && id) {
       loadMovieDetails();
     }
   }, [id]);
+
+  React.useEffect(() => {
+    const checkAutoPlay = async () => {
+      if (movie && videoId && !isPlayingTrailer) {
+        try {
+          const value = await AsyncStorage.getItem(AUTOPLAY_KEY);
+          if (value !== null && JSON.parse(value) === true) {
+            setIsPlayingTrailer(true);
+          }
+        } catch (e) {
+          console.error('Failed to check autoplay', e);
+        }
+      }
+    };
+    checkAutoPlay();
+  }, [movie, videoId]);
 
   const loadMovieDetails = async () => {
     setLoading(true);
@@ -90,12 +117,25 @@ export const TitleDetailScreen = () => {
             style={StyleSheet.absoluteFill}
           />
           
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="chevron-back" size={28} color={COLORS.text} />
-          </TouchableOpacity>
+          {/* Header Buttons */}
+          <View style={styles.headerButtons}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="chevron-back" size={28} color={COLORS.text} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.headerFavoriteButton}
+              onPress={handleToggleFavorite}
+            >
+              <Ionicons 
+                name={isFav ? "heart" : "heart-outline"} 
+                size={28} 
+                color={isFav ? "#EF4444" : COLORS.text}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Info Header */}
@@ -189,14 +229,28 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  backButton: {
+  headerButtons: {
     position: 'absolute',
     top: 50,
     left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    zIndex: 10,
+  },
+  backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(11, 11, 13, 0.5)',
+    backgroundColor: 'rgba(11, 11, 13, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerFavoriteButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(11, 11, 13, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
