@@ -23,7 +23,7 @@ import {
   MoodChip, 
   HeroCard, 
   TitleTile 
-} from '../components';
+} from '../components/index';
 import { MOOD_OPTIONS, FEEDBACK_OPTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
 import { AIPickResponse, MoviePick } from '../types';
@@ -82,7 +82,7 @@ export const HomeScreen = () => {
     );
   };
 
-  const handleSearch = async () => {
+  const handleSearch = async (overrideMoods?: string[], overrideVibe?: string) => {
     if (isLoading) return;
     
     // Smoothly scroll to results section
@@ -91,12 +91,14 @@ export const HomeScreen = () => {
     setIsLoading(true);
     try {
       let response: AIPickResponse;
+      const effectiveVibe = overrideVibe !== undefined ? overrideVibe : vibeText;
+      const effectiveMoods = overrideMoods !== undefined ? overrideMoods : selectedMoods;
 
-      if (vibeText.trim()) {
-        const interpretRes = await apiClient.interpretVibe(vibeText);
-        response = await apiClient.pickForMe(interpretRes.mood_tags || selectedMoods, vibeText);
+      if (effectiveVibe.trim()) {
+        const interpretRes = await apiClient.interpretVibe(effectiveVibe);
+        response = await apiClient.pickForMe(interpretRes.mood_tags || effectiveMoods, effectiveVibe);
       } else {
-        response = await apiClient.pickForMe(selectedMoods);
+        response = await apiClient.pickForMe(effectiveMoods);
       }
       
       setResults(response);
@@ -105,6 +107,18 @@ export const HomeScreen = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleShuffle = () => {
+    // Pick 2 random moods from options
+    const shuffled = [...MOOD_OPTIONS].sort(() => 0.5 - Math.random());
+    const randomMoods = shuffled.slice(0, 2).map(m => m.label);
+    
+    setVibeText('');
+    setSelectedMoods(randomMoods);
+    
+    // Trigger search immediately with the new moods
+    handleSearch(randomMoods, '');
   };
 
   const handleRepick = async (feedback: string) => {
@@ -178,7 +192,7 @@ export const HomeScreen = () => {
                 label={mood.label}
                 emoji={mood.emoji}
                 selected={selectedMoods.includes(mood.label)}
-                onToggle={(selected) => handleMoodToggle(mood.label, selected)}
+                onToggle={(selected: boolean) => handleMoodToggle(mood.label, selected)}
               />
             ))}
           </View>
@@ -198,7 +212,7 @@ export const HomeScreen = () => {
             ) : null}
             
             <ButtonSecondary 
-              onPress={() => setSelectedMoods([])}
+              onPress={handleShuffle}
               fullWidth
               disabled={isLoading}
             >
@@ -237,7 +251,7 @@ export const HomeScreen = () => {
                <Text style={styles.sectionLabel}>THE HIGHLIGHT</Text>
                <HeroCard 
                 movie={results.hero} 
-                onViewDetails={(id) => navigation.navigate('TitleDetail', { id, movie: results.hero })}
+                onViewDetails={(id: any) => navigation.navigate('TitleDetail', { id, movie: results.hero })}
               />
             </View>
 
@@ -269,7 +283,7 @@ export const HomeScreen = () => {
                     key={movie.id} 
                     movie={movie} 
                     width={getTileWidth()}
-                    onPress={(id, movieObj) => navigation.navigate('TitleDetail', { id, movie: movieObj })}
+                    onPress={(id: any, movieObj: any) => navigation.navigate('TitleDetail', { id, movie: movieObj })}
                   />
                 ))}
               </View>

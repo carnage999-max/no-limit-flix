@@ -14,7 +14,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
-import { ButtonPrimary, PermanenceBadge, TrailerPlayer } from '../components';
+import { ButtonPrimary, PermanenceBadge, TrailerPlayer } from '../components/index';
 import { apiClient } from '../lib/api';
 import { MoviePick } from '../types';
 import { useFavorites } from '../context/FavoritesContext';

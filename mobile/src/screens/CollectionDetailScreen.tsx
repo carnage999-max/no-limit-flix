@@ -12,7 +12,7 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
-import { TitleTile } from '../components';
+import { TitleTile } from '../components/index';
 import { COLLECTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
 import { MoviePick } from '../types';

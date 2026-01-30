@@ -13,13 +13,15 @@ interface ButtonSecondaryProps {
   children: React.ReactNode;
   fullWidth?: boolean;
   style?: ViewStyle;
+  disabled?: boolean;
 }
 
 export const ButtonSecondary: React.FC<ButtonSecondaryProps> = ({ 
   onPress, 
   children, 
   fullWidth = false,
-  style 
+  style,
+  disabled = false
 }) => {
   const animatedValue = new Animated.Value(1);
 
@@ -43,9 +45,11 @@ export const ButtonSecondary: React.FC<ButtonSecondaryProps> = ({
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      disabled={disabled}
       style={[
         styles.container,
         fullWidth && styles.fullWidth,
+        disabled && styles.disabled,
         style
       ]}
     >
@@ -76,5 +80,8 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '600',
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });

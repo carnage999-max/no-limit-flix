@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { COLLECTIONS } from '../lib/constants';
 import { useFavorites } from '../context/FavoritesContext';
-import { TitleTile } from '../components';
+import { TitleTile } from '../components/index';
 
 export const LibraryScreen = () => {
   const navigation = useNavigation<any>();

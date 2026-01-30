@@ -16,13 +16,15 @@ interface ButtonPrimaryProps {
   children: React.ReactNode;
   fullWidth?: boolean;
   style?: ViewStyle;
+  disabled?: boolean;
 }
 
 export const ButtonPrimary: React.FC<ButtonPrimaryProps> = ({ 
   onPress, 
   children, 
   fullWidth = false,
-  style 
+  style,
+  disabled = false
 }) => {
   const animatedValue = new Animated.Value(1);
 
@@ -46,9 +48,11 @@ export const ButtonPrimary: React.FC<ButtonPrimaryProps> = ({
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      disabled={disabled}
       style={[
         styles.container,
         fullWidth && styles.fullWidth,
+        disabled && styles.disabled,
         style
       ]}
     >
@@ -97,5 +101,8 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.size.md,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });
