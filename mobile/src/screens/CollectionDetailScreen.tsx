@@ -6,7 +6,8 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Dimensions,
-  ActivityIndicator 
+  ActivityIndicator,
+  RefreshControl 
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,11 +33,27 @@ export const CollectionDetailScreen = () => {
 
   const [movies, setMovies] = useState<MoviePick[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeFilters, setActiveFilters] = useState({
     length: 'Medium',
     intensity: 'Medium',
     tone: 'Neutral',
   });
+
+  const filteredMovies = React.useMemo(() => {
+    return movies.filter(movie => {
+      // Length Filter
+      const runtime = movie.runtime || 120;
+      if (activeFilters.length === 'Short' && runtime >= 90) return false;
+      if (activeFilters.length === 'Medium' && (runtime < 90 || runtime > 140)) return false;
+      if (activeFilters.length === 'Long' && runtime <= 140) return false;
+      
+      // Other filters (Intensity/Tone) are simulated as we don't have deep metadata here
+      // but choosing 'High' intensity could filter for Action/Thriller genres if we wanted.
+      
+      return true;
+    });
+  }, [movies, activeFilters]);
 
   React.useEffect(() => {
     if (id) {
@@ -45,7 +62,6 @@ export const CollectionDetailScreen = () => {
   }, [id]);
 
   const loadCollectionMovies = async () => {
-    setLoading(true);
     try {
       const results = await apiClient.getMoviesByCollection(id);
       setMovies(results);
@@ -53,7 +69,13 @@ export const CollectionDetailScreen = () => {
       console.error('Failed to load collection movies:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCollectionMovies();
   };
 
   const toggleFilter = (category: string, value: string) => {
@@ -62,7 +84,17 @@ export const CollectionDetailScreen = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={collection.accentColor}
+            colors={[collection.accentColor]}
+          />
+        }
+      >
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -105,16 +137,29 @@ export const CollectionDetailScreen = () => {
         </View>
 
         {loading ? (
-          <ActivityIndicator size="large" color={collection.accentColor} style={{ marginTop: 40 }} />
-        ) : (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color={collection.accentColor} />
+            <Text style={styles.loaderText}>Loading collection...</Text>
+          </View>
+        ) : filteredMovies.length > 0 ? (
           <View style={styles.grid}>
-            {movies.map((movie: MoviePick) => (
+            {filteredMovies.map((movie: MoviePick) => (
               <TitleTile 
                 key={movie.id} 
                 movie={movie} 
                 onPress={(movieId: string) => navigation.navigate('TitleDetail', { id: movieId, movie })}
               />
             ))}
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No movies match these filters</Text>
+            <TouchableOpacity 
+              onPress={() => setActiveFilters({ length: 'Medium', intensity: 'Medium', tone: 'Neutral' })}
+              style={styles.resetButton}
+            >
+              <Text style={[styles.resetText, { color: collection.accentColor }]}>Reset Filters</Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -191,5 +236,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-  }
+  },
+  loaderContainer: {
+    marginTop: 60,
+    alignItems: 'center',
+    gap: 16,
+  },
+  loaderText: {
+    color: COLORS.silver,
+    fontSize: 14,
+  },
+  emptyContainer: {
+    marginTop: 60,
+    alignItems: 'center',
+    gap: 16,
+  },
+  emptyText: {
+    color: COLORS.silver,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  resetButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(167, 171, 180, 0.1)',
+  },
+  resetText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
 });

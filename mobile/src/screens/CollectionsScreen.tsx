@@ -5,7 +5,8 @@ import {
   Text, 
   ScrollView, 
   TouchableOpacity, 
-  Dimensions 
+  Dimensions,
+  RefreshControl
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -14,10 +15,29 @@ import { COLLECTIONS } from '../lib/constants';
 
 export const CollectionsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    // Simulate refresh
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1500);
+  }, []);
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh} 
+            tintColor={COLORS.gold.mid}
+            colors={[COLORS.gold.mid]}
+          />
+        }
+      >
         <Text style={styles.title}>Explore Collections</Text>
         <Text style={styles.subtitle}>Curated selections that promise a specific feeling.</Text>
 

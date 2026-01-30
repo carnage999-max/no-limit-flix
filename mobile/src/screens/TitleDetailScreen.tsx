@@ -14,11 +14,18 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
-import { ButtonPrimary, PermanenceBadge } from '../components';
+import { ButtonPrimary, PermanenceBadge, TrailerPlayer } from '../components';
 import { apiClient } from '../lib/api';
 import { MoviePick } from '../types';
 
 const { width } = Dimensions.get('window');
+
+const getYoutubeId = (url?: string) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+};
 
 export const TitleDetailScreen = () => {
   const route = useRoute<any>();
@@ -26,10 +33,14 @@ export const TitleDetailScreen = () => {
   const { id, movie: passedMovie } = route.params || {};
 
   const [movie, setMovie] = React.useState<MoviePick | null>(passedMovie || null);
-  const [loading, setLoading] = React.useState(!passedMovie && !!id);
+  // Only skip loading if we have the full details (explanation and watchProviders)
+  const [loading, setLoading] = React.useState(!movie?.explanation || !movie?.watchProviders);
+  const [isPlayingTrailer, setIsPlayingTrailer] = React.useState(false);
+
+  const videoId = getYoutubeId(movie?.trailerUrl);
 
   React.useEffect(() => {
-    if (!movie && id) {
+    if ((!movie?.explanation || !movie?.watchProviders) && id) {
       loadMovieDetails();
     }
   }, [id]);
@@ -105,13 +116,13 @@ export const TitleDetailScreen = () => {
         <View style={styles.body}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Why you might like this</Text>
-            <Text style={styles.explanationText}>{movie.explanation}</Text>
+            <Text style={styles.explanationText}>{movie.explanation || 'Loading details...'}</Text>
           </View>
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Genres</Text>
             <View style={styles.genreList}>
-              {movie.genres.map(genre => (
+              {movie.genres?.map(genre => (
                 <View key={genre} style={styles.genreBadge}>
                   <Text style={styles.genreText}>{genre}</Text>
                 </View>
@@ -119,16 +130,23 @@ export const TitleDetailScreen = () => {
             </View>
           </View>
 
-          <View style={styles.section}>
-            <ButtonPrimary 
-              onPress={() => movie.trailerUrl && Linking.openURL(movie.trailerUrl)}
-              fullWidth
-            >
-              Watch Trailer
-            </ButtonPrimary>
-          </View>
+          {movie.trailerUrl && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Trailer</Text>
+              {isPlayingTrailer && videoId ? (
+                <TrailerPlayer videoId={videoId} />
+              ) : (
+                <ButtonPrimary 
+                  onPress={() => setIsPlayingTrailer(true)}
+                  fullWidth
+                >
+                  Watch Trailer
+                </ButtonPrimary>
+              )}
+            </View>
+          )}
 
-          {movie.watchProviders.length > 0 && (
+          {movie.watchProviders && movie.watchProviders.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Where to watch</Text>
               <View style={styles.providersGrid}>

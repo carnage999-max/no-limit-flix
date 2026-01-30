@@ -93,5 +93,16 @@ export const apiClient = {
       console.error('API Error (getMoviesByCollection):', error);
       throw error;
     }
+  },
+
+  searchMovies: async (query: string) => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/search?q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error('Failed to search movies');
+      return await response.json();
+    } catch (error) {
+      console.error('API Error (searchMovies):', error);
+      throw error;
+    }
   }
 };
