@@ -19,14 +19,13 @@ This Policy applies to all visitors and users of our Services. By accessing or u
 
 ## 2. Information We Collect
 
-We collect only information necessary to operate and improve the Services, including:
+We collect only information necessary to operate and improve the Services. For our mobile application users, this is specifically limited to:
 
-* Basic identifiers (such as email address if provided)
-* Device and usage data (browser type, pages viewed, interactions)
-* Session-based preference inputs (e.g., mood selections)
-* Voluntarily submitted communications
+*   **Search & Preferences:** Session-based inputs (mood selections and "vibe" text) used purely to generate your current movie recommendations.
+*   **Device & Usage Data:** Basic technical data (OS version, app version, error logs) to ensure compatibility, security, and performance.
+*   **App Activity:** Anonymous interactions with our movie discovery engine to understand feature usage.
 
-We do **not** collect payment information, biometric data, or health data as part of the Services.
+We do **not** collect personal identifiers such as names, email addresses, phone numbers, or precise location data. Vibe and search inputs are processed **ephemerally** and are not stored against a permanent user profile.
 
 ---
 

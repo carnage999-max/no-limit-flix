@@ -23,36 +23,42 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">1. Information We Collect</h2>
             <p className="text-[#A7ABB4] leading-relaxed mb-4">
-              We collect only information necessary to operate and improve the Services, including:
+              We collect only information necessary to operate and improve the Services. For our mobile application users, this is limited to:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-[#A7ABB4]">
-              <li>Basic identifiers (such as email address if provided)</li>
-              <li>Device and usage data (browser type, pages viewed, interactions)</li>
-              <li>Session-based preference inputs (e.g., mood selections)</li>
-              <li>Voluntarily submitted communications</li>
+              <li><strong>Search & Preferences:</strong> Session-based inputs (mood selections and "vibe" text) used to generate recommendations.</li>
+              <li><strong>Device Data:</strong> Basic information (OS version, app version) to ensure compatibility and performance.</li>
+              <li><strong>App Activity:</strong> Anonymous interactions with our movie discovery engine.</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">2. Automated and AI-Assisted Processing</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">2. Mobile Data Safety & Ephemeral Processing</h2>
+            <p className="text-[#A7ABB4] leading-relaxed">
+              <strong>No Limit Flix® does not collect personal identifiers</strong> like your name, email address, phone number, or precise location. 
+              Any "vibe" or search text you provide is processed <strong>ephemerally</strong>. This means it is used solely to generate your immediate recommendations and is not stored against a permanent user profile.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">3. Automated and AI-Assisted Processing</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
               No Limit Flix® uses AI-assisted systems to interpret user inputs and generate content recommendations. 
-              These processes are session-based and do not rely on long-term behavioral profiling.
+              These processes do not rely on long-term behavioral profiling. We use industry-standard encryption (HTTPS) for all data in transit between your device and our servers.
             </p>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">3. Disclosure and Data Sharing</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">4. Disclosure and Data Sharing</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              We do <strong>not sell</strong> personal data. Information is shared only with trusted service providers solely for operational purposes.
+              We do <strong>not sell</strong> personal data. Search queries may be shared with trusted AI infrastructure partners (like OpenRouter or Google Gemini) solely for processing your request. These partners do not use this data for their own marketing purposes.
             </p>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">4. Your Rights</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">5. Your Rights</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              Depending on your jurisdiction, you may have the right to access, correct, or delete your data. 
-              Requests can be made to our privacy contact.
+              Since we do not maintain user accounts or link data to personal identifiers, there is no "account" to manage. However, you can clear your local application cache at any time to remove your interaction history from your device.
             </p>
           </section>
 
