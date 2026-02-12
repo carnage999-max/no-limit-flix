@@ -921,6 +921,52 @@ export default function HomePage() {
           </div>
         </section>
       )}
+      
+      {/* Powered by Scene Aware Footer */}
+      <section
+        style={{
+          padding: '4rem 1rem',
+          background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(20, 184, 166, 0.08) 100%)',
+          borderTop: '1px solid rgba(167, 171, 180, 0.2)',
+          marginTop: '4rem',
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '1400px',
+            margin: '0 auto',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '1.5rem',
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}
+        >
+          <img
+            src="/scene-aware.png"
+            alt="Scene Aware Logo"
+            style={{
+              height: '5rem',
+              width: 'auto',
+              opacity: 1,
+              marginBottom: '1rem',
+              filter: 'drop-shadow(0 4px 6px rgba(139, 92, 246, 0.1))',
+            }}
+          />
+          <p
+            style={{
+              fontSize: '1rem',
+              color: '#A7ABB4',
+              fontWeight: '500',
+              margin: 0,
+              maxWidth: '600px',
+            }}
+          >
+            Powered by <span style={{ color: '#F3F4F6', fontWeight: '700' }}>Scene Aware</span> — The industry's only real-time content editor
+          </p>
+        </div>
+      </section>
     </div>
   );
 }
