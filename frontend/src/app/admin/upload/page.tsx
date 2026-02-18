@@ -364,7 +364,7 @@ export default function AdminUploadPage() {
                         <div style={styles.previewCard}>
                             <div style={styles.thumbWrapper}>
                                 {thumbnailPreview ? (
-                                    <img src={thumbnailPreview} style={{ width: '100%', height: '100%', objectCover: 'cover' }} alt="Preview" />
+                                    <img src={thumbnailPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview" />
                                 ) : (
                                     <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                         <Loader2 className="animate-spin" />
