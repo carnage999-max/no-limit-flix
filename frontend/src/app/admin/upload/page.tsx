@@ -258,7 +258,7 @@ export default function AdminUploadPage() {
 
                             {thumbnailPreview ? (
                                 <div className="absolute inset-0 group">
-                                    <img src={thumbnailPreview} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                    <img src={thumbnailPreview || ''} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
                                         <p className="text-[10px] uppercase tracking-[0.4em] font-black text-white">Change Poster</p>
                                     </div>

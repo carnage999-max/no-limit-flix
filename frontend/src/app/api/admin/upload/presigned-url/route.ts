@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Create a pending record in the database
-        const video = await prisma.video.create({
+        const video = await (prisma.video as any).create({
             data: {
                 id: videoId,
                 title,

@@ -14,17 +14,21 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { videoId, fileSize } = body;
 
+        console.log('Completing upload for videoId:', videoId);
+
         if (!videoId) {
             return NextResponse.json({ error: 'Missing videoId' }, { status: 400 });
         }
 
-        const completeRes = await prisma.video.update({
+        const completeRes = await (prisma.video as any).update({
             where: { id: videoId },
             data: {
                 status: 'completed',
                 fileSize: fileSize ? BigInt(fileSize) : null,
             },
         });
+
+        console.log('Record marked as completed in DB');
 
         // Construct the public URL (CloudFront or direct S3)
         const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
@@ -34,14 +38,13 @@ export async function POST(request: NextRequest) {
 
         let publicThumbUrl = completeRes.thumbnailUrl;
         if (cloudFrontUrl && completeRes.thumbnailUrl) {
-            // Check if it's an S3 URL and replace it
             const thumbS3Key = completeRes.thumbnailUrl.split('.com/').pop();
             if (thumbS3Key) {
                 publicThumbUrl = `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${thumbS3Key}`;
             }
         }
 
-        const video = await prisma.video.update({
+        const video = await (prisma.video as any).update({
             where: { id: videoId },
             data: {
                 s3Url: publicUrl,
@@ -49,9 +52,20 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        return NextResponse.json({ success: true, video });
+        console.log('Public URLs synced');
+
+        // Serialize BigInt for JSON response
+        const serializedVideo = {
+            ...video,
+            fileSize: video.fileSize?.toString() || null
+        };
+
+        return NextResponse.json({ success: true, video: serializedVideo });
     } catch (error: any) {
-        console.error('Error completing upload:', error);
-        return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+        console.error('CRITICAL ERROR in /api/admin/upload/complete:', error);
+        return NextResponse.json({
+            error: error.message || 'Internal Server Error',
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }, { status: 500 });
     }
 }
