@@ -25,25 +25,47 @@ export default function AdminUploadPage() {
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
+            const videoFile = e.target.files[0];
+            setFile(videoFile);
             setStatus('idle');
+
             if (!title) {
-                const nameWithoutExt = e.target.files[0].name.replace(/\.[^/.]+$/, "");
+                const nameWithoutExt = videoFile.name.replace(/\.[^/.]+$/, "");
                 setTitle(nameWithoutExt);
             }
+
+            // Automatic Thumbnail Extraction
+            extractThumbnail(videoFile);
         }
     };
 
-    const handleThumbChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            setThumbnailFile(file);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setThumbnailPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        }
+    const extractThumbnail = (videoFile: File) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.src = URL.createObjectURL(videoFile);
+
+        video.onloadedmetadata = () => {
+            // Seek to 1 second to avoid potential black frame at start
+            video.currentTime = 1;
+        };
+
+        video.onseeked = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                canvas.toBlob((blob) => {
+                    if (blob) {
+                        const thumbFile = new File([blob], 'auto-thumb.jpg', { type: 'image/jpeg' });
+                        setThumbnailFile(thumbFile);
+                        setThumbnailPreview(URL.createObjectURL(blob));
+                    }
+                }, 'image/jpeg', 0.8);
+            }
+            URL.revokeObjectURL(video.src);
+        };
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -147,335 +169,263 @@ export default function AdminUploadPage() {
     };
 
     return (
-        <div className="max-w-5xl mx-auto space-y-8 sm:space-y-16 py-8 sm:py-12 px-4 sm:px-6">
-            {/* Header Area */}
-            <div className="text-center space-y-4 sm:space-y-8 animate-fade-in">
+        <div className="max-w-6xl mx-auto py-12 px-6 space-y-20 animate-fade-in mb-24">
+            {/* Elegant Header */}
+            <div className="flex flex-col items-center text-center space-y-6">
                 <Link
                     href="/admin"
-                    className="group inline-flex items-center gap-3 text-silver/40 hover:text-gold-mid transition-all text-[10px] uppercase tracking-[0.4em] font-black"
+                    className="group flex items-center gap-2 text-[10px] uppercase tracking-[0.5em] font-black text-white/20 hover:text-gold-mid transition-all"
                 >
-                    <ArrowLeft className="w-3 h-3 group-hover:-translate-x-1 transition-transform" /> Back to Dashboard
+                    <ArrowLeft className="w-3 h-3 group-hover:-translate-x-1 transition-transform" />
+                    Return to Mission Control
                 </Link>
-                <div className="space-y-2">
+                <div className="space-y-4">
                     <h1 className="text-display gold-gradient-text uppercase leading-none tracking-tighter">
-                        Library Integration
+                        Library Ingestion
                     </h1>
-                    <p className="text-[0.875rem] sm:text-subheading text-white/40 font-medium tracking-wide">
-                        Authorized uplink for permanent cinematic assets.
+                    <p className="text-subheading text-white/30 font-medium max-w-xl mx-auto italic">
+                        Securing cinematic assets into the vault. Automatic metadata extraction enabled.
                     </p>
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-8 sm:space-y-12">
-                {/* File Upload Zone */}
-                <div
-                    onClick={() => !uploading && fileInputRef.current?.click()}
-                    className={`
-                        relative w-full min-h-[250px] sm:min-h-[350px] flex flex-col items-center justify-center gap-6 sm:gap-8 cursor-pointer transition-all duration-700 rounded-[2rem] sm:rounded-[3rem] overflow-hidden group
-                        ${file ? 'bg-gold-mid/5 border border-gold-mid shadow-[0_0_100px_rgba(212,175,55,0.15)]' : 'bg-white/[0.02] border-2 border-dashed border-white/10 hover:border-gold-mid/40 hover:bg-white/[0.05] backdrop-blur-3xl'}
-                        ${uploading ? 'cursor-not-allowed pointer-events-none' : ''}
-                    `}
-                >
-                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/*" className="hidden" />
+            <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-12 sm:gap-16">
+                {/* Left Column: Upload & Preview */}
+                <div className="lg:col-span-12 space-y-12">
+                    <div
+                        onClick={() => !uploading && fileInputRef.current?.click()}
+                        className={`
+                            relative w-full min-h-[400px] flex flex-col items-center justify-center rounded-[3rem] transition-all duration-1000 overflow-hidden group border-2 border-dashed
+                            ${file
+                                ? 'bg-black/40 border-gold-mid/40 shadow-[0_0_100px_rgba(212,175,55,0.1)]'
+                                : 'bg-white/[0.02] border-white/5 hover:border-gold-mid/30 hover:bg-white/[0.05] backdrop-blur-3xl'}
+                            ${uploading ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer'}
+                        `}
+                    >
+                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/*" className="hidden" />
 
-                    {file ? (
-                        <div className="text-center space-y-4 sm:space-y-6 px-4 sm:px-12 animate-scale-in">
-                            <div className="relative inline-block">
-                                <div className="w-16 h-16 sm:w-24 h-24 gold-gradient rounded-[1.25rem] sm:rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl rotate-12 transition-transform group-hover:rotate-0 duration-500">
-                                    <FileVideo className="w-8 h-8 sm:w-12 h-12 text-background" />
-                                </div>
-                                <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 bg-white text-background rounded-full p-1.5 sm:p-2 shadow-lg">
-                                    <Sparkles className="w-3 h-3 sm:w-4 h-4" />
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <h3 className="text-xl sm:text-3xl font-black text-white tracking-tighter break-all">{file.name}</h3>
-                                <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-                                    <span className="text-[9px] sm:text-[10px] text-gold-mid uppercase tracking-[0.2em] sm:tracking-[0.3em] font-black">Ready for Handshake</span>
-                                    <div className="hidden sm:block w-1 h-1 rounded-full bg-white/20" />
-                                    <span className="text-[9px] sm:text-[10px] text-silver/40 uppercase tracking-[0.2em] sm:tracking-[0.3em] font-black">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); setFile(null); }}
-                                className="text-[10px] text-silver/30 hover:text-white transition-colors underline uppercase tracking-[0.3em] sm:tracking-[0.4em] font-black"
-                            >
-                                Replace Selection
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center gap-6 sm:gap-8 group">
-                            <div className="w-16 h-16 sm:w-20 h-20 rounded-[1.25rem] sm:rounded-[2rem] border border-white/10 flex items-center justify-center group-hover:border-gold-mid/50 group-hover:scale-110 transition-all duration-700 bg-white/[0.02]">
-                                <Upload className="w-6 h-6 sm:w-8 h-8 text-silver/20 group-hover:text-gold-mid group-hover:animate-bounce" />
-                            </div>
-                            <div className="text-center space-y-2 px-4">
-                                <p className="text-lg sm:text-2xl font-black text-silver group-hover:text-white transition-colors tracking-tight uppercase">Drop Cinematic Asset</p>
-                                <p className="text-[9px] sm:text-[10px] text-silver/30 uppercase tracking-[0.3em] sm:tracking-[0.5em] font-black">Validated Formats: MP4, MOV, WEBM</p>
-                            </div>
-                        </div>
-                    )}
-
-                    {uploading && (
-                        <div className="absolute inset-0 bg-background/80 backdrop-blur-2xl rounded-[2rem] sm:rounded-[3rem] flex flex-col items-center justify-center p-8 sm:p-16 space-y-6 sm:space-y-8 animate-fade-in">
-                            <div className="text-center space-y-4">
-                                <div className="relative">
-                                    <Loader2 className="w-12 h-12 sm:w-16 h-16 animate-spin text-gold-mid mx-auto opacity-20" />
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Upload className="w-5 h-5 sm:w-6 h-6 text-gold-mid" />
-                                    </div>
-                                </div>
-                                <h2 className="text-2xl sm:text-4xl font-black gold-gradient-text uppercase tracking-tighter">Syncing to S3</h2>
-                            </div>
-                            <div className="w-full max-w-md space-y-4">
-                                <div className="w-full bg-white/5 rounded-full h-1.5 sm:h-2 overflow-hidden p-0.5 border border-white/5">
-                                    <div className="gold-gradient h-full rounded-full transition-all duration-700 ease-out" style={{ width: `${progress}%` }} />
-                                </div>
-                                <div className="flex justify-between items-center text-[9px] sm:text-[10px] uppercase tracking-[0.3em] sm:tracking-[0.5em] font-black text-gold-mid">
-                                    <span className="animate-pulse">Handshaking...</span>
-                                    <span className="text-2xl sm:text-3xl font-black text-white ml-auto">{progress}%</span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Thumbnail Selection */}
-                <div className="animate-fade-in delay-75">
-                    <div className="flex flex-col items-center gap-6 sm:gap-10">
-                        <label className="text-[10px] sm:text-[11px] uppercase tracking-[0.6em] font-black text-silver/30">
-                            Cinematic Poster
-                        </label>
-
-                        <div
-                            onClick={() => !uploading && thumbInputRef.current?.click()}
-                            className={`
-                                relative w-full sm:w-[320px] aspect-[16/9] rounded-[1.5rem] sm:rounded-[2rem] border-2 border-dashed transition-all duration-700 overflow-hidden cursor-pointer group
-                                ${thumbnailPreview ? 'border-gold-mid bg-gold-mid/5 shadow-2xl' : 'border-white/10 bg-white/[0.01] hover:bg-white/[0.03] hover:border-gold-mid/40'}
-                            `}
-                        >
-                            <input type="file" ref={thumbInputRef} onChange={handleThumbChange} accept="image/*" className="hidden" />
-
-                            {thumbnailPreview ? (
-                                <div className="absolute inset-0 group">
-                                    <img src={thumbnailPreview || ''} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                                        <p className="text-[10px] uppercase tracking-[0.4em] font-black text-white">Change Poster</p>
-                                    </div>
-                                    {uploading && (
-                                        <div className="absolute inset-0 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4">
-                                            <p className="text-[10px] uppercase tracking-[0.4em] font-black text-gold-mid mb-2">Injecting Metadata...</p>
-                                            <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
-                                                <div className="h-full bg-gold-mid transition-all duration-500" style={{ width: `${thumbProgress}%` }} />
-                                            </div>
+                        {file ? (
+                            <div className="relative w-full h-full flex flex-col md:flex-row items-center gap-12 p-12 animate-scale-in">
+                                {/* Auto-extracted Preview Card */}
+                                <div className="relative w-full md:w-[480px] aspect-video rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 group/thumb">
+                                    {thumbnailPreview ? (
+                                        <img src={thumbnailPreview} alt="Auto-extracted" className="w-full h-full object-cover transition-transform duration-1000 group-hover/thumb:scale-110" />
+                                    ) : (
+                                        <div className="w-full h-full bg-white/5 flex flex-col items-center justify-center animate-pulse gap-4">
+                                            <Loader2 className="w-8 h-8 text-gold-mid animate-spin opacity-50" />
+                                            <span className="text-[10px] uppercase tracking-[0.4em] text-white/20 font-black">Extracting Visuals...</span>
                                         </div>
                                     )}
-                                </div>
-                            ) : (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-                                    <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center bg-white/[0.02] group-hover:border-gold-mid/50 transition-colors">
-                                        <Upload className="w-4 h-4 text-silver/20 group-hover:text-gold-mid" />
+                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent p-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 rounded-full bg-gold-mid animate-pulse" />
+                                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-white/60 text-shadow">Automatic Frame Capture</span>
+                                        </div>
                                     </div>
-                                    <p className="text-[9px] uppercase tracking-[0.4em] font-black text-silver/30 group-hover:text-silver/60">Upload Thumbnail</p>
                                 </div>
-                            )}
-                        </div>
+
+                                {/* File Details */}
+                                <div className="flex-1 space-y-6 text-center md:text-left">
+                                    <div className="space-y-2">
+                                        <p className="text-[10px] uppercase tracking-[0.5em] font-black text-gold-mid">Asset Selected</p>
+                                        <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tighter break-all line-clamp-2 uppercase italic">{file.name}</h3>
+                                    </div>
+                                    <div className="flex flex-col md:flex-row items-center gap-6 justify-center md:justify-start">
+                                        <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5">
+                                            <FileVideo className="w-4 h-4 text-gold-mid" />
+                                            <span className="text-[11px] font-black text-white/50 lowercase tracking-widest italic line-clamp-1 max-w-[150px]">{file.type}</span>
+                                        </div>
+                                        <span className="text-[11px] font-black text-gold-mid/60 uppercase tracking-widest italic line-clamp-1">{(file.size / (1024 * 1024)).toFixed(0)} Megabytes</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setFile(null); setThumbnailPreview(null); setThumbnailFile(null); }}
+                                        className="text-[10px] text-white/20 hover:text-gold-mid transition-all uppercase tracking-[0.6em] font-black underline underline-offset-8"
+                                    >
+                                        Eject Selection
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center gap-10 group/drop">
+                                <div className="w-24 h-24 rounded-[2.5rem] border border-white/5 flex items-center justify-center group-hover/drop:border-gold-mid/40 group-hover/drop:scale-110 transition-all duration-700 bg-white/[0.01] relative">
+                                    <Upload className="w-8 h-8 text-white/10 group-hover/drop:text-gold-mid group-hover/drop:animate-bounce" />
+                                    <div className="absolute inset-0 bg-gold-mid/5 blur-3xl opacity-0 group-hover/drop:opacity-100 transition-opacity rounded-full scale-150" />
+                                </div>
+                                <div className="text-center space-y-4">
+                                    <p className="text-2xl sm:text-3xl font-black text-white/20 group-hover/drop:text-white transition-colors tracking-tighter uppercase italic">Inject Cinematic Feed</p>
+                                    <p className="text-[10px] text-white/10 uppercase tracking-[0.5em] font-black">Validated Formats: MP4, MOV, WEBM</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {uploading && (
+                            <div className="absolute inset-0 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center p-8 z-50 animate-fade-in">
+                                <div className="w-full max-w-2xl space-y-12">
+                                    <div className="flex flex-col items-center gap-8">
+                                        <div className="relative">
+                                            <Loader2 className="w-20 h-20 animate-spin text-gold-mid opacity-20" />
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <Upload className="w-8 h-8 text-gold-mid animate-pulse" />
+                                            </div>
+                                        </div>
+                                        <div className="text-center space-y-3">
+                                            <h2 className="text-4xl font-black gold-gradient-text uppercase tracking-tighter italic">Broadcasting to Orbit</h2>
+                                            <p className="text-[11px] uppercase tracking-[0.5em] text-white/40 font-black animate-pulse">Syncing Video + Captured Frames</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-6">
+                                        <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden p-1 border border-white/5">
+                                            <div className="gold-gradient h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_20px_rgba(212,175,55,0.5)]" style={{ width: `${progress}%` }} />
+                                        </div>
+                                        <div className="flex justify-between items-end">
+                                            <div className="space-y-1">
+                                                <span className="text-[10px] uppercase tracking-[0.4em] font-black text-gold-mid block italic">Transmission Power</span>
+                                                <span className="text-4xl font-black text-white leading-none">{progress}%</span>
+                                            </div>
+                                            <div className="text-right space-y-1">
+                                                <span className="text-[10px] uppercase tracking-[0.4em] font-black text-white/20 block italic">Status</span>
+                                                <span className="text-[11px] uppercase tracking-[0.2em] font-black text-gold-mid animate-pulse italic">Injecting...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Classification Selector */}
-                <div className="flex flex-col items-center gap-6 sm:gap-10 animate-fade-in delay-100">
-                    <label className="text-[10px] sm:text-[11px] uppercase tracking-[0.6em] font-black text-silver/30">
-                        Content Classification
-                    </label>
-                    <div className="flex p-2 bg-white/[0.03] backdrop-blur-3xl rounded-full border border-white/10 shadow-2xl">
-                        <button
-                            type="button"
-                            onClick={() => setAssetType('movie')}
-                            className={`
-                                px-8 sm:px-12 py-3 sm:py-4 rounded-full text-[10px] sm:text-[12px] uppercase tracking-[0.3em] font-black transition-all duration-500
-                                ${assetType === 'movie' ? 'bg-gold-mid text-background shadow-[0_10px_30px_rgba(212,175,55,0.4)] scale-105' : 'text-silver/50 hover:text-white hover:bg-white/5'}
-                            `}
-                        >
-                            Feature Film
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setAssetType('series')}
-                            className={`
-                                px-8 sm:px-12 py-3 sm:py-4 rounded-full text-[10px] sm:text-[12px] uppercase tracking-[0.3em] font-black transition-all duration-500
-                                ${assetType === 'series' ? 'bg-gold-mid text-background shadow-[0_10px_30px_rgba(212,175,55,0.4)] scale-105' : 'text-silver/50 hover:text-white hover:bg-white/5'}
-                            `}
-                        >
-                            TV Series
-                        </button>
+                {/* Classification Section - Redesigned to be Premium */}
+                <div className="lg:col-span-12 space-y-12 animate-fade-in py-12 border-y border-white/5">
+                    <div className="flex flex-col md:flex-row items-center justify-center gap-12 md:gap-24">
+                        <div className="space-y-8 text-center md:text-left flex-1 max-w-sm">
+                            <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Content DNA</h3>
+                            <p className="text-[11px] text-white/40 font-medium tracking-wide leading-relaxed">
+                                Select the core classification for this asset. Series will unlock additional episodic metadata fields for precise vault organization.
+                            </p>
+                        </div>
+
+                        <div className="flex p-3 bg-white/[0.02] backdrop-blur-3xl rounded-[2.5rem] border border-white/5 shadow-inner scale-110">
+                            <button
+                                type="button"
+                                onClick={() => setAssetType('movie')}
+                                className={`
+                                    px-10 py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.4em] font-black transition-all duration-700
+                                    ${assetType === 'movie'
+                                        ? 'bg-gold-mid text-background shadow-[0_15px_40px_rgba(212,175,55,0.3)] scale-105'
+                                        : 'text-white/20 hover:text-white/60 hover:bg-white/5'}
+                                `}
+                            >
+                                Feature Film
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAssetType('series')}
+                                className={`
+                                    px-10 py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.4em] font-black transition-all duration-700
+                                    ${assetType === 'series'
+                                        ? 'bg-gold-mid text-background shadow-[0_15px_40px_rgba(212,175,55,0.3)] scale-105'
+                                        : 'text-white/20 hover:text-white/60 hover:bg-white/5'}
+                                `}
+                            >
+                                TV Series
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Series Metadata - Refined Grid */}
+                    {assetType === 'series' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-4xl mx-auto animate-slide-up bg-gold-mid/[0.02] p-12 rounded-[3rem] border border-gold-mid/10">
+                            <div className="space-y-6 group">
+                                <label className="flex items-center gap-4 text-[10px] uppercase tracking-[0.6em] font-black text-gold-mid/40 px-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gold-mid/40 ring-4 ring-gold-mid/5" />
+                                    Season Number
+                                </label>
+                                <input
+                                    type="number"
+                                    value={seasonNumber}
+                                    onChange={(e) => setSeasonNumber(e.target.value)}
+                                    min="1"
+                                    placeholder="01"
+                                    className="w-full bg-black/40 border border-white/5 rounded-[1.5rem] py-6 px-8 text-2xl font-black text-white text-center outline-none focus:border-gold-mid/40 focus:bg-gold-mid/5 transition-all transition-duration-500 placeholder:text-white/5"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-6 group">
+                                <label className="flex items-center gap-4 text-[10px] uppercase tracking-[0.6em] font-black text-gold-mid/40 px-2">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-gold-mid/40 ring-4 ring-gold-mid/5" />
+                                    Episode Number
+                                </label>
+                                <input
+                                    type="number"
+                                    value={episodeNumber}
+                                    onChange={(e) => setEpisodeNumber(e.target.value)}
+                                    min="1"
+                                    placeholder="01"
+                                    className="w-full bg-black/40 border border-white/5 rounded-[1.5rem] py-6 px-8 text-2xl font-black text-white text-center outline-none focus:border-gold-mid/40 focus:bg-gold-mid/5 transition-all transition-duration-500 placeholder:text-white/5"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Series Metadata (Conditional) */}
-                {assetType === 'series' && (
-                    <div className="grid grid-cols-2 gap-6 sm:gap-12 animate-slide-up bg-gold-mid/[0.02] p-8 sm:p-12 rounded-[2rem] border border-gold-mid/10">
-                        <div className="space-y-4 group">
-                            <label className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.5em] font-black text-gold-mid/60 px-6 group-focus-within:text-gold-mid transition-colors">Season Number</label>
-                            <input
-                                type="number"
-                                value={seasonNumber}
-                                onChange={(e) => setSeasonNumber(e.target.value)}
-                                min="1"
-                                placeholder="01"
-                                style={{
-                                    width: '100%',
-                                    padding: '1.25rem 1.5rem',
-                                    background: 'rgba(167, 171, 180, 0.05)',
-                                    border: '1px solid rgba(212, 175, 55, 0.2)',
-                                    borderRadius: '9999px',
-                                    fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                    color: '#F3F4F6',
-                                    outline: 'none',
-                                    transition: 'all 0.3s',
-                                    textAlign: 'center',
-                                    fontWeight: '900'
-                                }}
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor = '#D4AF37';
-                                    e.currentTarget.style.background = 'rgba(212, 175, 55, 0.05)';
-                                    e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
-                                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-4 group">
-                            <label className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.5em] font-black text-gold-mid/60 px-6 group-focus-within:text-gold-mid transition-colors">Episode Number</label>
-                            <input
-                                type="number"
-                                value={episodeNumber}
-                                onChange={(e) => setEpisodeNumber(e.target.value)}
-                                min="1"
-                                placeholder="01"
-                                style={{
-                                    width: '100%',
-                                    padding: '1.25rem 1.5rem',
-                                    background: 'rgba(167, 171, 180, 0.05)',
-                                    border: '1px solid rgba(212, 175, 55, 0.2)',
-                                    borderRadius: '9999px',
-                                    fontSize: 'clamp(1rem, 4vw, 1.25rem)',
-                                    color: '#F3F4F6',
-                                    outline: 'none',
-                                    transition: 'all 0.3s',
-                                    textAlign: 'center',
-                                    fontWeight: '900'
-                                }}
-                                onFocus={(e) => {
-                                    e.currentTarget.style.borderColor = '#D4AF37';
-                                    e.currentTarget.style.background = 'rgba(212, 175, 55, 0.05)';
-                                    e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
-                                }}
-                                onBlur={(e) => {
-                                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
-                                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
-                                required
-                            />
-                        </div>
-                    </div>
-                )}
-
-                {/* Input Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-12">
-                    <div className="space-y-4 group">
-                        <label className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.5em] font-black text-silver/40 px-6 group-focus-within:text-gold-mid transition-colors">Library Reference</label>
+                {/* Metadata Fields - Full Width and Polished */}
+                <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="space-y-6 group">
+                        <label className="text-[10px] uppercase tracking-[0.6em] font-black text-white/20 px-8 group-focus-within:text-gold-mid transition-colors duration-500">Inventory ID</label>
                         <input
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '1.25rem 1.5rem',
-                                background: 'rgba(167, 171, 180, 0.05)',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                borderRadius: '9999px',
-                                fontSize: 'clamp(0.875rem, 4vw, 1.125rem)',
-                                color: '#F3F4F6',
-                                outline: 'none',
-                                transition: 'all 0.3s',
-                                backdropFilter: 'blur(10px)'
-                            }}
-                            onFocus={(e) => {
-                                e.currentTarget.style.borderColor = '#D4AF37';
-                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
-                            }}
-                            onBlur={(e) => {
-                                e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
-                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                            placeholder="e.g. Inception — Master File"
+                            className="w-full bg-white/[0.02] border border-white/5 rounded-full py-6 px-10 text-lg font-black text-white outline-none focus:border-gold-mid/40 focus:bg-white/[0.04] transition-all duration-500 backdrop-blur-xl placeholder:text-white/5 uppercase tracking-tight italic"
+                            placeholder="e.g. BLADE RUNNER 2049"
                             required
                         />
                     </div>
-                    <div className="space-y-4 group">
-                        <label className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.5em] font-black text-silver/40 px-6 group-focus-within:text-gold-mid transition-colors">Vibe Signature</label>
+                    <div className="space-y-6 group">
+                        <label className="text-[10px] uppercase tracking-[0.6em] font-black text-white/20 px-8 group-focus-within:text-gold-mid transition-colors duration-500">Atmosphere Blueprint</label>
                         <input
                             type="text"
                             value={description}
                             onChange={(e) => setDescription(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '1.25rem 1.5rem',
-                                background: 'rgba(167, 171, 180, 0.05)',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                borderRadius: '9999px',
-                                fontSize: 'clamp(0.875rem, 4vw, 1.125rem)',
-                                color: '#F3F4F6',
-                                outline: 'none',
-                                transition: 'all 0.3s',
-                                backdropFilter: 'blur(10px)'
-                            }}
-                            onFocus={(e) => {
-                                e.currentTarget.style.borderColor = '#D4AF37';
-                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
-                            }}
-                            onBlur={(e) => {
-                                e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
-                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                            placeholder="Why does this fit the collection?"
+                            className="w-full bg-white/[0.02] border border-white/5 rounded-full py-6 px-10 text-lg font-black text-white outline-none focus:border-gold-mid/40 focus:bg-white/[0.04] transition-all duration-500 backdrop-blur-xl placeholder:text-white/5 italic"
+                            placeholder="Define the cinematic vibration..."
                         />
                     </div>
                 </div>
 
-                <div className="flex flex-col items-center gap-8 sm:gap-12 pt-8 sm:pt-24">
-                    <ButtonPrimary
-                        type="submit"
-                        disabled={uploading || !file || !title}
-                        fullWidth
-                        className={`sm:min-w-[360px] sm:w-auto ${uploading ? 'opacity-50 grayscale' : 'shadow-[0_20px_60px_-10px_rgba(212,175,55,0.3)]'}`}
-                    >
-                        {uploading ? 'Uplink Busy...' : 'Authorize Integration'}
-                    </ButtonPrimary>
+                {/* Submission Area */}
+                <div className="lg:col-span-12 flex flex-col items-center gap-12 pt-20">
+                    <div className="relative group/btn">
+                        <div className="absolute inset-0 bg-gold-mid/20 blur-[50px] opacity-0 group-hover/btn:opacity-100 transition-opacity rounded-full scale-125 transition-duration-1000" />
+                        <ButtonPrimary
+                            type="submit"
+                            disabled={uploading || !file || !title}
+                            fullWidth={false}
+                            className={`
+                                min-w-[360px] py-10 rounded-full text-lg uppercase tracking-[0.5em] font-black transition-all duration-700
+                                ${uploading ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:scale-105 active:scale-95 shadow-[0_20px_80px_-20px_rgba(212,175,55,0.4)]'}
+                            `}
+                        >
+                            {uploading ? 'Transmission Active' : 'Commit to Vault'}
+                        </ButtonPrimary>
+                    </div>
 
                     {status === 'success' && (
-                        <div className="flex flex-col items-center gap-3 sm:gap-4 animate-scale-in">
-                            <div className="w-10 h-10 sm:w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30">
-                                <CheckCircle2 className="w-5 h-5 sm:w-6 h-6 text-green-400" />
+                        <div className="flex flex-col items-center gap-4 animate-scale-in text-green-400">
+                            <div className="w-16 h-16 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center shadow-[0_0_40px_rgba(74,222,128,0.2)]">
+                                <CheckCircle2 className="w-8 h-8" />
                             </div>
-                            <p className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.6em] font-black text-green-400">Library Sync Complete</p>
+                            <span className="text-[11px] uppercase tracking-[0.6em] font-black">Archive Integrity Synchronized</span>
                         </div>
                     )}
 
                     {status === 'error' && (
-                        <div className="flex items-center gap-3 text-red-500 animate-shake bg-red-500/5 py-3 px-6 rounded-full border border-red-500/10">
-                            <AlertCircle className="w-4 h-4" />
-                            <span className="text-[9px] sm:text-[10px] uppercase tracking-[0.2em] sm:tracking-[0.3em] font-black truncate max-w-[200px] sm:max-w-none">{error}</span>
+                        <div className="flex items-center gap-6 text-red-400 animate-shake bg-red-400/5 py-4 px-10 rounded-full border border-red-400/10 shadow-2xl">
+                            <AlertCircle className="w-5 h-5" />
+                            <span className="text-[10px] uppercase tracking-[0.3em] font-black">{error}</span>
                         </div>
                     )}
                 </div>
