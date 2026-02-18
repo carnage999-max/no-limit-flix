@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
         const {
             fileName, fileType,
             thumbFileName, thumbFileType,
-            title, description, type, seasonNumber, episodeNumber
+            title, description, type, seasonNumber, episodeNumber,
+            releaseYear, duration, resolution
         } = body;
 
         if (!fileName || !fileType || !title) {
@@ -74,6 +75,9 @@ export async function POST(request: NextRequest) {
                 type: type || 'movie',
                 seasonNumber: seasonNumber ? parseInt(seasonNumber) : null,
                 episodeNumber: episodeNumber ? parseInt(episodeNumber) : null,
+                releaseYear: releaseYear ? parseInt(releaseYear) : null,
+                duration: duration ? parseFloat(duration) : null,
+                resolution,
                 s3Key,
                 s3Url: publicUrl,
                 thumbnailUrl: publicThumbUrl,

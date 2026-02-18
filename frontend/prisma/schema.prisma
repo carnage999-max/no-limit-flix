@@ -21,6 +21,9 @@ model Video {
   s3Url         String
   thumbnailUrl  String?
   status        String   @default("pending") // pending, uploading, completed, failed
+  releaseYear   Int?
+  duration      Float?   // Duration in seconds
+  resolution    String?  // e.g., 4K, 1080p
   fileSize      BigInt?
   mimeType      String?
   createdAt     DateTime @default(now())

@@ -186,6 +186,9 @@ export default function AdminUploadPage() {
     const [assetType, setAssetType] = useState<'movie' | 'series'>('movie');
     const [seasonNumber, setSeasonNumber] = useState('');
     const [episodeNumber, setEpisodeNumber] = useState('');
+    const [releaseYear, setReleaseYear] = useState('');
+    const [duration, setDuration] = useState<number | null>(null);
+    const [resolution, setResolution] = useState('');
     const [file, setFile] = useState<File | null>(null);
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
     const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
@@ -237,6 +240,9 @@ export default function AdminUploadPage() {
         }, 10000);
 
         video.onloadedmetadata = () => {
+            setDuration(video.duration);
+            const res = video.videoWidth >= 3840 ? '4K' : video.videoWidth >= 1920 ? '1080p' : '720p';
+            setResolution(res);
             // Seek to 1s or 10% of duration
             const timeToSeek = Math.min(1, video.duration / 10);
             video.currentTime = timeToSeek;
@@ -294,7 +300,10 @@ export default function AdminUploadPage() {
                     description,
                     type: assetType,
                     seasonNumber: assetType === 'series' ? seasonNumber : null,
-                    episodeNumber: assetType === 'series' ? episodeNumber : null
+                    episodeNumber: assetType === 'series' ? episodeNumber : null,
+                    releaseYear,
+                    duration,
+                    resolution
                 }),
             });
 
@@ -362,6 +371,9 @@ export default function AdminUploadPage() {
             setDescription('');
             setSeasonNumber('');
             setEpisodeNumber('');
+            setReleaseYear('');
+            setDuration(null);
+            setResolution('');
             setProgress(0);
             setThumbProgress(0);
         } catch (err: any) {
@@ -411,6 +423,11 @@ export default function AdminUploadPage() {
                                 )}
                             </div>
                             <h3 style={styles.assetName}>{file.name}</h3>
+                            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '-20px' }}>
+                                {resolution && <span style={{ fontSize: '10px', color: '#D4AF37', border: '1px solid #D4AF37', padding: '2px 8px', borderRadius: '4px', fontWeight: 900 }}>{resolution}</span>}
+                                {duration && <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{Math.floor(duration / 60)}m {Math.floor(duration % 60)}s</span>}
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
+                            </div>
                         </div>
                     ) : (
                         <div style={styles.uploadInner}>
@@ -462,6 +479,16 @@ export default function AdminUploadPage() {
                             value={description}
                             onChange={e => setDescription(e.target.value)}
                             placeholder="Define the vibration..."
+                        />
+                    </div>
+                    <div style={styles.inputSection}>
+                        <label style={styles.label}>Release Year</label>
+                        <input
+                            style={styles.input}
+                            type="number"
+                            value={releaseYear}
+                            onChange={e => setReleaseYear(e.target.value)}
+                            placeholder="e.g. 2024"
                         />
                     </div>
                 </div>
