@@ -54,6 +54,17 @@ export async function POST(request: NextRequest) {
             thumbPresignedUrl = await getSignedUrl(s3Client, thumbCommand, { expiresIn: 3600 });
         }
 
+        const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+        const publicUrl = cloudFrontUrl
+            ? `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${s3Key}`
+            : `https://${BUCKET_NAME}.s3.amazonaws.com/${s3Key}`;
+
+        const publicThumbUrl = thumbS3Key
+            ? (cloudFrontUrl
+                ? `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${thumbS3Key}`
+                : `https://${BUCKET_NAME}.s3.amazonaws.com/${thumbS3Key}`)
+            : null;
+
         // Create a pending record in the database
         const video = await (prisma.video as any).create({
             data: {
@@ -64,8 +75,8 @@ export async function POST(request: NextRequest) {
                 seasonNumber: seasonNumber ? parseInt(seasonNumber) : null,
                 episodeNumber: episodeNumber ? parseInt(episodeNumber) : null,
                 s3Key,
-                s3Url: `https://${BUCKET_NAME}.s3.amazonaws.com/${s3Key}`,
-                thumbnailUrl: thumbS3Key ? `https://${BUCKET_NAME}.s3.amazonaws.com/${thumbS3Key}` : null,
+                s3Url: publicUrl,
+                thumbnailUrl: publicThumbUrl,
                 status: 'pending',
                 mimeType: fileType,
             },
