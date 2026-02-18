@@ -24,6 +24,8 @@ model Video {
   releaseYear   Int?
   duration      Float?   // Duration in seconds
   resolution    String?  // e.g., 4K, 1080p
+  genre         String?
+  rating        String?  // e.g., PG, 18+
   fileSize      BigInt?
   mimeType      String?
   createdAt     DateTime @default(now())
