@@ -1,0 +1,27 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?
+  s3Key        String   @unique
+  s3Url        String
+  thumbnailUrl String?
+  status       String   @default("pending") // pending, uploading, completed, failed
+  fileSize     BigInt?
+  mimeType     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+}
