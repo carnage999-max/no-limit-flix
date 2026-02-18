@@ -194,6 +194,7 @@ export default function AdminUploadPage() {
     const [thumbProgress, setThumbProgress] = useState(0);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [error, setError] = useState('');
+    const [thumbError, setThumbError] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -202,6 +203,8 @@ export default function AdminUploadPage() {
             const videoFile = e.target.files[0];
             setFile(videoFile);
             setStatus('idle');
+            setThumbError(false);
+            setThumbnailPreview(null);
 
             if (!title) {
                 const nameWithoutExt = videoFile.name.replace(/\.[^/.]+$/, "");
@@ -214,17 +217,38 @@ export default function AdminUploadPage() {
 
     const extractThumbnail = (videoFile: File) => {
         const video = document.createElement('video');
+        video.style.display = 'none';
         video.preload = 'metadata';
-        video.src = URL.createObjectURL(videoFile);
+        video.muted = true;
+        video.playsInline = true;
 
-        video.onloadedmetadata = () => { video.currentTime = 1; };
+        const videoUrl = URL.createObjectURL(videoFile);
+        video.src = videoUrl;
+
+        const cleanup = () => {
+            URL.revokeObjectURL(videoUrl);
+            video.remove();
+        };
+
+        const timeout = setTimeout(() => {
+            console.error('Thumbnail extraction timed out');
+            setThumbError(true);
+            cleanup();
+        }, 10000);
+
+        video.onloadedmetadata = () => {
+            // Seek to 1s or 10% of duration
+            const timeToSeek = Math.min(1, video.duration / 10);
+            video.currentTime = timeToSeek;
+        };
 
         video.onseeked = () => {
+            clearTimeout(timeout);
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
-            if (ctx) {
+            if (ctx && canvas.width > 0 && canvas.height > 0) {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 canvas.toBlob((blob) => {
                     if (blob) {
@@ -232,9 +256,19 @@ export default function AdminUploadPage() {
                         setThumbnailFile(thumbFile);
                         setThumbnailPreview(URL.createObjectURL(blob));
                     }
+                    cleanup();
                 }, 'image/jpeg', 0.8);
+            } else {
+                setThumbError(true);
+                cleanup();
             }
-            URL.revokeObjectURL(video.src);
+        };
+
+        video.onerror = () => {
+            clearTimeout(timeout);
+            console.error('Video loading error during thumbnail extraction');
+            setThumbError(true);
+            cleanup();
         };
     };
 
@@ -365,9 +399,14 @@ export default function AdminUploadPage() {
                             <div style={styles.thumbWrapper}>
                                 {thumbnailPreview ? (
                                     <img src={thumbnailPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="Preview" />
+                                ) : thumbError ? (
+                                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+                                        <FileVideo size={48} color="rgba(255,255,255,0.1)" />
+                                        <span style={{ fontSize: '10px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.2em' }}>Preview Unavailable</span>
+                                    </div>
                                 ) : (
                                     <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <Loader2 className="animate-spin" />
+                                        <Loader2 className="animate-spin" color="rgba(212, 175, 55, 0.5)" />
                                     </div>
                                 )}
                             </div>
