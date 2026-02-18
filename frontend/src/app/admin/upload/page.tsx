@@ -1,9 +1,184 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, CSSProperties } from 'react';
 import { Upload, FileVideo, CheckCircle2, AlertCircle, Loader2, ArrowLeft, Sparkles } from 'lucide-react';
 import { ButtonPrimary } from '@/components';
 import Link from 'next/link';
+
+// Define styles as constants for reuse and cleanliness
+const styles: Record<string, CSSProperties> = {
+    container: {
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '60px 24px 120px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '80px',
+    },
+    header: {
+        textAlign: 'center',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '24px',
+    },
+    backLink: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5em',
+        fontWeight: 900,
+        color: 'rgba(255, 255, 255, 0.2)',
+        textDecoration: 'none',
+        transition: 'all 0.3s',
+    },
+    title: {
+        fontSize: 'clamp(2.5rem, 8vw, 5rem)',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+        letterSpacing: '-0.05em',
+        lineHeight: 1,
+        margin: 0,
+        background: 'linear-gradient(to bottom, #FFFFFF 0%, #D4AF37 100%)',
+        WebkitBackgroundClip: 'text',
+        WebkitTextFillColor: 'transparent',
+    },
+    subtitle: {
+        fontSize: '18px',
+        color: 'rgba(255, 255, 255, 0.3)',
+        fontWeight: 500,
+        fontStyle: 'italic',
+        maxWidth: '600px',
+        margin: 0,
+    },
+    form: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '60px',
+    },
+    uploadZone: {
+        position: 'relative',
+        width: '100%',
+        minHeight: '450px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '40px',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        background: 'rgba(255, 255, 255, 0.01)',
+        backdropFilter: 'blur(40px)',
+        cursor: 'pointer',
+        transition: 'all 0.6s cubic-bezier(0.23, 1, 0.32, 1)',
+        overflow: 'hidden',
+    },
+    uploadInner: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '40px',
+        padding: '40px',
+    },
+    previewCard: {
+        width: '100%',
+        maxWidth: '800px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '40px',
+    },
+    thumbWrapper: {
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '16/9',
+        borderRadius: '24px',
+        overflow: 'hidden',
+        border: '1px solid rgba(212, 175, 55, 0.3)',
+        boxShadow: '0 40px 100px -20px rgba(0,0,0,0.5)',
+    },
+    assetName: {
+        fontSize: '24px',
+        fontWeight: 900,
+        color: '#FFFFFF',
+        textTransform: 'uppercase',
+        letterSpacing: '-0.02em',
+        textAlign: 'center',
+        margin: 0,
+    },
+    inputSection: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '24px',
+    },
+    label: {
+        fontSize: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.4em',
+        fontWeight: 900,
+        color: 'rgba(212, 175, 55, 0.5)',
+        paddingLeft: '20px',
+    },
+    input: {
+        width: '100%',
+        background: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '100px',
+        padding: '24px 32px',
+        fontSize: '16px',
+        color: '#FFFFFF',
+        fontWeight: 700,
+        outline: 'none',
+        transition: 'all 0.3s',
+    },
+    typeSelector: {
+        display: 'flex',
+        background: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: '100px',
+        padding: '8px',
+        width: 'fit-content',
+        margin: '0 auto',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+    },
+    typeButton: {
+        padding: '16px 40px',
+        borderRadius: '80px',
+        fontSize: '12px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.3em',
+        fontWeight: 900,
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'all 0.4s',
+    },
+    seriesGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '24px',
+        width: '100%',
+        maxWidth: '600px',
+        margin: '0 auto',
+    },
+    submitWrapper: {
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '32px',
+        paddingTop: '40px',
+    },
+    progressBar: {
+        width: '100%',
+        height: '4px',
+        background: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '10px',
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        background: 'linear-gradient(90deg, #D4AF37 0%, #F3F4F6 100%)',
+        transition: 'width 0.3s',
+    }
+};
 
 export default function AdminUploadPage() {
     const [title, setTitle] = useState('');
@@ -21,7 +196,6 @@ export default function AdminUploadPage() {
     const [error, setError] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const thumbInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -34,7 +208,6 @@ export default function AdminUploadPage() {
                 setTitle(nameWithoutExt);
             }
 
-            // Automatic Thumbnail Extraction
             extractThumbnail(videoFile);
         }
     };
@@ -44,10 +217,7 @@ export default function AdminUploadPage() {
         video.preload = 'metadata';
         video.src = URL.createObjectURL(videoFile);
 
-        video.onloadedmetadata = () => {
-            // Seek to 1 second to avoid potential black frame at start
-            video.currentTime = 1;
-        };
+        video.onloadedmetadata = () => { video.currentTime = 1; };
 
         video.onseeked = () => {
             const canvas = document.createElement('canvas');
@@ -169,263 +339,168 @@ export default function AdminUploadPage() {
     };
 
     return (
-        <div className="max-w-6xl mx-auto py-12 px-6 space-y-20 animate-fade-in mb-24">
-            {/* Elegant Header */}
-            <div className="flex flex-col items-center text-center space-y-6">
-                <Link
-                    href="/admin"
-                    className="group flex items-center gap-2 text-[10px] uppercase tracking-[0.5em] font-black text-white/20 hover:text-gold-mid transition-all"
-                >
-                    <ArrowLeft className="w-3 h-3 group-hover:-translate-x-1 transition-transform" />
-                    Return to Mission Control
+        <div style={styles.container}>
+            <div style={styles.header}>
+                <Link href="/admin" style={styles.backLink}>
+                    <ArrowLeft size={12} /> Mission Control
                 </Link>
-                <div className="space-y-4">
-                    <h1 className="text-display gold-gradient-text uppercase leading-none tracking-tighter">
-                        Library Ingestion
-                    </h1>
-                    <p className="text-subheading text-white/30 font-medium max-w-xl mx-auto italic">
-                        Securing cinematic assets into the vault. Automatic metadata extraction enabled.
-                    </p>
-                </div>
+                <h1 style={styles.title}>Library Ingestion</h1>
+                <p style={styles.subtitle}>Securing cinematic assets into the vault. Automatic archival enabled.</p>
             </div>
 
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-12 sm:gap-16">
-                {/* Left Column: Upload & Preview */}
-                <div className="lg:col-span-12 space-y-12">
-                    <div
-                        onClick={() => !uploading && fileInputRef.current?.click()}
-                        className={`
-                            relative w-full min-h-[400px] flex flex-col items-center justify-center rounded-[3rem] transition-all duration-1000 overflow-hidden group border-2 border-dashed
-                            ${file
-                                ? 'bg-black/40 border-gold-mid/40 shadow-[0_0_100px_rgba(212,175,55,0.1)]'
-                                : 'bg-white/[0.02] border-white/5 hover:border-gold-mid/30 hover:bg-white/[0.05] backdrop-blur-3xl'}
-                            ${uploading ? 'cursor-not-allowed pointer-events-none' : 'cursor-pointer'}
-                        `}
-                    >
-                        <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/*" className="hidden" />
+            <form onSubmit={handleSubmit} style={styles.form}>
+                {/* Upload Zone */}
+                <div
+                    onClick={() => !uploading && fileInputRef.current?.click()}
+                    style={{
+                        ...styles.uploadZone,
+                        borderColor: file ? 'rgba(212, 175, 55, 0.4)' : 'rgba(255, 255, 255, 0.1)',
+                        boxShadow: file ? '0 0 80px rgba(212, 175, 55, 0.1)' : 'none'
+                    }}
+                >
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="video/*" style={{ display: 'none' }} />
 
-                        {file ? (
-                            <div className="relative w-full h-full flex flex-col md:flex-row items-center gap-12 p-12 animate-scale-in">
-                                {/* Auto-extracted Preview Card */}
-                                <div className="relative w-full md:w-[480px] aspect-video rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 group/thumb">
-                                    {thumbnailPreview ? (
-                                        <img src={thumbnailPreview} alt="Auto-extracted" className="w-full h-full object-cover transition-transform duration-1000 group-hover/thumb:scale-110" />
-                                    ) : (
-                                        <div className="w-full h-full bg-white/5 flex flex-col items-center justify-center animate-pulse gap-4">
-                                            <Loader2 className="w-8 h-8 text-gold-mid animate-spin opacity-50" />
-                                            <span className="text-[10px] uppercase tracking-[0.4em] text-white/20 font-black">Extracting Visuals...</span>
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent p-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-2 h-2 rounded-full bg-gold-mid animate-pulse" />
-                                            <span className="text-[10px] uppercase tracking-[0.3em] font-black text-white/60 text-shadow">Automatic Frame Capture</span>
-                                        </div>
+                    {file ? (
+                        <div style={styles.previewCard}>
+                            <div style={styles.thumbWrapper}>
+                                {thumbnailPreview ? (
+                                    <img src={thumbnailPreview} style={{ width: '100%', height: '100%', objectCover: 'cover' }} alt="Preview" />
+                                ) : (
+                                    <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <Loader2 className="animate-spin" />
                                     </div>
-                                </div>
-
-                                {/* File Details */}
-                                <div className="flex-1 space-y-6 text-center md:text-left">
-                                    <div className="space-y-2">
-                                        <p className="text-[10px] uppercase tracking-[0.5em] font-black text-gold-mid">Asset Selected</p>
-                                        <h3 className="text-3xl sm:text-4xl font-black text-white tracking-tighter break-all line-clamp-2 uppercase italic">{file.name}</h3>
-                                    </div>
-                                    <div className="flex flex-col md:flex-row items-center gap-6 justify-center md:justify-start">
-                                        <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/5">
-                                            <FileVideo className="w-4 h-4 text-gold-mid" />
-                                            <span className="text-[11px] font-black text-white/50 lowercase tracking-widest italic line-clamp-1 max-w-[150px]">{file.type}</span>
-                                        </div>
-                                        <span className="text-[11px] font-black text-gold-mid/60 uppercase tracking-widest italic line-clamp-1">{(file.size / (1024 * 1024)).toFixed(0)} Megabytes</span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setFile(null); setThumbnailPreview(null); setThumbnailFile(null); }}
-                                        className="text-[10px] text-white/20 hover:text-gold-mid transition-all uppercase tracking-[0.6em] font-black underline underline-offset-8"
-                                    >
-                                        Eject Selection
-                                    </button>
-                                </div>
+                                )}
                             </div>
-                        ) : (
-                            <div className="flex flex-col items-center gap-10 group/drop">
-                                <div className="w-24 h-24 rounded-[2.5rem] border border-white/5 flex items-center justify-center group-hover/drop:border-gold-mid/40 group-hover/drop:scale-110 transition-all duration-700 bg-white/[0.01] relative">
-                                    <Upload className="w-8 h-8 text-white/10 group-hover/drop:text-gold-mid group-hover/drop:animate-bounce" />
-                                    <div className="absolute inset-0 bg-gold-mid/5 blur-3xl opacity-0 group-hover/drop:opacity-100 transition-opacity rounded-full scale-150" />
-                                </div>
-                                <div className="text-center space-y-4">
-                                    <p className="text-2xl sm:text-3xl font-black text-white/20 group-hover/drop:text-white transition-colors tracking-tighter uppercase italic">Inject Cinematic Feed</p>
-                                    <p className="text-[10px] text-white/10 uppercase tracking-[0.5em] font-black">Validated Formats: MP4, MOV, WEBM</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {uploading && (
-                            <div className="absolute inset-0 bg-black/90 backdrop-blur-3xl flex flex-col items-center justify-center p-8 z-50 animate-fade-in">
-                                <div className="w-full max-w-2xl space-y-12">
-                                    <div className="flex flex-col items-center gap-8">
-                                        <div className="relative">
-                                            <Loader2 className="w-20 h-20 animate-spin text-gold-mid opacity-20" />
-                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                <Upload className="w-8 h-8 text-gold-mid animate-pulse" />
-                                            </div>
-                                        </div>
-                                        <div className="text-center space-y-3">
-                                            <h2 className="text-4xl font-black gold-gradient-text uppercase tracking-tighter italic">Broadcasting to Orbit</h2>
-                                            <p className="text-[11px] uppercase tracking-[0.5em] text-white/40 font-black animate-pulse">Syncing Video + Captured Frames</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-6">
-                                        <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden p-1 border border-white/5">
-                                            <div className="gold-gradient h-full rounded-full transition-all duration-700 ease-out shadow-[0_0_20px_rgba(212,175,55,0.5)]" style={{ width: `${progress}%` }} />
-                                        </div>
-                                        <div className="flex justify-between items-end">
-                                            <div className="space-y-1">
-                                                <span className="text-[10px] uppercase tracking-[0.4em] font-black text-gold-mid block italic">Transmission Power</span>
-                                                <span className="text-4xl font-black text-white leading-none">{progress}%</span>
-                                            </div>
-                                            <div className="text-right space-y-1">
-                                                <span className="text-[10px] uppercase tracking-[0.4em] font-black text-white/20 block italic">Status</span>
-                                                <span className="text-[11px] uppercase tracking-[0.2em] font-black text-gold-mid animate-pulse italic">Injecting...</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Classification Section - Redesigned to be Premium */}
-                <div className="lg:col-span-12 space-y-12 animate-fade-in py-12 border-y border-white/5">
-                    <div className="flex flex-col md:flex-row items-center justify-center gap-12 md:gap-24">
-                        <div className="space-y-8 text-center md:text-left flex-1 max-w-sm">
-                            <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Content DNA</h3>
-                            <p className="text-[11px] text-white/40 font-medium tracking-wide leading-relaxed">
-                                Select the core classification for this asset. Series will unlock additional episodic metadata fields for precise vault organization.
-                            </p>
+                            <h3 style={styles.assetName}>{file.name}</h3>
                         </div>
-
-                        <div className="flex p-3 bg-white/[0.02] backdrop-blur-3xl rounded-[2.5rem] border border-white/5 shadow-inner scale-110">
-                            <button
-                                type="button"
-                                onClick={() => setAssetType('movie')}
-                                className={`
-                                    px-10 py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.4em] font-black transition-all duration-700
-                                    ${assetType === 'movie'
-                                        ? 'bg-gold-mid text-background shadow-[0_15px_40px_rgba(212,175,55,0.3)] scale-105'
-                                        : 'text-white/20 hover:text-white/60 hover:bg-white/5'}
-                                `}
-                            >
-                                Feature Film
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setAssetType('series')}
-                                className={`
-                                    px-10 py-5 rounded-[2rem] text-[11px] uppercase tracking-[0.4em] font-black transition-all duration-700
-                                    ${assetType === 'series'
-                                        ? 'bg-gold-mid text-background shadow-[0_15px_40px_rgba(212,175,55,0.3)] scale-105'
-                                        : 'text-white/20 hover:text-white/60 hover:bg-white/5'}
-                                `}
-                            >
-                                TV Series
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Series Metadata - Refined Grid */}
-                    {assetType === 'series' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-4xl mx-auto animate-slide-up bg-gold-mid/[0.02] p-12 rounded-[3rem] border border-gold-mid/10">
-                            <div className="space-y-6 group">
-                                <label className="flex items-center gap-4 text-[10px] uppercase tracking-[0.6em] font-black text-gold-mid/40 px-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-gold-mid/40 ring-4 ring-gold-mid/5" />
-                                    Season Number
-                                </label>
-                                <input
-                                    type="number"
-                                    value={seasonNumber}
-                                    onChange={(e) => setSeasonNumber(e.target.value)}
-                                    min="1"
-                                    placeholder="01"
-                                    className="w-full bg-black/40 border border-white/5 rounded-[1.5rem] py-6 px-8 text-2xl font-black text-white text-center outline-none focus:border-gold-mid/40 focus:bg-gold-mid/5 transition-all transition-duration-500 placeholder:text-white/5"
-                                    required
-                                />
+                    ) : (
+                        <div style={styles.uploadInner}>
+                            <div style={{ padding: '24px', borderRadius: '30px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                                <Upload size={32} color="rgba(255,255,255,0.2)" />
                             </div>
-                            <div className="space-y-6 group">
-                                <label className="flex items-center gap-4 text-[10px] uppercase tracking-[0.6em] font-black text-gold-mid/40 px-2">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-gold-mid/40 ring-4 ring-gold-mid/5" />
-                                    Episode Number
-                                </label>
-                                <input
-                                    type="number"
-                                    value={episodeNumber}
-                                    onChange={(e) => setEpisodeNumber(e.target.value)}
-                                    min="1"
-                                    placeholder="01"
-                                    className="w-full bg-black/40 border border-white/5 rounded-[1.5rem] py-6 px-8 text-2xl font-black text-white text-center outline-none focus:border-gold-mid/40 focus:bg-gold-mid/5 transition-all transition-duration-500 placeholder:text-white/5"
-                                    required
-                                />
+                            <div style={{ textAlign: 'center', gap: '8px', display: 'flex', flexDirection: 'column' }}>
+                                <p style={{ fontSize: '24px', fontWeight: 900, textTransform: 'uppercase', color: '#FFF' }}>Inject Feed</p>
+                                <p style={{ fontSize: '10px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.4em' }}>MP4, MOV, WEBM</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {uploading && (
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', gap: '40px', zIndex: 100 }}>
+                            <div style={{ textAlign: 'center', gap: '16px', display: 'flex', flexDirection: 'column' }}>
+                                <Loader2 size={64} className="animate-spin" color="#D4AF37" />
+                                <h2 style={{ fontSize: '32px', fontWeight: 900, textTransform: 'uppercase', color: '#FFF' }}>Broadcasting...</h2>
+                            </div>
+                            <div style={{ width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <div style={styles.progressBar}>
+                                    <div style={{ ...styles.progressFill, width: `${progress}%` }} />
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 900, color: '#D4AF37' }}>
+                                    <span>Transmitting</span>
+                                    <span>{progress}%</span>
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
 
-                {/* Metadata Fields - Full Width and Polished */}
-                <div className="lg:col-span-12 grid grid-cols-1 md:grid-cols-2 gap-12">
-                    <div className="space-y-6 group">
-                        <label className="text-[10px] uppercase tracking-[0.6em] font-black text-white/20 px-8 group-focus-within:text-gold-mid transition-colors duration-500">Inventory ID</label>
+                {/* Metadata Fields */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '40px' }}>
+                    <div style={styles.inputSection}>
+                        <label style={styles.label}>Inventory ID</label>
                         <input
-                            type="text"
+                            style={styles.input}
                             value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-full py-6 px-10 text-lg font-black text-white outline-none focus:border-gold-mid/40 focus:bg-white/[0.04] transition-all duration-500 backdrop-blur-xl placeholder:text-white/5 uppercase tracking-tight italic"
+                            onChange={e => setTitle(e.target.value)}
                             placeholder="e.g. BLADE RUNNER 2049"
                             required
                         />
                     </div>
-                    <div className="space-y-6 group">
-                        <label className="text-[10px] uppercase tracking-[0.6em] font-black text-white/20 px-8 group-focus-within:text-gold-mid transition-colors duration-500">Atmosphere Blueprint</label>
+                    <div style={styles.inputSection}>
+                        <label style={styles.label}>Atmosphere Blueprint</label>
                         <input
-                            type="text"
+                            style={styles.input}
                             value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            className="w-full bg-white/[0.02] border border-white/5 rounded-full py-6 px-10 text-lg font-black text-white outline-none focus:border-gold-mid/40 focus:bg-white/[0.04] transition-all duration-500 backdrop-blur-xl placeholder:text-white/5 italic"
-                            placeholder="Define the cinematic vibration..."
+                            onChange={e => setDescription(e.target.value)}
+                            placeholder="Define the vibration..."
                         />
                     </div>
                 </div>
 
-                {/* Submission Area */}
-                <div className="lg:col-span-12 flex flex-col items-center gap-12 pt-20">
-                    <div className="relative group/btn">
-                        <div className="absolute inset-0 bg-gold-mid/20 blur-[50px] opacity-0 group-hover/btn:opacity-100 transition-opacity rounded-full scale-125 transition-duration-1000" />
-                        <ButtonPrimary
-                            type="submit"
-                            disabled={uploading || !file || !title}
-                            fullWidth={false}
-                            className={`
-                                min-w-[360px] py-10 rounded-full text-lg uppercase tracking-[0.5em] font-black transition-all duration-700
-                                ${uploading ? 'opacity-30 grayscale cursor-not-allowed' : 'hover:scale-105 active:scale-95 shadow-[0_20px_80px_-20px_rgba(212,175,55,0.4)]'}
-                            `}
+                {/* Type Selection */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', textAlign: 'center' }}>
+                    <label style={styles.label}>Classification</label>
+                    <div style={styles.typeSelector}>
+                        <button
+                            type="button"
+                            onClick={() => setAssetType('movie')}
+                            style={{
+                                ...styles.typeButton,
+                                background: assetType === 'movie' ? '#D4AF37' : 'transparent',
+                                color: assetType === 'movie' ? '#000' : 'rgba(255,255,255,0.4)'
+                            }}
                         >
-                            {uploading ? 'Transmission Active' : 'Commit to Vault'}
-                        </ButtonPrimary>
+                            Feature
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setAssetType('series')}
+                            style={{
+                                ...styles.typeButton,
+                                background: assetType === 'series' ? '#D4AF37' : 'transparent',
+                                color: assetType === 'series' ? '#000' : 'rgba(255,255,255,0.4)'
+                            }}
+                        >
+                            Series
+                        </button>
                     </div>
+                </div>
+
+                {/* Series Specifics */}
+                {assetType === 'series' && (
+                    <div style={styles.seriesGrid}>
+                        <div style={styles.inputSection}>
+                            <label style={styles.label}>Season</label>
+                            <input
+                                style={{ ...styles.input, textAlign: 'center' }}
+                                type="number"
+                                value={seasonNumber}
+                                onChange={e => setSeasonNumber(e.target.value)}
+                                placeholder="01"
+                            />
+                        </div>
+                        <div style={styles.inputSection}>
+                            <label style={styles.label}>Episode</label>
+                            <input
+                                style={{ ...styles.input, textAlign: 'center' }}
+                                type="number"
+                                value={episodeNumber}
+                                onChange={e => setEpisodeNumber(e.target.value)}
+                                placeholder="01"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Submition Area */}
+                <div style={styles.submitWrapper}>
+                    <ButtonPrimary
+                        type="submit"
+                        disabled={uploading || !file || !title}
+                        style={{ padding: '24px 80px', fontSize: '18px' }}
+                    >
+                        {uploading ? 'Uplink Active...' : 'Commit to Vault'}
+                    </ButtonPrimary>
 
                     {status === 'success' && (
-                        <div className="flex flex-col items-center gap-4 animate-scale-in text-green-400">
-                            <div className="w-16 h-16 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center shadow-[0_0_40px_rgba(74,222,128,0.2)]">
-                                <CheckCircle2 className="w-8 h-8" />
-                            </div>
-                            <span className="text-[11px] uppercase tracking-[0.6em] font-black">Archive Integrity Synchronized</span>
+                        <div style={{ color: '#4ADE80', fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.4em', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <CheckCircle2 size={16} /> Archive Integrity Verified
                         </div>
                     )}
 
                     {status === 'error' && (
-                        <div className="flex items-center gap-6 text-red-400 animate-shake bg-red-400/5 py-4 px-10 rounded-full border border-red-400/10 shadow-2xl">
-                            <AlertCircle className="w-5 h-5" />
-                            <span className="text-[10px] uppercase tracking-[0.3em] font-black">{error}</span>
+                        <div style={{ color: '#F87171', fontSize: '12px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', display: 'flex', alignItems: 'center', gap: '12px', background: 'rgba(248, 113, 113, 0.1)', padding: '16px 32px', borderRadius: '100px' }}>
+                            <AlertCircle size={16} /> {error}
                         </div>
                     )}
                 </div>
@@ -433,3 +508,4 @@ export default function AdminUploadPage() {
         </div>
     );
 }
+
