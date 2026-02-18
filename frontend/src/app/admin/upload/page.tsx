@@ -8,6 +8,9 @@ import Link from 'next/link';
 export default function AdminUploadPage() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
+    const [assetType, setAssetType] = useState<'movie' | 'series'>('movie');
+    const [seasonNumber, setSeasonNumber] = useState('');
+    const [episodeNumber, setEpisodeNumber] = useState('');
     const [file, setFile] = useState<File | null>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -40,7 +43,15 @@ export default function AdminUploadPage() {
             const res = await fetch('/api/admin/upload/presigned-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileName: file.name, fileType: file.type, title, description }),
+                body: JSON.stringify({
+                    fileName: file.name,
+                    fileType: file.type,
+                    title,
+                    description,
+                    type: assetType,
+                    seasonNumber: assetType === 'series' ? seasonNumber : null,
+                    episodeNumber: assetType === 'series' ? episodeNumber : null
+                }),
             });
 
             if (!res.ok) {
@@ -81,6 +92,8 @@ export default function AdminUploadPage() {
             setFile(null);
             setTitle('');
             setDescription('');
+            setSeasonNumber('');
+            setEpisodeNumber('');
         } catch (err: any) {
             setError(err.message || 'An unexpected error occurred');
             setStatus('error');
@@ -182,6 +195,109 @@ export default function AdminUploadPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Classification Selector */}
+                <div className="flex flex-col items-center gap-6 sm:gap-10 animate-fade-in delay-100">
+                    <label className="text-[10px] sm:text-[11px] uppercase tracking-[0.6em] font-black text-silver/30">
+                        Content Classification
+                    </label>
+                    <div className="flex p-2 bg-white/[0.03] backdrop-blur-3xl rounded-full border border-white/10 shadow-2xl">
+                        <button
+                            type="button"
+                            onClick={() => setAssetType('movie')}
+                            className={`
+                                px-8 sm:px-12 py-3 sm:py-4 rounded-full text-[10px] sm:text-[12px] uppercase tracking-[0.3em] font-black transition-all duration-500
+                                ${assetType === 'movie' ? 'bg-gold-mid text-background shadow-[0_10px_30px_rgba(212,175,55,0.4)] scale-105' : 'text-silver/50 hover:text-white hover:bg-white/5'}
+                            `}
+                        >
+                            Feature Film
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setAssetType('series')}
+                            className={`
+                                px-8 sm:px-12 py-3 sm:py-4 rounded-full text-[10px] sm:text-[12px] uppercase tracking-[0.3em] font-black transition-all duration-500
+                                ${assetType === 'series' ? 'bg-gold-mid text-background shadow-[0_10px_30px_rgba(212,175,55,0.4)] scale-105' : 'text-silver/50 hover:text-white hover:bg-white/5'}
+                            `}
+                        >
+                            TV Series
+                        </button>
+                    </div>
+                </div>
+
+                {/* Series Metadata (Conditional) */}
+                {assetType === 'series' && (
+                    <div className="grid grid-cols-2 gap-6 sm:gap-12 animate-slide-up bg-gold-mid/[0.02] p-8 sm:p-12 rounded-[2rem] border border-gold-mid/10">
+                        <div className="space-y-4 group">
+                            <label className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.5em] font-black text-gold-mid/60 px-6 group-focus-within:text-gold-mid transition-colors">Season Number</label>
+                            <input
+                                type="number"
+                                value={seasonNumber}
+                                onChange={(e) => setSeasonNumber(e.target.value)}
+                                min="1"
+                                placeholder="01"
+                                style={{
+                                    width: '100%',
+                                    padding: '1.25rem 1.5rem',
+                                    background: 'rgba(167, 171, 180, 0.05)',
+                                    border: '1px solid rgba(212, 175, 55, 0.2)',
+                                    borderRadius: '9999px',
+                                    fontSize: 'clamp(1rem, 4vw, 1.25rem)',
+                                    color: '#F3F4F6',
+                                    outline: 'none',
+                                    transition: 'all 0.3s',
+                                    textAlign: 'center',
+                                    fontWeight: '900'
+                                }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = '#D4AF37';
+                                    e.currentTarget.style.background = 'rgba(212, 175, 55, 0.05)';
+                                    e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                                required
+                            />
+                        </div>
+                        <div className="space-y-4 group">
+                            <label className="text-[9px] sm:text-[10px] uppercase tracking-[0.4em] sm:tracking-[0.5em] font-black text-gold-mid/60 px-6 group-focus-within:text-gold-mid transition-colors">Episode Number</label>
+                            <input
+                                type="number"
+                                value={episodeNumber}
+                                onChange={(e) => setEpisodeNumber(e.target.value)}
+                                min="1"
+                                placeholder="01"
+                                style={{
+                                    width: '100%',
+                                    padding: '1.25rem 1.5rem',
+                                    background: 'rgba(167, 171, 180, 0.05)',
+                                    border: '1px solid rgba(212, 175, 55, 0.2)',
+                                    borderRadius: '9999px',
+                                    fontSize: 'clamp(1rem, 4vw, 1.25rem)',
+                                    color: '#F3F4F6',
+                                    outline: 'none',
+                                    transition: 'all 0.3s',
+                                    textAlign: 'center',
+                                    fontWeight: '900'
+                                }}
+                                onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = '#D4AF37';
+                                    e.currentTarget.style.background = 'rgba(212, 175, 55, 0.05)';
+                                    e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
+                                }}
+                                onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                }}
+                                required
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Input Fields */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-12">

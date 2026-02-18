@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { fileName, fileType, title, description } = body;
+        const { fileName, fileType, title, description, type, seasonNumber, episodeNumber } = body;
 
         if (!fileName || !fileType || !title) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
             data: {
                 title,
                 description,
+                type: type || 'movie',
+                seasonNumber: seasonNumber ? parseInt(seasonNumber) : null,
+                episodeNumber: episodeNumber ? parseInt(episodeNumber) : null,
                 s3Key,
                 s3Url: `https://${BUCKET_NAME}.s3.amazonaws.com/${s3Key}`,
                 status: 'pending',

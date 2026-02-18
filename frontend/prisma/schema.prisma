@@ -11,17 +11,21 @@ datasource db {
 }
 
 model Video {
-  id           String   @id @default(cuid())
-  title        String
-  description  String?
-  s3Key        String   @unique
-  s3Url        String
-  thumbnailUrl String?
-  status       String   @default("pending") // pending, uploading, completed, failed
-  fileSize     BigInt?
-  mimeType     String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  type          String   @default("movie") // movie, series
+  seasonNumber  Int?
+  episodeNumber Int?
+  s3Key         String   @unique
+  s3Url         String
+  thumbnailUrl  String?
+  status        String   @default("pending") // pending, uploading, completed, failed
+  fileSize      BigInt?
+  mimeType      String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([status])
+  @@index([type])
 }
