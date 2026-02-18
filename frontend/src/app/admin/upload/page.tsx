@@ -12,12 +12,16 @@ export default function AdminUploadPage() {
     const [seasonNumber, setSeasonNumber] = useState('');
     const [episodeNumber, setEpisodeNumber] = useState('');
     const [file, setFile] = useState<File | null>(null);
+    const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+    const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [thumbProgress, setThumbProgress] = useState(0);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [error, setError] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const thumbInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -27,6 +31,18 @@ export default function AdminUploadPage() {
                 const nameWithoutExt = e.target.files[0].name.replace(/\.[^/.]+$/, "");
                 setTitle(nameWithoutExt);
             }
+        }
+    };
+
+    const handleThumbChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            setThumbnailFile(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setThumbnailPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
@@ -46,6 +62,8 @@ export default function AdminUploadPage() {
                 body: JSON.stringify({
                     fileName: file.name,
                     fileType: file.type,
+                    thumbFileName: thumbnailFile?.name,
+                    thumbFileType: thumbnailFile?.type,
                     title,
                     description,
                     type: assetType,
@@ -59,26 +77,48 @@ export default function AdminUploadPage() {
                 throw new Error(data.error || 'Failed to get upload URL');
             }
 
-            const { presignedUrl, videoId } = await res.json();
-            const xhr = new XMLHttpRequest();
+            const { presignedUrl, thumbPresignedUrl, videoId } = await res.json();
 
-            const uploadPromise = new Promise((resolve, reject) => {
-                xhr.open('PUT', presignedUrl);
-                xhr.setRequestHeader('Content-Type', file.type);
-                xhr.upload.onprogress = (event) => {
+            // 1. Upload Video
+            const videoXhr = new XMLHttpRequest();
+            const videoUploadPromise = new Promise((resolve, reject) => {
+                videoXhr.open('PUT', presignedUrl);
+                videoXhr.setRequestHeader('Content-Type', file.type);
+                videoXhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
                         setProgress(Math.round((event.loaded / event.total) * 100));
                     }
                 };
-                xhr.onload = () => {
-                    if (xhr.status === 200) resolve(true);
-                    else reject(new Error(`S3 upload failed (${xhr.status})`));
+                videoXhr.onload = () => {
+                    if (videoXhr.status === 200) resolve(true);
+                    else reject(new Error(`Video upload failed (${videoXhr.status})`));
                 };
-                xhr.onerror = () => reject(new Error('Network error during S3 upload'));
-                xhr.send(file);
+                videoXhr.onerror = () => reject(new Error('Network error during video upload'));
+                videoXhr.send(file);
             });
 
-            await uploadPromise;
+            // 2. Upload Thumbnail (Parallel)
+            let thumbUploadPromise = Promise.resolve(true);
+            if (thumbPresignedUrl && thumbnailFile) {
+                const thumbXhr = new XMLHttpRequest();
+                thumbUploadPromise = new Promise((resolve, reject) => {
+                    thumbXhr.open('PUT', thumbPresignedUrl);
+                    thumbXhr.setRequestHeader('Content-Type', thumbnailFile.type);
+                    thumbXhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            setThumbProgress(Math.round((event.loaded / event.total) * 100));
+                        }
+                    };
+                    thumbXhr.onload = () => {
+                        if (thumbXhr.status === 200) resolve(true);
+                        else reject(new Error(`Thumbnail upload failed (${thumbXhr.status})`));
+                    };
+                    thumbXhr.onerror = () => reject(new Error('Network error during thumbnail upload'));
+                    thumbXhr.send(thumbnailFile);
+                });
+            }
+
+            await Promise.all([videoUploadPromise, thumbUploadPromise]);
 
             const completeRes = await fetch('/api/admin/upload/complete', {
                 method: 'POST',
@@ -90,10 +130,14 @@ export default function AdminUploadPage() {
 
             setStatus('success');
             setFile(null);
+            setThumbnailFile(null);
+            setThumbnailPreview(null);
             setTitle('');
             setDescription('');
             setSeasonNumber('');
             setEpisodeNumber('');
+            setProgress(0);
+            setThumbProgress(0);
         } catch (err: any) {
             setError(err.message || 'An unexpected error occurred');
             setStatus('error');
@@ -194,6 +238,49 @@ export default function AdminUploadPage() {
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Thumbnail Selection */}
+                <div className="animate-fade-in delay-75">
+                    <div className="flex flex-col items-center gap-6 sm:gap-10">
+                        <label className="text-[10px] sm:text-[11px] uppercase tracking-[0.6em] font-black text-silver/30">
+                            Cinematic Poster
+                        </label>
+
+                        <div
+                            onClick={() => !uploading && thumbInputRef.current?.click()}
+                            className={`
+                                relative w-full sm:w-[320px] aspect-[16/9] rounded-[1.5rem] sm:rounded-[2rem] border-2 border-dashed transition-all duration-700 overflow-hidden cursor-pointer group
+                                ${thumbnailPreview ? 'border-gold-mid bg-gold-mid/5 shadow-2xl' : 'border-white/10 bg-white/[0.01] hover:bg-white/[0.03] hover:border-gold-mid/40'}
+                            `}
+                        >
+                            <input type="file" ref={thumbInputRef} onChange={handleThumbChange} accept="image/*" className="hidden" />
+
+                            {thumbnailPreview ? (
+                                <div className="absolute inset-0 group">
+                                    <img src={thumbnailPreview} alt="Preview" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                        <p className="text-[10px] uppercase tracking-[0.4em] font-black text-white">Change Poster</p>
+                                    </div>
+                                    {uploading && (
+                                        <div className="absolute inset-0 bg-black/60 backdrop-blur-md flex flex-col items-center justify-center p-4">
+                                            <p className="text-[10px] uppercase tracking-[0.4em] font-black text-gold-mid mb-2">Injecting Metadata...</p>
+                                            <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
+                                                <div className="h-full bg-gold-mid transition-all duration-500" style={{ width: `${thumbProgress}%` }} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+                                    <div className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center bg-white/[0.02] group-hover:border-gold-mid/50 transition-colors">
+                                        <Upload className="w-4 h-4 text-silver/20 group-hover:text-gold-mid" />
+                                    </div>
+                                    <p className="text-[9px] uppercase tracking-[0.4em] font-black text-silver/30 group-hover:text-silver/60">Upload Thumbnail</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Classification Selector */}

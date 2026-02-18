@@ -16,27 +16,48 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { fileName, fileType, title, description, type, seasonNumber, episodeNumber } = body;
+        const {
+            fileName, fileType,
+            thumbFileName, thumbFileType,
+            title, description, type, seasonNumber, episodeNumber
+        } = body;
 
         if (!fileName || !fileType || !title) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
+        const videoId = uuidv4();
         const fileExtension = fileName.split('.').pop();
-        const s3Key = `videos/${uuidv4()}.${fileExtension}`;
+        const s3Key = `videos/${videoId}.${fileExtension}`;
 
-        const command = new PutObjectCommand({
+        const videoCommand = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: s3Key,
             ContentType: fileType,
         });
 
-        // Generate presigned URL (expires in 1 hour)
-        const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+        const presignedUrl = await getSignedUrl(s3Client, videoCommand, { expiresIn: 3600 });
+
+        let thumbPresignedUrl = null;
+        let thumbS3Key = null;
+
+        if (thumbFileName && thumbFileType) {
+            const thumbExtension = thumbFileName.split('.').pop();
+            thumbS3Key = `thumbnails/${videoId}.${thumbExtension}`;
+
+            const thumbCommand = new PutObjectCommand({
+                Bucket: BUCKET_NAME,
+                Key: thumbS3Key,
+                ContentType: thumbFileType,
+            });
+
+            thumbPresignedUrl = await getSignedUrl(s3Client, thumbCommand, { expiresIn: 3600 });
+        }
 
         // Create a pending record in the database
         const video = await prisma.video.create({
             data: {
+                id: videoId,
                 title,
                 description,
                 type: type || 'movie',
@@ -44,6 +65,7 @@ export async function POST(request: NextRequest) {
                 episodeNumber: episodeNumber ? parseInt(episodeNumber) : null,
                 s3Key,
                 s3Url: `https://${BUCKET_NAME}.s3.amazonaws.com/${s3Key}`,
+                thumbnailUrl: thumbS3Key ? `https://${BUCKET_NAME}.s3.amazonaws.com/${thumbS3Key}` : null,
                 status: 'pending',
                 mimeType: fileType,
             },
@@ -52,6 +74,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
             presignedUrl,
             s3Key,
+            thumbPresignedUrl,
+            thumbS3Key,
             videoId: video.id,
         });
     } catch (error: any) {

@@ -32,9 +32,21 @@ export async function POST(request: NextRequest) {
             ? `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${completeRes.s3Key}`
             : completeRes.s3Url;
 
+        let publicThumbUrl = completeRes.thumbnailUrl;
+        if (cloudFrontUrl && completeRes.thumbnailUrl) {
+            // Check if it's an S3 URL and replace it
+            const thumbS3Key = completeRes.thumbnailUrl.split('.com/').pop();
+            if (thumbS3Key) {
+                publicThumbUrl = `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${thumbS3Key}`;
+            }
+        }
+
         const video = await prisma.video.update({
             where: { id: videoId },
-            data: { s3Url: publicUrl },
+            data: {
+                s3Url: publicUrl,
+                thumbnailUrl: publicThumbUrl
+            },
         });
 
         return NextResponse.json({ success: true, video });
