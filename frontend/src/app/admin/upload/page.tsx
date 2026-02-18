@@ -187,6 +187,8 @@ export default function AdminUploadPage() {
     const [seasonNumber, setSeasonNumber] = useState('');
     const [episodeNumber, setEpisodeNumber] = useState('');
     const [releaseYear, setReleaseYear] = useState('');
+    const [genre, setGenre] = useState('');
+    const [rating, setRating] = useState('');
     const [duration, setDuration] = useState<number | null>(null);
     const [resolution, setResolution] = useState('');
     const [file, setFile] = useState<File | null>(null);
@@ -303,7 +305,9 @@ export default function AdminUploadPage() {
                     episodeNumber: assetType === 'series' ? episodeNumber : null,
                     releaseYear,
                     duration,
-                    resolution
+                    resolution,
+                    genre,
+                    rating
                 }),
             });
 
@@ -372,6 +376,8 @@ export default function AdminUploadPage() {
             setSeasonNumber('');
             setEpisodeNumber('');
             setReleaseYear('');
+            setGenre('');
+            setRating('');
             setDuration(null);
             setResolution('');
             setProgress(0);
@@ -489,6 +495,27 @@ export default function AdminUploadPage() {
                             value={releaseYear}
                             onChange={e => setReleaseYear(e.target.value)}
                             placeholder="e.g. 2024"
+                        />
+                    </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '40px' }}>
+                    <div style={styles.inputSection}>
+                        <label style={styles.label}>Prime Genre</label>
+                        <input
+                            style={styles.input}
+                            value={genre}
+                            onChange={e => setGenre(e.target.value)}
+                            placeholder="e.g. CYBERPUNK"
+                        />
+                    </div>
+                    <div style={styles.inputSection}>
+                        <label style={styles.label}>Maturity Rating</label>
+                        <input
+                            style={styles.input}
+                            value={rating}
+                            onChange={e => setRating(e.target.value)}
+                            placeholder="e.g. 18+ or PG-13"
                         />
                     </div>
                 </div>

@@ -20,7 +20,8 @@ export async function POST(request: NextRequest) {
             fileName, fileType,
             thumbFileName, thumbFileType,
             title, description, type, seasonNumber, episodeNumber,
-            releaseYear, duration, resolution
+            releaseYear, duration, resolution,
+            genre, rating
         } = body;
 
         if (!fileName || !fileType || !title) {
@@ -78,6 +79,8 @@ export async function POST(request: NextRequest) {
                 releaseYear: releaseYear ? parseInt(releaseYear) : null,
                 duration: duration ? parseFloat(duration) : null,
                 resolution,
+                genre,
+                rating,
                 s3Key,
                 s3Url: publicUrl,
                 thumbnailUrl: publicThumbUrl,
