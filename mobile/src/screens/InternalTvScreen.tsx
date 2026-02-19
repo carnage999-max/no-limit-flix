@@ -13,23 +13,10 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { apiClient } from '../lib/api';
-
-const { width } = Dimensions.get('window');
-
+import { transformToCloudFront } from '../lib/utils';
 import { RefreshControl } from 'react-native';
 
-const transformToCloudFront = (url: string | null) => {
-    if (!url) return '';
-    let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
-    if (!cfUrl) return url;
-
-    if (!cfUrl.startsWith('http')) {
-        cfUrl = `https://${cfUrl}`;
-    }
-
-    const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
-    return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
-};
+const { width } = Dimensions.get('window');
 
 export const InternalTvScreen = () => {
     const navigation = useNavigation<any>();

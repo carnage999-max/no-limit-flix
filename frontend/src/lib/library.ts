@@ -39,8 +39,15 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
                 let publicUrl = v.s3Url;
                 if (cloudFrontUrl) {
                     const cfBase = cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`;
-                    const s3Pattern = /https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//;
-                    publicUrl = v.s3Url.replace(s3Pattern, cfBase.startsWith('http') ? cfBase : `https://${cfBase}`);
+                    const cfPrefix = cfBase.startsWith('http') ? cfBase : `https://${cfBase}`;
+                    const s3Pattern = /https?:\/\/[^.]+\.s3[.-][^.]+\.amazonaws\.com\//i;
+                    const s3PatternLegacy = /https?:\/\/[^.]+\.s3\.amazonaws\.com\//i;
+
+                    if (s3Pattern.test(v.s3Url)) {
+                        publicUrl = v.s3Url.replace(s3Pattern, cfPrefix);
+                    } else if (s3PatternLegacy.test(v.s3Url)) {
+                        publicUrl = v.s3Url.replace(s3PatternLegacy, cfPrefix);
+                    }
                 }
 
                 hostedMap[v.tmdbId] = {

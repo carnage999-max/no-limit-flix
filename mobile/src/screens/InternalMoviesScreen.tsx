@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { apiClient } from '../lib/api';
 import { TitleTile } from '../components/index';
+import { transformToCloudFront } from '../lib/utils';
+import { RefreshControl } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -26,21 +28,6 @@ interface Movie {
     genre?: string;
     s3Url: string;
 }
-
-import { RefreshControl } from 'react-native';
-
-const transformToCloudFront = (url: string | null) => {
-    if (!url) return '';
-    let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
-    if (!cfUrl) return url;
-
-    if (!cfUrl.startsWith('http')) {
-        cfUrl = `https://${cfUrl}`;
-    }
-
-    const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
-    return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
-};
 
 export const InternalMoviesScreen = () => {
     const navigation = useNavigation<any>();

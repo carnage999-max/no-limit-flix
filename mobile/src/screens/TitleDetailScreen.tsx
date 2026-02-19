@@ -19,6 +19,7 @@ import { apiClient } from '../lib/api';
 import { MoviePick, WatchProvider } from '../types';
 import { useFavorites } from '../context/FavoritesContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { transformToCloudFront } from '../lib/utils';
 
 const { width, height } = Dimensions.get('window');
 const AUTOPLAY_KEY = '@nolimitflix_autoplay';
@@ -28,19 +29,6 @@ const getYoutubeId = (url?: string) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
-};
-
-const transformToCloudFront = (url: string | null) => {
-  if (!url) return '';
-  let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
-  if (!cfUrl) return url;
-
-  if (!cfUrl.startsWith('http')) {
-    cfUrl = `https://${cfUrl}`;
-  }
-
-  const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
-  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
 };
 
 export const TitleDetailScreen = () => {

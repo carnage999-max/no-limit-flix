@@ -16,17 +16,29 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { transformToCloudFront } from '../lib/utils';
 
 export const WatchScreen = () => {
     const { width, height } = useWindowDimensions();
     const route = useRoute<any>();
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
-    const { videoUrl, title } = route.params || {};
+    const params = route.params || {};
+    const title = params.title;
+    const videoUrl = transformToCloudFront(params.videoUrl);
 
     const [isBuffering, setIsBuffering] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(true);
+
+    useEffect(() => {
+        console.log('--- WatchScreen Debug ---');
+        console.log('Title:', title);
+        console.log('Original Video URL:', videoUrl);
+        if (videoUrl && !videoUrl.startsWith('http')) {
+            console.warn('CRITICAL: Video URL is missing protocol!');
+        }
+    }, [videoUrl, title]);
 
     useEffect(() => {
         async function lockOrientation() {
@@ -111,7 +123,7 @@ export const WatchScreen = () => {
                         <Text style={styles.errorSubtitle}>
                             {error.includes('Format') || error.includes('Decoder')
                                 ? 'This video format (MKV/HEVC) is not supported on this device. Please try a different title.'
-                                : 'Failed to load video. Please check your connection or try again later.'}
+                                : `Failed to load video: ${error}`}
                         </Text>
                         <TouchableOpacity
                             style={styles.errorButton}

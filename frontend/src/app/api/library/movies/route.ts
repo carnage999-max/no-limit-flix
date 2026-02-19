@@ -41,9 +41,21 @@ export async function GET() {
 
             if (cfBase) {
                 const cfPrefix = cfBase.startsWith('http') ? cfBase : `https://${cfBase}`;
-                publicUrl = video.s3Url.replace(s3Pattern, cfPrefix);
+                const s3Pattern = /https?:\/\/[^.]+\.s3[.-][^.]+\.amazonaws\.com\//i;
+                const s3PatternLegacy = /https?:\/\/[^.]+\.s3\.amazonaws\.com\//i;
+
+                if (s3Pattern.test(video.s3Url)) {
+                    publicUrl = video.s3Url.replace(s3Pattern, cfPrefix);
+                } else if (s3PatternLegacy.test(video.s3Url)) {
+                    publicUrl = video.s3Url.replace(s3PatternLegacy, cfPrefix);
+                }
+
                 if (video.thumbnailUrl) {
-                    publicThumb = video.thumbnailUrl.replace(s3Pattern, cfPrefix);
+                    if (s3Pattern.test(video.thumbnailUrl)) {
+                        publicThumb = video.thumbnailUrl.replace(s3Pattern, cfPrefix);
+                    } else if (s3PatternLegacy.test(video.thumbnailUrl)) {
+                        publicThumb = video.thumbnailUrl.replace(s3PatternLegacy, cfPrefix);
+                    }
                 }
             }
 

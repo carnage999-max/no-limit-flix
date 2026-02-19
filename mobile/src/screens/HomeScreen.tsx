@@ -31,22 +31,9 @@ import {
 import { MOOD_OPTIONS, FEEDBACK_OPTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
 import { AIPickResponse, MoviePick } from '../types';
+import { transformToCloudFront } from '../lib/utils';
 
 const { height, width } = Dimensions.get('window');
-
-const transformToCloudFront = (url: string | null) => {
-  if (!url) return '';
-  let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
-  if (!cfUrl) return url;
-
-  // Ensure cfUrl has protocol
-  if (!cfUrl.startsWith('http')) {
-    cfUrl = `https://${cfUrl}`;
-  }
-
-  const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
-  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
-};
 
 export const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
