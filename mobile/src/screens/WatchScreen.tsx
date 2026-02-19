@@ -13,12 +13,14 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, SPACING } from '../theme/tokens';
+import { COLORS } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { transformToCloudFront } from '../lib/utils';
 import { BASE_URL } from '../lib/api';
 import * as Linking from 'expo-linking';
+// @ts-ignore - Native module without types
+import { VLCPlayer } from 'react-native-vlc-media-player';
 
 const styles = StyleSheet.create({
     container: {
@@ -34,6 +36,10 @@ const styles = StyleSheet.create({
     },
     video: {
         flex: 1,
+        width: '100%',
+        height: '100%',
+    },
+    vlcPlayer: {
         width: '100%',
         height: '100%',
     },
@@ -143,6 +149,15 @@ const styles = StyleSheet.create({
         marginTop: 25,
         opacity: 0.6,
         textAlign: 'center',
+    },
+    vlcControlsHint: {
+        position: 'absolute',
+        bottom: 40,
+        alignSelf: 'center',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        paddingHorizontal: 15,
+        paddingVertical: 8,
+        borderRadius: 20,
     }
 });
 
@@ -162,30 +177,23 @@ export const WatchScreen = () => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
     const [serverMime, setServerMime] = useState<string | null>(null);
-    const [useCompatMode, setUseCompatMode] = useState(false);
-
-    const streamUrl = useMemo(() => {
-        if (!assetId) return null;
-        return `${BASE_URL}/api/stream/${assetId}`;
-    }, [assetId]);
-
-    const finalVideoUrl = useCompatMode && streamUrl ? streamUrl : videoUrl;
+    const [activeEngine, setActiveEngine] = useState<'native' | 'vlc'>('native');
 
     // Deep debug logging
     useEffect(() => {
-        if (!finalVideoUrl) return;
+        if (!videoUrl) return;
 
-        console.log(`[WatchScreen] Mode: ${useCompatMode ? 'COMPAT (Transcoding)' : 'DIRECT'}`);
-        console.log(`[WatchScreen] URL: ${finalVideoUrl}`);
+        console.log(`[WatchScreen] Engine: ${activeEngine}`);
+        console.log(`[WatchScreen] URL: ${videoUrl}`);
 
-        fetch(finalVideoUrl, { method: 'HEAD' })
+        fetch(videoUrl, { method: 'HEAD' })
             .then(res => {
                 const mime = res.headers.get('Content-Type');
                 console.log(`[WatchScreen] Server Content-Type: ${mime}`);
                 setServerMime(mime);
             })
             .catch(e => console.log('[WatchScreen] Header Check Failed', e));
-    }, [finalVideoUrl, retryCount, useCompatMode]);
+    }, [videoUrl, retryCount, activeEngine]);
 
     useEffect(() => {
         async function lockOrientation() {
@@ -202,45 +210,41 @@ export const WatchScreen = () => {
         };
     }, []);
 
+    // Native Player Setup
     const videoSource = useMemo(() => {
-        if (!finalVideoUrl) return null;
+        if (!videoUrl || activeEngine !== 'native') return null;
         return {
-            uri: finalVideoUrl,
-            metadata: {
-                title: title || 'Playing Video'
-            },
-            headers: {
-                'User-Agent': 'NoLimitFlixMobile/1.0',
-            }
+            uri: videoUrl,
+            metadata: { title: title || 'Playing Video' },
+            headers: { 'User-Agent': 'NoLimitFlixMobile/1.0' }
         };
-    }, [finalVideoUrl, retryCount]);
+    }, [videoUrl, retryCount, activeEngine]);
 
-    const player = useVideoPlayer(videoSource, (p) => {
+    const nativePlayer = useVideoPlayer(videoSource, (p) => {
         p.loop = false;
         p.play();
     });
 
     useEffect(() => {
-        if (!player) return;
+        if (!nativePlayer || activeEngine !== 'native') return;
 
-        const statusSub = player.addListener('statusChange', (event) => {
-            console.log(`[WatchScreen] Player status changed: ${event.status}`);
+        const statusSub = nativePlayer.addListener('statusChange', (event) => {
             if (event.status === 'readyToPlay') {
                 setIsBuffering(false);
                 setError(null);
-                player.play();
+                nativePlayer.play();
                 setIsPlaying(true);
             } else if (event.status === 'loading') {
                 setIsBuffering(true);
             } else if (event.status === 'error') {
                 setIsBuffering(false);
                 const errorMsg = (event as any).error?.message || 'Unknown playback error';
-                console.error('[WatchScreen] Player error detail:', (event as any).error);
+                console.error('[WatchScreen] Native Player error:', errorMsg);
                 setError(errorMsg);
             }
         });
 
-        const playingSub = player.addListener('playingChange', (event) => {
+        const playingSub = nativePlayer.addListener('playingChange', (event) => {
             setIsPlaying(event.isPlaying);
         });
 
@@ -248,47 +252,41 @@ export const WatchScreen = () => {
             statusSub.remove();
             playingSub.remove();
         };
-    }, [player]);
+    }, [nativePlayer, activeEngine]);
 
     const handleRetry = () => {
         setError(null);
         setIsBuffering(true);
         setRetryCount(prev => prev + 1);
-        if (player && videoSource) {
-            player.replace(videoSource);
-            player.play();
+        if (activeEngine === 'native' && nativePlayer && videoSource) {
+            nativePlayer.replace(videoSource);
+            nativePlayer.play();
         }
     };
 
-    const handleEnableCompat = () => {
+    const handleSwitchToVlcInternal = () => {
         setError(null);
         setIsBuffering(true);
-        setUseCompatMode(true);
+        setActiveEngine('vlc');
         setRetryCount(prev => prev + 1);
     };
 
-    const handleOpenExternal = async () => {
+    const handleOpenExternalVlc = async () => {
         if (!videoUrl) return;
-
         try {
             if (Platform.OS === 'ios') {
-                // Try open source VLC first
                 const vlcUrl = `vlc://${videoUrl.replace(/^https?:\/\//, '')}`;
                 const canOpenVlc = await Linking.canOpenURL('vlc://').catch(() => false);
-
                 if (canOpenVlc) {
                     await Linking.openURL(vlcUrl);
                 } else {
-                    // Fallback to direct URL which may trigger Infuse or Safari
                     await Linking.openURL(videoUrl);
                 }
             } else {
-                // Android is brilliant with 'openURL', it shows the app picker (VLC, MX Player, etc)
                 await Linking.openURL(videoUrl);
             }
         } catch (e) {
-            console.error('Failed to open external player:', e);
-            Alert.alert('External Player', 'To play this file, please install VLC from the App Store.');
+            Alert.alert('External Player', 'Please install VLC from the Store.');
         }
     };
 
@@ -297,15 +295,38 @@ export const WatchScreen = () => {
             <StatusBar barStyle="light-content" hidden={isPlaying} />
 
             <View style={styles.videoContainer}>
-                {videoSource ? (
+                {activeEngine === 'native' && videoSource && (
                     <VideoView
                         style={styles.video}
-                        player={player}
+                        player={nativePlayer}
                         allowsPictureInPicture={true}
                         nativeControls={true}
                         contentFit="contain"
                     />
-                ) : (
+                )}
+
+                {activeEngine === 'vlc' && videoUrl && (
+                    <VLCPlayer
+                        style={styles.vlcPlayer}
+                        videoAspectRatio="16:9"
+                        source={{
+                            uri: videoUrl,
+                            initOptions: ['--codec=avcodec,all', '--avcodec-hw=none'] // Force internal software decoding like the main VLC app
+                        }}
+                        onVLCProgress={() => setIsBuffering(false)}
+                        onVLCPlaying={() => {
+                            setIsBuffering(false);
+                            setIsPlaying(true);
+                        }}
+                        onVLCBuffering={() => setIsBuffering(true)}
+                        onVLCError={(e: any) => {
+                            console.error('[WatchScreen] VLC Internal Error:', e);
+                            setError('VLC engine failed to decode stream.');
+                        }}
+                    />
+                )}
+
+                {!videoUrl && (
                     <View style={styles.loaderContainer}>
                         <ActivityIndicator size="large" color={COLORS.gold.mid} />
                     </View>
@@ -322,6 +343,15 @@ export const WatchScreen = () => {
                     </View>
                 )}
 
+                {activeEngine === 'vlc' && isPlaying && (
+                    <TouchableOpacity
+                        onPress={() => setIsPlaying(false)}
+                        style={{ position: 'absolute', top: 40, left: 20, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 8 }}
+                    >
+                        <Ionicons name="chevron-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                )}
+
                 {error && (
                     <View style={styles.errorContainer}>
                         <Ionicons name="alert-circle" size={64} color={COLORS.accent.red || '#EF4444'} />
@@ -332,43 +362,28 @@ export const WatchScreen = () => {
                                 error.toLowerCase().includes('matroska') ||
                                 error.toLowerCase().includes('hevc') ||
                                 error.toLowerCase().includes('hvc1') ||
-                                error.toLowerCase().includes('renderer') ||
-                                (finalVideoUrl && finalVideoUrl.toLowerCase().endsWith('.mkv')) ||
-                                (serverMime && serverMime.includes('matroska'))
-                                ? `The device's native player cannot decode this MKV/HEVC content.`
+                                error.toLowerCase().includes('renderer')
+                                ? `The native player hit a hardware decoding limit for this file.`
                                 : `Playback Issue: ${error}`}
                         </Text>
-
-                        <View style={{ marginVertical: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8 }}>
-                            <Text style={{ color: COLORS.silver, opacity: 0.7, fontSize: 10, textAlign: 'center' }}>
-                                MIME: {serverMime || 'checking...'}{"\n"}
-                                Mode: {useCompatMode ? 'Compat (Transcoding)' : 'Direct Play'}
-                            </Text>
-                        </View>
 
                         <View style={styles.errorActionRow}>
                             <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
                                 <Text style={styles.secondaryButtonText}>Back</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.errorButton} onPress={handleOpenExternal}>
-                                <Ionicons name="open-outline" size={18} color={COLORS.background} />
-                                <Text style={styles.errorButtonText}>Open in VLC</Text>
+                            <TouchableOpacity style={styles.errorButton} onPress={handleSwitchToVlcInternal}>
+                                <Ionicons name="shield-checkmark" size={18} color={COLORS.background} />
+                                <Text style={styles.errorButtonText}>Use Internal VLC Fix</Text>
                             </TouchableOpacity>
 
-                            {/* Fallback to transcoding if they have a local server running */}
-                            {!useCompatMode && assetId && (
-                                <TouchableOpacity
-                                    style={[styles.secondaryButton, { backgroundColor: 'transparent', borderColor: 'transparent' }]}
-                                    onPress={handleEnableCompat}
-                                >
-                                    <Ionicons name="flash" size={18} color={COLORS.gold.mid} />
-                                </TouchableOpacity>
-                            )}
+                            <TouchableOpacity style={[styles.secondaryButton, { borderStyle: 'dashed' }]} onPress={handleOpenExternalVlc}>
+                                <Ionicons name="open-outline" size={18} color={COLORS.text} />
+                            </TouchableOpacity>
                         </View>
 
                         <Text style={styles.iosHint}>
-                            Tip: MKV/HEVC files play best in VLC or Infuse.
+                            "VLC Fix" uses software decoding (VLC engine) to bypass hardware limits.
                         </Text>
                     </View>
                 )}
@@ -377,8 +392,14 @@ export const WatchScreen = () => {
                     <View style={styles.loaderContainer} pointerEvents="none">
                         <ActivityIndicator size="large" color={COLORS.gold.mid} />
                         <Text style={{ color: '#fff', marginTop: 15, fontWeight: '600' }}>
-                            {useCompatMode ? 'Preparing Compatibility Stream...' : 'Buffering...'}
+                            {activeEngine === 'vlc' ? 'Loading VLC Engine...' : 'Buffering...'}
                         </Text>
+                    </View>
+                )}
+
+                {activeEngine === 'vlc' && !isPlaying && (
+                    <View style={styles.vlcControlsHint}>
+                        <Text style={{ color: '#fff', fontSize: 12 }}>VLC Mode: Use system gestures for volume/brightness</Text>
                     </View>
                 )}
             </View>
