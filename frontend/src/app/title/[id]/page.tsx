@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal, PermanenceBadge } from '@/components';
 import { getMovieDetails } from '@/lib/tmdb';
+import { PLAY_STORE_URL } from '@/lib/constants';
 import type { MoviePick } from '@/types';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
@@ -207,20 +208,84 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 </div>
                             </div>
 
-                            {/* Action Buttons */}
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    flexWrap: 'wrap',
-                                    gap: '1rem',
-                                    marginBottom: '3rem',
-                                }}
-                            >
-                                {movie.trailerUrl && (
-                                    <ButtonPrimary
-                                        onClick={() => setIsTrailerOpen(true)}
+                            {/* === WATCH ON APP CTA === */}
+                            <div style={{
+                                padding: '2rem',
+                                borderRadius: '1.5rem',
+                                background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(246,211,101,0.04) 100%)',
+                                border: '1px solid rgba(212, 175, 55, 0.2)',
+                                marginBottom: '2rem',
+                                position: 'relative',
+                                overflow: 'hidden'
+                            }}>
+                                {/* Subtle glow */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-40px', right: '-40px',
+                                    width: '120px', height: '120px',
+                                    background: 'radial-gradient(circle, rgba(212,175,55,0.15) 0%, transparent 70%)',
+                                    pointerEvents: 'none'
+                                }} />
+
+                                <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.5rem' }}>
+                                    📱 Stream Full Content
+                                </p>
+                                <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#F3F4F6', marginBottom: '0.5rem', lineHeight: '1.2' }}>
+                                    Watch on the No Limit Flix App
+                                </h3>
+                                <p style={{ fontSize: '0.9375rem', color: '#A7ABB4', marginBottom: '1.5rem', lineHeight: '1.6', maxWidth: '480px' }}>
+                                    Full video playback, including H.265/4K content, is available exclusively on the mobile app. Discover here, watch anywhere.
+                                </p>
+
+                                {/* Google Play badge — Play Store only */}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginBottom: '1.25rem' }}>
+                                    <a
+                                        href={PLAY_STORE_URL}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            textDecoration: 'none',
+                                            transition: 'transform 0.15s, opacity 0.15s',
+                                            opacity: 0.9,
+                                        }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.transform = 'scale(1.04)';
+                                            e.currentTarget.style.opacity = '1';
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.transform = 'scale(1)';
+                                            e.currentTarget.style.opacity = '0.9';
+                                        }}
                                     >
-                                        Watch Trailer
+                                        <img
+                                            src="/google-play.svg"
+                                            alt="Get it on Google Play"
+                                            style={{ height: '2.5rem', width: 'auto' }}
+                                        />
+                                    </a>
+                                    <span style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: '600',
+                                        color: 'rgba(167,171,180,0.4)',
+                                        letterSpacing: '0.06em',
+                                        border: '1px solid rgba(167,171,180,0.12)',
+                                        padding: '0.2rem 0.6rem',
+                                        borderRadius: '999px',
+                                    }}>iOS — Coming Soon</span>
+                                </div>
+
+                                <p style={{ fontSize: '0.75rem', color: 'rgba(167,171,180,0.5)', fontStyle: 'italic' }}>
+                                    Web browsing is for discovery only. No browser-based playback by design.
+                                </p>
+                            </div>
+
+                            {/* Trailer + Back buttons */}
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '3rem' }}>
+                                {movie.trailerUrl && (
+                                    <ButtonPrimary onClick={() => setIsTrailerOpen(true)}>
+                                        ▶ Watch Trailer
                                     </ButtonPrimary>
                                 )}
                                 <ButtonSecondary onClick={() => window.history.back()}>
@@ -228,26 +293,13 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 </ButtonSecondary>
                             </div>
 
-                            {/* Where to Watch */}
+                            {/* Where to Watch (external services) */}
                             {movie.watchProviders.length > 0 && (
                                 <div>
-                                    <h3
-                                        style={{
-                                            fontSize: '1.25rem',
-                                            fontWeight: '600',
-                                            color: '#F3F4F6',
-                                            marginBottom: '1rem',
-                                        }}
-                                    >
-                                        Where to Watch
+                                    <h3 style={{ fontSize: '0.75rem', fontWeight: '800', color: '#A7ABB4', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '1rem' }}>
+                                        Also Available On
                                     </h3>
-                                    <div
-                                        style={{
-                                            display: 'flex',
-                                            flexWrap: 'wrap',
-                                            gap: '1rem',
-                                        }}
-                                    >
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                                         {movie.watchProviders.map((provider, idx) => (
                                             <a
                                                 key={idx}
@@ -258,38 +310,28 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     gap: '0.75rem',
-                                                    padding: '0.875rem 1.25rem',
+                                                    padding: '0.75rem 1.125rem',
                                                     borderRadius: '0.75rem',
                                                     background: 'rgba(167, 171, 180, 0.05)',
-                                                    border: '2px solid rgba(167, 171, 180, 0.2)',
+                                                    border: '1px solid rgba(167, 171, 180, 0.15)',
                                                     textDecoration: 'none',
                                                     transition: 'all 0.2s',
                                                 }}
                                                 onMouseEnter={(e) => {
-                                                    e.currentTarget.style.borderColor = '#D4AF37';
-                                                    e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
+                                                    e.currentTarget.style.borderColor = 'rgba(167,171,180,0.4)';
+                                                    e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
                                                 }}
                                                 onMouseLeave={(e) => {
-                                                    e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
+                                                    e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.15)';
                                                     e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
                                                 }}
                                             >
                                                 <img
                                                     src={provider.logoUrl}
                                                     alt={provider.name}
-                                                    style={{
-                                                        width: '40px',
-                                                        height: '40px',
-                                                        borderRadius: '0.375rem',
-                                                    }}
+                                                    style={{ width: '32px', height: '32px', borderRadius: '0.375rem' }}
                                                 />
-                                                <span
-                                                    style={{
-                                                        fontSize: '1rem',
-                                                        fontWeight: '500',
-                                                        color: '#F3F4F6',
-                                                    }}
-                                                >
+                                                <span style={{ fontSize: '0.9375rem', fontWeight: '500', color: '#A7ABB4' }}>
                                                     {provider.name}
                                                 </span>
                                             </a>

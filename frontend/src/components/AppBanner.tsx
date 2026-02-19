@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { PLAY_STORE_URL } from '@/lib/constants';
 
 export function AppBanner() {
   const [isDismissed, setIsDismissed] = useState(false);
@@ -54,7 +55,7 @@ export function AppBanner() {
         >
           Download our mobile app:
         </p>
-        
+
         <div
           style={{
             display: 'flex',
@@ -64,7 +65,7 @@ export function AppBanner() {
         >
           {/* Google Play */}
           <a
-            href="https://play.google.com/store/apps/details?id=com.nolimitflix.app"
+            href={PLAY_STORE_URL}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -84,31 +85,26 @@ export function AppBanner() {
             <img
               src="/google-play.svg"
               alt="Get it on Google Play"
-              style={{
-                height: '1.75rem',
-                width: 'auto',
-              }}
+              style={{ height: '1.75rem', width: 'auto' }}
             />
           </a>
 
-          {/* App Store */}
-          <div
+          {/* App Store — coming soon */}
+          <span
+            title="iOS app coming soon"
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              opacity: 0.5,
+              fontSize: '0.75rem',
+              fontWeight: '600',
+              color: 'rgba(167,171,180,0.45)',
+              letterSpacing: '0.05em',
+              userSelect: 'none',
+              border: '1px solid rgba(167,171,180,0.15)',
+              padding: '0.25rem 0.625rem',
+              borderRadius: '999px',
             }}
-            title="Coming soon"
           >
-            <img
-              src="/App_Store.svg"
-              alt="Download on the App Store"
-              style={{
-                height: '1.75rem',
-                width: 'auto',
-              }}
-            />
-          </div>
+            iOS — Coming Soon
+          </span>
         </div>
 
         {/* Dismiss Button */}

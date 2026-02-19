@@ -213,9 +213,13 @@ export default function AdminUploadPage() {
             setCodecWarning(null);
             setThumbnailPreview(null);
 
-            if (!videoFile.name.toLowerCase().endsWith('.mp4')) {
-                setCodecWarning('Warning: This file is not an MP4. For best compatibility, use H.264 MP4 with AAC audio.');
+            const ext = videoFile.name.toLowerCase().split('.').pop();
+            // H.265/HEVC files — fully valid for mobile app playback, just note it
+            const hevcContainers = ['hevc', 'h265'];
+            if (ext && hevcContainers.includes(ext)) {
+                setCodecWarning('ℹ️ H.265/HEVC detected — this will be streamed via the mobile app. Web discovery will still work normally.');
             }
+            // All other formats are accepted — playback is mobile-app only anyway
 
             if (!title) {
                 const nameWithoutExt = videoFile.name.replace(/\.[^/.]+$/, "");
@@ -242,9 +246,10 @@ export default function AdminUploadPage() {
         };
 
         const timeout = setTimeout(() => {
-            console.error('Thumbnail extraction timed out');
+            console.warn('Thumbnail extraction timed out — likely H.265/HEVC or non-standard codec');
             setThumbError(true);
-            setCodecWarning('Warning: Could not probe video metadata. The encoding might be incompatible with web playback.');
+            // Not a critical error — video is valid for mobile app playback (e.g. H.265)
+            setCodecWarning('ℹ️ Could not extract thumbnail from browser — this may be H.265/HEVC or a mobile-optimised codec. The video will play fine on the mobile app. You can upload a custom thumbnail below.');
             cleanup();
         }, 12000);
 
@@ -253,9 +258,9 @@ export default function AdminUploadPage() {
             const res = video.videoWidth >= 3840 ? '4K' : video.videoWidth >= 1920 ? '1080p' : '720p';
             setResolution(res);
 
-            // Basic "can play" check
+            // Dimension check — if zero, browser can't decode (likely H.265 or unsupported codec)
             if (video.videoWidth === 0 || video.videoHeight === 0) {
-                setCodecWarning('Warning: Video dimensions not detected. This file may be corrupted or use an unsupported codec.');
+                setCodecWarning('ℹ️ Browser could not decode video dimensions — likely H.265/HEVC or a mobile-only codec. Playback will work on the mobile app. Upload a custom thumbnail if needed.');
             }
 
             // Seek to 1s or 10% of duration
@@ -287,9 +292,10 @@ export default function AdminUploadPage() {
 
         video.onerror = () => {
             clearTimeout(timeout);
-            console.error('Video loading error during thumbnail extraction');
+            console.warn('Browser cannot decode this video — likely H.265/HEVC or proprietary codec');
             setThumbError(true);
-            setCodecWarning('Critical: The browser cannot play this video. Please ensure it is H.264 MP4.');
+            // Not an error — this is expected for H.265 or mobile-optimised files
+            setCodecWarning('ℹ️ This video uses a codec the browser cannot preview (e.g. H.265/HEVC). It will stream correctly on the mobile app. You can upload a custom thumbnail manually.');
             cleanup();
         };
     };
@@ -451,17 +457,17 @@ export default function AdminUploadPage() {
 
                             {codecWarning && (
                                 <div style={{
-                                    background: 'rgba(212, 175, 55, 0.1)',
-                                    border: '1px solid rgba(212, 175, 55, 0.2)',
-                                    padding: '12px 20px',
-                                    borderRadius: '16px',
+                                    background: 'rgba(59, 130, 246, 0.08)',
+                                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                                    padding: '10px 16px',
+                                    borderRadius: '12px',
                                     display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '12px',
+                                    alignItems: 'flex-start',
+                                    gap: '10px',
                                     marginTop: '-12px'
                                 }}>
-                                    <AlertCircle size={14} color="#D4AF37" />
-                                    <span style={{ fontSize: '11px', color: '#D4AF37', fontWeight: 600, letterSpacing: '0.02em' }}>{codecWarning}</span>
+                                    <span style={{ fontSize: '14px', marginTop: '1px', flexShrink: 0 }}>ℹ️</span>
+                                    <span style={{ fontSize: '11px', color: '#93C5FD', fontWeight: 500, lineHeight: '1.5', letterSpacing: '0.01em' }}>{codecWarning.replace(/^ℹ️\s?/, '')}</span>
                                 </div>
                             )}
                         </div>

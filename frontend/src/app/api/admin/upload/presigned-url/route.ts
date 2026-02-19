@@ -32,26 +32,26 @@ export async function POST(request: NextRequest) {
         const fileExtension = fileName.split('.').pop()?.toLowerCase();
         const s3Key = `videos/${videoId}.${fileExtension}`;
 
-        // Force video/mp4 for mp4 files to avoid playback issues
-        // If fileType is missing, default to octet-stream or derive from extension
-        let contentType = fileType || 'application/octet-stream';
-        if (fileExtension === 'mp4') {
-            contentType = 'video/mp4';
-        } else if (!fileType && fileExtension) {
-            // Basic fallback for common types if fileType is missing from browser
-            const typeMap: Record<string, string> = {
-                'mov': 'video/quicktime',
-                'webm': 'video/webm',
-                'avi': 'video/x-msvideo',
-                'mkv': 'video/x-matroska',
-                'jpg': 'image/jpeg',
-                'jpeg': 'image/jpeg',
-                'png': 'image/png'
-            };
-            if (typeMap[fileExtension]) {
-                contentType = typeMap[fileExtension];
-            }
-        }
+        // Always derive content type from extension — browser MIME types can be unreliable
+        // (e.g., MKV, AVI, MOV are frequently misreported or missing)
+        const extTypeMap: Record<string, string> = {
+            'mp4':  'video/mp4',
+            'mkv':  'video/x-matroska',
+            'webm': 'video/webm',
+            'mov':  'video/quicktime',
+            'avi':  'video/x-msvideo',
+            'wmv':  'video/x-ms-wmv',
+            'flv':  'video/x-flv',
+            'm4v':  'video/x-m4v',
+            'jpg':  'image/jpeg',
+            'jpeg': 'image/jpeg',
+            'png':  'image/png',
+            'gif':  'image/gif',
+            'webp': 'image/webp',
+        };
+        const contentType = (fileExtension && extTypeMap[fileExtension])
+            ? extTypeMap[fileExtension]
+            : (fileType || 'application/octet-stream');
 
         const videoCommand = new PutObjectCommand({
             Bucket: BUCKET_NAME,
