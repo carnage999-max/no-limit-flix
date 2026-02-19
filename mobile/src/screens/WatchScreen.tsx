@@ -8,15 +8,17 @@ import {
     StatusBar,
     Platform,
     useWindowDimensions,
+    Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../theme/tokens';
+import { COLORS, SPACING } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { transformToCloudFront } from '../lib/utils';
 import { BASE_URL } from '../lib/api';
+import * as Linking from 'expo-linking';
 
 const styles = StyleSheet.create({
     container: {
@@ -105,6 +107,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         alignItems: 'center',
+        justifyContent: 'center',
     },
     errorButton: {
         backgroundColor: COLORS.gold.mid,
@@ -175,7 +178,6 @@ export const WatchScreen = () => {
         console.log(`[WatchScreen] Mode: ${useCompatMode ? 'COMPAT (Transcoding)' : 'DIRECT'}`);
         console.log(`[WatchScreen] URL: ${finalVideoUrl}`);
 
-        // Investigative fetch to check headers
         fetch(finalVideoUrl, { method: 'HEAD' })
             .then(res => {
                 const mime = res.headers.get('Content-Type');
@@ -265,6 +267,32 @@ export const WatchScreen = () => {
         setRetryCount(prev => prev + 1);
     };
 
+    const handleOpenExternal = async () => {
+        if (!videoUrl) return;
+
+        try {
+            if (Platform.OS === 'ios') {
+                // Specific iOS Schemes for pro players
+                // encodeURIComponent is critical for URLs as params
+                const vlcScheme = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(videoUrl)}`;
+
+                const canVlc = await Linking.canOpenURL('vlc://').catch(() => false);
+                if (canVlc) {
+                    await Linking.openURL(vlcScheme);
+                } else {
+                    // Fallback to direct linking - will open Safari or App Store/Prompt
+                    await Linking.openURL(videoUrl);
+                }
+            } else {
+                // Android handles direct video URLs beautifully by offering an App Picker
+                await Linking.openURL(videoUrl);
+            }
+        } catch (e) {
+            console.error('Failed to open external player:', e);
+            Alert.alert('External Player', 'Please install VLC or another media player that supports MKV files.');
+        }
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" hidden={isPlaying} />
@@ -298,7 +326,7 @@ export const WatchScreen = () => {
                 {error && (
                     <View style={styles.errorContainer}>
                         <Ionicons name="alert-circle" size={64} color={COLORS.accent.red || '#EF4444'} />
-                        <Text style={styles.errorTitle}>Playback Error</Text>
+                        <Text style={styles.errorTitle}>Format Conflict</Text>
                         <Text style={styles.errorSubtitle}>
                             {error.toLowerCase().includes('format') ||
                                 error.toLowerCase().includes('decoder') ||
@@ -308,40 +336,41 @@ export const WatchScreen = () => {
                                 error.toLowerCase().includes('renderer') ||
                                 (finalVideoUrl && finalVideoUrl.toLowerCase().endsWith('.mkv')) ||
                                 (serverMime && serverMime.includes('matroska'))
-                                ? `Unsupported hardware decoder or format (MKV/HEVC) detected.`
+                                ? `The device's native player cannot decode this MKV/HEVC content.`
                                 : `Playback Issue: ${error}`}
                         </Text>
 
                         <View style={{ marginVertical: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8 }}>
                             <Text style={{ color: COLORS.silver, opacity: 0.7, fontSize: 10, textAlign: 'center' }}>
                                 MIME: {serverMime || 'checking...'}{"\n"}
-                                Mode: {useCompatMode ? 'Compat (Transcoding)' : 'Direct'}
+                                Mode: {useCompatMode ? 'Compat (Transcoding)' : 'Direct Play'}
                             </Text>
                         </View>
 
                         <View style={styles.errorActionRow}>
                             <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
-                                <Text style={styles.secondaryButtonText}>Exit</Text>
+                                <Text style={styles.secondaryButtonText}>Back</Text>
                             </TouchableOpacity>
 
-                            {!useCompatMode && assetId ? (
-                                <TouchableOpacity style={styles.errorButton} onPress={handleEnableCompat}>
-                                    <Ionicons name="flash" size={18} color={COLORS.background} />
-                                    <Text style={styles.errorButtonText}>Force Smart Fix</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <TouchableOpacity style={styles.errorButton} onPress={handleRetry}>
-                                    <Ionicons name="refresh" size={18} color={COLORS.background} />
-                                    <Text style={styles.errorButtonText}>Retry</Text>
+                            <TouchableOpacity style={styles.errorButton} onPress={handleOpenExternal}>
+                                <Ionicons name="open-outline" size={18} color={COLORS.background} />
+                                <Text style={styles.errorButtonText}>Open in VLC</Text>
+                            </TouchableOpacity>
+
+                            {/* Fallback to transcoding if they have a local server running */}
+                            {!useCompatMode && assetId && (
+                                <TouchableOpacity
+                                    style={[styles.secondaryButton, { backgroundColor: 'transparent', borderColor: 'transparent' }]}
+                                    onPress={handleEnableCompat}
+                                >
+                                    <Ionicons name="flash" size={18} color={COLORS.gold.mid} />
                                 </TouchableOpacity>
                             )}
                         </View>
 
-                        {Platform.OS === 'ios' && !useCompatMode && assetId && (
-                            <Text style={styles.iosHint}>
-                                Tip: Tap "Force Smart Fix" to transcode for iOS playback.
-                            </Text>
-                        )}
+                        <Text style={styles.iosHint}>
+                            Tip: MKV/HEVC files play best in VLC or Infuse.
+                        </Text>
                     </View>
                 )}
 
@@ -349,13 +378,8 @@ export const WatchScreen = () => {
                     <View style={styles.loaderContainer} pointerEvents="none">
                         <ActivityIndicator size="large" color={COLORS.gold.mid} />
                         <Text style={{ color: '#fff', marginTop: 15, fontWeight: '600' }}>
-                            {useCompatMode ? 'Transcoding for Compatibility...' : 'Buffering...'}
+                            {useCompatMode ? 'Preparing Compatibility Stream...' : 'Buffering...'}
                         </Text>
-                        {useCompatMode && (
-                            <Text style={{ color: COLORS.silver, fontSize: 12, marginTop: 5 }}>
-                                This might take a few seconds
-                            </Text>
-                        )}
                     </View>
                 )}
             </View>
