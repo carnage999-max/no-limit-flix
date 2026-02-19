@@ -5,6 +5,7 @@ import { MoviePick } from '../types';
 import { COLORS, SPACING } from '../theme/tokens';
 import { PermanenceBadge } from './PermanenceBadge';
 import { Ionicons } from '@expo/vector-icons';
+import { transformToCloudFront } from '../lib/utils';
 
 const { width } = Dimensions.get('window');
 
@@ -15,14 +16,6 @@ interface HeroCardProps {
 }
 
 import { useNavigation } from '@react-navigation/native';
-
-const transformToCloudFront = (url: string | null) => {
-  if (!url) return '';
-  const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
-  if (!cfUrl) return url;
-  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//,
-    cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`);
-};
 
 export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
   const navigation = useNavigation<any>();

@@ -35,9 +35,13 @@ export const transformToCloudFront = (url: string | null) => {
         finalizedUrl = finalizedUrl.replace(s3PatternLegacy, cfBase);
     }
 
-    // 2. Final sanitization: ensure no double slashes after protocol
-    // This regex looks for double slashes NOT preceded by a colon (ignoring protocol)
-    finalizedUrl = finalizedUrl.replace(/([^:])\/\//g, '$1/');
+    // 2. Final sanitization: ensure no double slashes in the path, while preserving protocol
+    if (finalizedUrl.includes('://')) {
+        const [protocol, rest] = finalizedUrl.split('://');
+        finalizedUrl = `${protocol}://${rest.replace(/\/\/+/g, '/')}`;
+    } else {
+        finalizedUrl = finalizedUrl.replace(/\/\/+/g, '/');
+    }
 
     // 3. URL Encoding for iOS stability (handles spaces and special characters)
     if (Platform.OS === 'ios') {

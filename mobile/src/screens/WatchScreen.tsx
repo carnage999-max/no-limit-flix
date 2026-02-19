@@ -121,9 +121,12 @@ export const WatchScreen = () => {
                         <Ionicons name="alert-circle" size={64} color={COLORS.accent.red || '#EF4444'} />
                         <Text style={styles.errorTitle}>Playback Error</Text>
                         <Text style={styles.errorSubtitle}>
-                            {error.includes('Format') || error.includes('Decoder')
-                                ? 'This video format (MKV/HEVC) is not supported on this device. Please try a different title.'
-                                : `Failed to load video: ${error}`}
+                            {error.includes('Format') || error.includes('Decoder') || videoUrl.toLowerCase().endsWith('.mkv')
+                                ? `This title uses a format (MKV or HEVC) that might not be supported natively on ${Platform.OS === 'ios' ? 'iOS' : 'this device'}. Try a different title or use an MP4 source.`
+                                : `Playback Issue: ${error}`}
+                        </Text>
+                        <Text style={{ color: COLORS.silver, opacity: 0.5, fontSize: 12, marginBottom: 20 }}>
+                            URL: {videoUrl}
                         </Text>
                         <TouchableOpacity
                             style={styles.errorButton}
