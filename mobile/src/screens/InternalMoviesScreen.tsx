@@ -95,7 +95,8 @@ export const InternalMoviesScreen = () => {
                         } else {
                             navigation.navigate('Watch', {
                                 videoUrl: videoUrl,
-                                title: item.title
+                                title: item.title,
+                                assetId: item.id
                             });
                         }
                     }}

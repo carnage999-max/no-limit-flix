@@ -300,8 +300,15 @@ export const WatchScreen = () => {
                         <Ionicons name="alert-circle" size={64} color={COLORS.accent.red || '#EF4444'} />
                         <Text style={styles.errorTitle}>Playback Error</Text>
                         <Text style={styles.errorSubtitle}>
-                            {error.includes('Format') || error.includes('Decoder') || (finalVideoUrl && finalVideoUrl.toLowerCase().endsWith('.mkv')) || (serverMime && serverMime.includes('matroska'))
-                                ? `Unsupported format (MKV/HEVC) for this device.`
+                            {error.toLowerCase().includes('format') ||
+                                error.toLowerCase().includes('decoder') ||
+                                error.toLowerCase().includes('matroska') ||
+                                error.toLowerCase().includes('hevc') ||
+                                error.toLowerCase().includes('hvc1') ||
+                                error.toLowerCase().includes('renderer') ||
+                                (finalVideoUrl && finalVideoUrl.toLowerCase().endsWith('.mkv')) ||
+                                (serverMime && serverMime.includes('matroska'))
+                                ? `Unsupported hardware decoder or format (MKV/HEVC) detected.`
                                 : `Playback Issue: ${error}`}
                         </Text>
 
@@ -330,7 +337,7 @@ export const WatchScreen = () => {
                             )}
                         </View>
 
-                        {Platform.OS === 'ios' && !useCompatMode && (
+                        {Platform.OS === 'ios' && !useCompatMode && assetId && (
                             <Text style={styles.iosHint}>
                                 Tip: Tap "Force Smart Fix" to transcode for iOS playback.
                             </Text>

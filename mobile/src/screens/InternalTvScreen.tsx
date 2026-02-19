@@ -74,7 +74,8 @@ export const InternalTvScreen = () => {
                 style={styles.episodeCard}
                 onPress={() => navigation.navigate('Watch', {
                     videoUrl: videoUrl,
-                    title: `${seriesName} - S${item.seasonNumber}E${item.episodeNumber}: ${item.title}`
+                    title: `${seriesName} - S${item.seasonNumber}E${item.episodeNumber}: ${item.title}`,
+                    assetId: item.id
                 })}
             >
                 <View style={styles.episodeNumberContainer}>
