@@ -13,6 +13,10 @@ import { LibraryScreen } from '../screens/LibraryScreen';
 import { AccountScreen } from '../screens/AccountScreen';
 import { TitleDetailScreen } from '../screens/TitleDetailScreen';
 import { CollectionDetailScreen } from '../screens/CollectionDetailScreen';
+import { WatchScreen } from '../screens/WatchScreen';
+import { InternalMoviesScreen } from '../screens/InternalMoviesScreen';
+import { InternalTvScreen } from '../screens/InternalTvScreen';
+import { SettingsScreen } from '../screens/SettingsScreen';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,7 +28,7 @@ const Stack = createNativeStackNavigator();
 function TabNavigator() {
   return (
     <Tab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} />}
+      tabBar={(props: any) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
       }}
@@ -33,7 +37,7 @@ function TabNavigator() {
       <Tab.Screen name="Collections" component={CollectionsScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="Library" component={LibraryScreen} />
-      <Tab.Screen name="Account" component={AccountScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
 }
@@ -50,6 +54,9 @@ export function RootNavigator() {
         <Stack.Screen name="MainTabs" component={TabNavigator} />
         <Stack.Screen name="TitleDetail" component={TitleDetailScreen} />
         <Stack.Screen name="CollectionDetail" component={CollectionDetailScreen} />
+        <Stack.Screen name="Watch" component={WatchScreen} />
+        <Stack.Screen name="InternalMovies" component={InternalMoviesScreen} />
+        <Stack.Screen name="InternalTv" component={InternalTvScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -107,15 +107,24 @@ export default function HeroCard({ movie }: HeroCardProps) {
                         {movie.title}
                     </h2>
 
-                    <p
-                        style={{
-                            fontSize: '1.125rem',
-                            color: '#A7ABB4',
-                            marginBottom: '1.5rem',
-                        }}
-                    >
-                        {movie.year} · {movie.runtime} min
-                    </p>
+                    <div className="flex flex-wrap items-center gap-4 mb-3">
+                        <p
+                            style={{
+                                fontSize: '1.125rem',
+                                color: '#A7ABB4',
+                            }}
+                        >
+                            {movie.year} · {movie.runtime} min
+                        </p>
+                        {movie.playable && (
+                            <div className="flex items-center gap-2 px-3 py-1 rounded-full" style={{ background: '#D4AF37' }}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="#0B0B0D">
+                                    <path d="M8 5v14l11-7z" />
+                                </svg>
+                                <span style={{ color: '#0B0B0D', fontSize: '0.75rem', fontWeight: '800', textTransform: 'uppercase' }}>Playable Now</span>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Why This Fits Your Mood */}
                     <div
@@ -162,7 +171,18 @@ export default function HeroCard({ movie }: HeroCardProps) {
                         }}
                     >
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                            {movie.trailerUrl && (
+                            {movie.playable ? (
+                                <Link href={`/watch/${movie.assetId}`}>
+                                    <ButtonPrimary>
+                                        <div className="flex items-center gap-2">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M8 5v14l11-7z" />
+                                            </svg>
+                                            Watch Now
+                                        </div>
+                                    </ButtonPrimary>
+                                </Link>
+                            ) : movie.trailerUrl && (
                                 <ButtonPrimary
                                     onClick={() => setIsTrailerOpen(true)}
                                 >
@@ -175,6 +195,15 @@ export default function HeroCard({ movie }: HeroCardProps) {
                                     Full Details
                                 </ButtonSecondary>
                             </Link>
+
+                            {movie.playable && movie.trailerUrl && (
+                                <button
+                                    onClick={() => setIsTrailerOpen(true)}
+                                    className="text-silver hover:text-white text-sm font-medium underline"
+                                >
+                                    View Trailer
+                                </button>
+                            )}
                         </div>
 
                         {movie.watchProviders.length > 0 && (

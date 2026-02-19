@@ -1,11 +1,11 @@
 import React from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  ScrollView, 
-  Image, 
-  Dimensions, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  Image,
+  Dimensions,
   Linking,
   TouchableOpacity,
   ActivityIndicator
@@ -16,11 +16,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
 import { ButtonPrimary, PermanenceBadge, TrailerPlayer } from '../components/index';
 import { apiClient } from '../lib/api';
-import { MoviePick } from '../types';
+import { MoviePick, WatchProvider } from '../types';
 import { useFavorites } from '../context/FavoritesContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const AUTOPLAY_KEY = '@nolimitflix_autoplay';
 
 const getYoutubeId = (url?: string) => {
@@ -37,7 +37,6 @@ export const TitleDetailScreen = () => {
   const { isFavorite, toggleFavorite } = useFavorites();
 
   const [movie, setMovie] = React.useState<MoviePick | null>(passedMovie || null);
-  // Only skip loading if we have the full details (explanation and watchProviders)
   const [loading, setLoading] = React.useState(!movie?.explanation || !movie?.watchProviders);
   const [isPlayingTrailer, setIsPlayingTrailer] = React.useState(false);
 
@@ -106,98 +105,114 @@ export const TitleDetailScreen = () => {
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Backdrop Photo */}
-        <View style={styles.backdropContainer}>
-          <Image 
-            source={{ uri: movie.backdrop }} 
-            style={styles.backdrop} 
+        {/* Backdrop & Header */}
+        <View style={styles.heroSection}>
+          <Image
+            source={{ uri: movie.backdrop || movie.poster }}
+            style={styles.backdrop}
           />
           <LinearGradient
-            colors={['rgba(11, 11, 13, 0.4)', 'rgba(11, 11, 13, 0.7)', COLORS.background]}
-            style={StyleSheet.absoluteFill}
+            colors={['rgba(11, 11, 13, 0)', 'rgba(11, 11, 13, 0.5)', COLORS.background]}
+            style={styles.backdropGradient}
           />
-          
-          {/* Header Buttons */}
-          <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={styles.backButton}
+
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.headerBackButton}
               onPress={() => navigation.goBack()}
             >
               <Ionicons name="chevron-back" size={28} color={COLORS.text} />
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.headerFavoriteButton}
+          </View>
+
+          <View style={styles.actionRow}>
+            {movie.playable ? (
+              <TouchableOpacity
+                style={styles.playButton}
+                onPress={() => navigation.navigate('Watch', {
+                  videoUrl: movie.cloudfrontUrl,
+                  title: movie.title
+                })}
+              >
+                <Ionicons name="play" size={24} color={COLORS.background} />
+                <Text style={styles.playButtonText}>Play Now</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {movie.trailerUrl && !isPlayingTrailer ? (
+              <TouchableOpacity
+                style={[styles.trailerButton, movie.playable && { flex: 1.2 }]}
+                onPress={() => setIsPlayingTrailer(true)}
+              >
+                <Ionicons name="logo-youtube" size={20} color={COLORS.text} />
+                <Text style={styles.trailerButtonText}>Trailer</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <TouchableOpacity
+              style={styles.favoriteButton}
               onPress={handleToggleFavorite}
             >
-              <Ionicons 
-                name={isFav ? "heart" : "heart-outline"} 
-                size={28} 
+              <Ionicons
+                name={isFav ? "heart" : "heart-outline"}
+                size={24}
                 color={isFav ? "#EF4444" : COLORS.text}
               />
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Info Header */}
-        <View style={styles.mainInfo}>
-          <Image source={{ uri: movie.poster }} style={styles.poster} />
-          <View style={styles.titleInfo}>
-            <Text style={styles.title}>{movie.title}</Text>
-            <Text style={styles.meta}>
-              {movie.year}  ·  {movie.runtime} min
-            </Text>
-            <View style={styles.badgeRow}>
-              <PermanenceBadge type={movie.permanence} />
-            </View>
-          </View>
-        </View>
-
-        {/* Content Details */}
-        <View style={styles.body}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Why you might like this</Text>
-            <Text style={styles.explanationText}>{movie.explanation || 'Loading details...'}</Text>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Genres</Text>
-            <View style={styles.genreList}>
-              {movie.genres?.map(genre => (
-                <View key={genre} style={styles.genreBadge}>
-                  <Text style={styles.genreText}>{genre}</Text>
+        {/* Content */}
+        <View style={styles.mainContent}>
+          <View style={styles.titleSection}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.titleText}>{movie.title}</Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.metaText}>{movie.year}</Text>
+                <Text style={styles.bullet}>•</Text>
+                <Text style={styles.metaText}>{movie.runtime}m</Text>
+                <Text style={styles.bullet}>•</Text>
+                <View style={styles.genresRow}>
+                  {movie.genres.slice(0, 2).map((g, i) => (
+                    <Text key={i} style={styles.metaText}>{g}{i < 1 && movie.genres.length > 1 ? ', ' : ''}</Text>
+                  ))}
                 </View>
-              ))}
+              </View>
             </View>
+            <PermanenceBadge type={movie.permanence || 'Permanent Core'} />
           </View>
 
-          {movie.trailerUrl && (
+          {movie.explanation && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Trailer</Text>
-              {isPlayingTrailer && videoId ? (
-                <TrailerPlayer videoId={videoId} />
-              ) : (
-                <ButtonPrimary 
-                  onPress={() => setIsPlayingTrailer(true)}
-                  fullWidth
-                >
-                  Watch Trailer
-                </ButtonPrimary>
-              )}
+              <Text style={styles.sectionTitle}>Why this match?</Text>
+              <Text style={styles.explanationText}>{movie.explanation}</Text>
+            </View>
+          )}
+
+          {isPlayingTrailer && videoId && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Trailer</Text>
+                <TouchableOpacity onPress={() => setIsPlayingTrailer(false)}>
+                  <Text style={styles.closeTrailerText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+              <TrailerPlayer videoId={videoId} />
             </View>
           )}
 
           {movie.watchProviders && movie.watchProviders.length > 0 && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Where to watch</Text>
+              <Text style={styles.sectionTitle}>Where to stream</Text>
               <View style={styles.providersGrid}>
-                {movie.watchProviders.map((provider, i) => (
-                  <TouchableOpacity 
-                    key={i} 
+                {movie.watchProviders.map((provider: WatchProvider, i: number) => (
+                  <TouchableOpacity
+                    key={i}
                     style={styles.providerCard}
                     onPress={() => Linking.openURL(provider.link)}
                   >
                     <Image source={{ uri: provider.logoUrl }} style={styles.providerLogo} />
-                    <Text style={styles.providerName}>{provider.name}</Text>
+                    <Text style={styles.providerName} numberOfLines={1}>{provider.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -219,132 +234,184 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingBottom: 140,
+    paddingBottom: 40,
   },
-  backdropContainer: {
-    height: 350,
-    width: '100%',
+  heroSection: {
+    width: width,
+    height: height * 0.55,
+    position: 'relative',
   },
   backdrop: {
     width: '100%',
     height: '100%',
+    resizeMode: 'cover',
   },
-  headerButtons: {
+  backdropGradient: {
     position: 'absolute',
-    top: 50,
+    inset: 0,
+  },
+  header: {
+    position: 'absolute',
+    top: 60,
     left: 20,
     right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  headerBackButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(11, 11, 13, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionRow: {
+    position: 'absolute',
+    bottom: -28,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    gap: 12,
     zIndex: 10,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(11, 11, 13, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerFavoriteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(11, 11, 13, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mainInfo: {
+  playButton: {
+    flex: 2,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: COLORS.gold.mid,
     flexDirection: 'row',
-    paddingHorizontal: SPACING.xl,
-    marginTop: -100,
-    alignItems: 'flex-end',
-    gap: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: COLORS.gold.mid,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  poster: {
-    width: 120,
-    height: 180,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: 'rgba(167, 171, 180, 0.2)',
-  },
-  titleInfo: {
-    flex: 1,
-    paddingBottom: 10,
-  },
-  title: {
-    color: COLORS.text,
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  meta: {
-    color: COLORS.silver,
+  playButtonText: {
+    color: COLORS.background,
     fontSize: 16,
-    marginBottom: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  badgeRow: {
+  trailerButton: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  body: {
-    paddingHorizontal: SPACING.xl,
-    paddingTop: 40,
+  trailerButtonText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  favoriteButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  mainContent: {
+    paddingHorizontal: 20,
+    paddingTop: 60,
+  },
+  titleSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  titleText: {
+    color: COLORS.text,
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 38,
+    marginBottom: 8,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  metaText: {
+    color: COLORS.silver,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  bullet: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 14,
+  },
+  genresRow: {
+    flexDirection: 'row',
   },
   section: {
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     color: COLORS.gold.mid,
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  closeTrailerText: {
+    color: COLORS.silver,
+    fontSize: 12,
+    fontWeight: '600',
   },
   explanationText: {
     color: COLORS.text,
-    fontSize: 17,
+    fontSize: 16,
     lineHeight: 26,
-  },
-  genreList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  genreBadge: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(167, 171, 180, 0.05)',
-    borderWidth: 1,
-    borderColor: 'rgba(167, 171, 180, 0.1)',
-  },
-  genreText: {
-    color: COLORS.silver,
-    fontSize: 13,
-    fontWeight: '600',
+    opacity: 0.9,
   },
   providersGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   providerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
+    width: (width - 40 - 24) / 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
     borderRadius: 12,
-    backgroundColor: 'rgba(167, 171, 180, 0.05)',
+    padding: 12,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(167, 171, 180, 0.1)',
+    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   providerLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    marginRight: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    marginBottom: 8,
   },
   providerName: {
-    color: COLORS.text,
-    fontSize: 16,
+    color: COLORS.silver,
+    fontSize: 11,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

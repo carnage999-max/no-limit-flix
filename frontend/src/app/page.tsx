@@ -45,7 +45,8 @@ export default function HomePage() {
     isLoading, setIsLoading,
     results, setResults,
     sessionId, setSessionId,
-    viewSize, setViewSize
+    viewSize, setViewSize,
+    onlyPlayable, setOnlyPlayable
   } = useSearch();
 
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
@@ -122,11 +123,23 @@ export default function HomePage() {
       }
 
       const data = await response.json();
-      setResults({
+
+      let finalResults = {
         hero: data.hero,
         alternates: data.alternates,
         explanationTokens: data.explanationTokens
-      });
+      };
+
+      if (onlyPlayable) {
+        const all = [data.hero, ...data.alternates];
+        const playables = all.filter((m: any) => m.playable);
+        if (playables.length > 0) {
+          finalResults.hero = playables[0];
+          finalResults.alternates = playables.slice(1);
+        }
+      }
+
+      setResults(finalResults);
       setSessionId(null);
 
       setTimeout(() => {
@@ -156,11 +169,23 @@ export default function HomePage() {
       }
 
       const data = await response.json();
-      setResults({
+
+      let finalResults = {
         hero: data.hero,
         alternates: data.alternates,
         explanationTokens: data.explanationTokens
-      });
+      };
+
+      if (onlyPlayable) {
+        const all = [data.hero, ...data.alternates];
+        const playables = all.filter((m: any) => m.playable);
+        if (playables.length > 0) {
+          finalResults.hero = playables[0];
+          finalResults.alternates = playables.slice(1);
+        }
+      }
+
+      setResults(finalResults);
       setSessionId(data.sessionId);
       if (data.inferredParams) setSearchParams(data.inferredParams);
 
@@ -255,7 +280,23 @@ export default function HomePage() {
       }
 
       const data = await response.json();
-      setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
+
+      let finalResults = {
+        hero: data.hero,
+        alternates: data.alternates,
+        explanationTokens: data.explanationTokens
+      };
+
+      if (onlyPlayable) {
+        const all = [data.hero, ...data.alternates];
+        const playables = all.filter((m: any) => m.playable);
+        if (playables.length > 0) {
+          finalResults.hero = playables[0];
+          finalResults.alternates = playables.slice(1);
+        }
+      }
+
+      setResults(finalResults);
       setSessionId(data.sessionId);
 
       // Auto-scroll to results
@@ -538,6 +579,34 @@ export default function HomePage() {
             <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.875rem', color: '#A7ABB4', opacity: 0.7 }}>
               Powered by DeepSeek R1 • No Limit Flix
             </p>
+          </div>
+
+          {/* Playable Filter Toggle */}
+          <div className="flex justify-center mb-8">
+            <button
+              onClick={() => setOnlyPlayable(!onlyPlayable)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem 1.5rem',
+                borderRadius: '1.25rem',
+                background: onlyPlayable ? '#D4AF37' : 'rgba(212, 175, 55, 0.1)',
+                border: '1px solid rgba(212, 175, 55, 0.3)',
+                color: onlyPlayable ? '#0B0B0D' : '#D4AF37',
+                fontWeight: '800',
+                fontSize: '0.875rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                boxShadow: onlyPlayable ? '0 0 20px rgba(212, 175, 55, 0.4)' : 'none',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+              </svg>
+              <span>Playable Now</span>
+            </button>
           </div>
 
           {/* Mood Chips */}

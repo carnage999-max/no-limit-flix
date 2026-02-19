@@ -4,18 +4,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MoviePick } from '../types';
 import { COLORS, SPACING } from '../theme/tokens';
 import { PermanenceBadge } from './PermanenceBadge';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
 interface HeroCardProps {
   movie: MoviePick;
   onViewDetails: (id: string) => void;
+  key?: string | number;
 }
 
-export const HeroCard: React.FC<HeroCardProps> = ({ movie, onViewDetails }) => {
+export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
   return (
-    <TouchableOpacity 
-      activeOpacity={0.9} 
+    <TouchableOpacity
+      activeOpacity={0.9}
       onPress={() => onViewDetails(movie.id)}
       style={styles.container}
     >
@@ -25,18 +27,40 @@ export const HeroCard: React.FC<HeroCardProps> = ({ movie, onViewDetails }) => {
           colors={['transparent', 'rgba(11, 11, 13, 0.5)', '#0B0B0D']}
           style={styles.gradient}
         />
-        
+
         <View style={styles.content}>
-          <PermanenceBadge type={movie.permanence} />
+          <View style={styles.badgeRow}>
+            <PermanenceBadge type={movie.permanence} />
+            {movie.playable && (
+              <View style={styles.playableBadge}>
+                <Ionicons name="play-circle" size={14} color={COLORS.background} />
+                <Text style={styles.playableBadgeText}>Playable Now</Text>
+              </View>
+            )}
+          </View>
           <Text style={styles.title}>{movie.title}</Text>
           <Text style={styles.whyLabel}>WHY THIS MATCHES:</Text>
           <Text style={styles.explanation} numberOfLines={3}>{movie.explanation}</Text>
-          
+
           <View style={styles.footer}>
-             <Text style={styles.meta}>{movie.year}  ·  {movie.runtime}m</Text>
-             <View style={styles.detailsBtn}>
-                <Text style={styles.detailsBtnText}>View Details</Text>
-             </View>
+            <Text style={styles.meta}>{movie.year}  ·  {movie.runtime}m</Text>
+            <View style={styles.actionButtons}>
+              {movie.playable ? (
+                <TouchableOpacity
+                  style={styles.heroPlayBtn}
+                  onPress={(e: any) => {
+                    e.stopPropagation();
+                    // In a real app we'd navigate to WatchScreen here
+                  }}
+                >
+                  <Ionicons name="play" size={18} color={COLORS.background} />
+                  <Text style={styles.heroPlayBtnText}>Play</Text>
+                </TouchableOpacity>
+              ) : null}
+              <View style={styles.detailsBtn}>
+                <Text style={styles.detailsBtnText}>Details</Text>
+              </View>
+            </View>
           </View>
         </View>
       </View>
@@ -120,5 +144,44 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 13,
     fontWeight: '600',
-  }
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  playableBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.gold.mid,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  playableBadgeText: {
+    color: COLORS.background,
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  heroPlayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.gold.mid,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+  },
+  heroPlayBtnText: {
+    color: COLORS.background,
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
 });

@@ -2,6 +2,7 @@
 
 export interface Movie {
     id: string;
+    tmdb_id?: string;          // TMDb ID (present on discovery results)
     title: string;
     year: number;
     runtime: number;
@@ -14,6 +15,11 @@ export interface MoviePick extends Movie {
     explanation: string;
     trailerUrl?: string;
     watchProviders: WatchProvider[];
+    permanence?: 'Permanent Core' | 'Long-Term' | 'Licensed';
+    // Phase 2 — playback enrichment
+    playable?: boolean;        // true if title exists in our hosted library
+    assetId?: string;          // DB Video.id when playable=true
+    cloudfrontUrl?: string;    // CloudFront URL when playable=true (used by WatchScreen)
 }
 
 export interface WatchProvider {

@@ -5,20 +5,21 @@ export const COLORS = {
   foreground: '#F3F4F6',
   text: '#F3F4F6',
   silver: '#A7ABB4',
-  
+
   // Gold Coin Gradient
   gold: {
     light: '#F6D365',
     mid: '#D4AF37',
     dark: '#B8860B',
   },
-  
+
   // Accents
   accent: {
     purple: '#8B5CF6',
     blue: '#3B82F6',
     teal: '#14B8A6',
     rose: '#F43F5E',
+    red: '#EF4444',
   },
 
   button: {

@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  ScrollView, 
-  Dimensions, 
-  TextInput, 
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  Dimensions,
+  TextInput,
   Animated,
   ActivityIndicator,
   FlatList,
@@ -17,12 +17,12 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
-import { 
-  ButtonPrimary, 
-  ButtonSecondary, 
-  MoodChip, 
-  HeroCard, 
-  TitleTile 
+import {
+  ButtonPrimary,
+  ButtonSecondary,
+  MoodChip,
+  HeroCard,
+  TitleTile
 } from '../components/index';
 import { MOOD_OPTIONS, FEEDBACK_OPTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
@@ -33,14 +33,15 @@ const { height, width } = Dimensions.get('window');
 export const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const mainScrollRef = useRef<ScrollView>(null);
-  
+
   // State
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [vibeText, setVibeText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<AIPickResponse | null>(null);
   const [viewSize, setViewSize] = useState<'compact' | 'standard' | 'large'>('standard');
-  
+  const [onlyPlayable, setOnlyPlayable] = useState(false);
+
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -77,17 +78,17 @@ export const HomeScreen = () => {
   }, []);
 
   const handleMoodToggle = (moodLabel: string, selected: boolean) => {
-    setSelectedMoods(prev =>
-      selected ? [...prev, moodLabel] : prev.filter(m => m !== moodLabel)
+    setSelectedMoods((prev: string[]) =>
+      selected ? [...prev, moodLabel] : prev.filter((m: string) => m !== moodLabel)
     );
   };
 
   const handleSearch = async (overrideMoods?: string[], overrideVibe?: string) => {
     if (isLoading) return;
-    
+
     // Smoothly scroll to results section
     mainScrollRef.current?.scrollTo({ y: height, animated: true });
-    
+
     setIsLoading(true);
     try {
       let response: AIPickResponse;
@@ -100,7 +101,21 @@ export const HomeScreen = () => {
       } else {
         response = await apiClient.pickForMe(effectiveMoods);
       }
-      
+
+      // Phase 2: Client-side filter if "Only show playable" is checked
+      // In a real prod app, the API would handle this to ensure we still get N results,
+      // but for this implementation we'll filter the results.
+      if (onlyPlayable && response) {
+        // We'll keep results that are playable. If hero isn't playable, we'll swap it.
+        const allPicks: MoviePick[] = [response.hero, ...response.alternates];
+        const playables = allPicks.filter((m: MoviePick) => m.playable);
+
+        if (playables.length > 0) {
+          response.hero = playables[0];
+          response.alternates = playables.slice(1);
+        }
+      }
+
       setResults(response);
     } catch (error) {
       console.error('Search failed:', error);
@@ -113,10 +128,10 @@ export const HomeScreen = () => {
     // Pick 2 random moods from options
     const shuffled = [...MOOD_OPTIONS].sort(() => 0.5 - Math.random());
     const randomMoods = shuffled.slice(0, 2).map(m => m.label);
-    
+
     setVibeText('');
     setSelectedMoods(randomMoods);
-    
+
     // Trigger search immediately with the new moods
     handleSearch(randomMoods, '');
   };
@@ -137,7 +152,7 @@ export const HomeScreen = () => {
   const getTileWidth = () => {
     const horizontalPadding = SPACING.md + SPACING.sm;
     const availableWidth = width - (horizontalPadding * 2);
-    
+
     if (viewSize === 'compact') return (availableWidth - (SPACING.sm * 2)) / 3;
     if (viewSize === 'standard') return (availableWidth - SPACING.sm) / 2;
     return availableWidth;
@@ -148,22 +163,22 @@ export const HomeScreen = () => {
       {/* Animated Background */}
       <View style={styles.bgContainer}>
         <Animated.View style={[
-          styles.bubble, 
-          styles.bubble1, 
+          styles.bubble,
+          styles.bubble1,
           { opacity: Animated.multiply(bubble1Anim, 0.15) }
         ]} />
         <Animated.View style={[
-          styles.bubble, 
-          styles.bubble2, 
+          styles.bubble,
+          styles.bubble2,
           { opacity: Animated.multiply(bubble2Anim, 0.15) }
         ]} />
       </View>
 
       <Animated.View style={[
-        styles.heroContent, 
-        { 
-          opacity: fadeAnim, 
-          transform: [{ translateY: slideAnim }], 
+        styles.heroContent,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
           paddingTop: insets.top + SPACING.xl,
           minHeight: height,
           justifyContent: 'center',
@@ -185,6 +200,22 @@ export const HomeScreen = () => {
             />
           </View>
 
+          <View style={styles.filterBar}>
+            <TouchableOpacity
+              style={[styles.playableToggle, onlyPlayable && styles.playableToggleActive]}
+              onPress={() => setOnlyPlayable(!onlyPlayable)}
+            >
+              <MaterialCommunityIcons
+                name={onlyPlayable ? "play-box-multiple" : "play-box-multiple-outline"}
+                size={20}
+                color={onlyPlayable ? COLORS.background : COLORS.gold.mid}
+              />
+              <Text style={[styles.playableToggleText, onlyPlayable && styles.playableToggleTextActive]}>
+                Playable Now
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.moodGrid}>
             {MOOD_OPTIONS.map((mood) => (
               <MoodChip
@@ -201,7 +232,7 @@ export const HomeScreen = () => {
         <View style={styles.ctaContainer}>
           <View style={{ gap: 16 }}>
             {(selectedMoods.length > 0 || vibeText.trim().length > 0) ? (
-              <ButtonPrimary 
+              <ButtonPrimary
                 onPress={handleSearch}
                 fullWidth
                 style={styles.primaryBtn}
@@ -210,8 +241,8 @@ export const HomeScreen = () => {
                 {isLoading ? 'Finding magic...' : 'See my picks'}
               </ButtonPrimary>
             ) : null}
-            
-            <ButtonSecondary 
+
+            <ButtonSecondary
               onPress={handleShuffle}
               fullWidth
               disabled={isLoading}
@@ -226,14 +257,36 @@ export const HomeScreen = () => {
     </View>
   );
 
+  const renderLibraryQuickAccess = () => (
+    <View style={styles.quickAccessSection}>
+      <Text style={styles.sectionLabel}>Available to Watch</Text>
+      <View style={styles.quickAccessRow}>
+        <TouchableOpacity
+          style={styles.quickCard}
+          onPress={() => navigation.navigate('InternalMovies')}
+        >
+          <MaterialCommunityIcons name="filmstrip" size={24} color={COLORS.gold.mid} />
+          <Text style={styles.quickCardText}>Movies</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickCard}
+          onPress={() => navigation.navigate('InternalTv')}
+        >
+          <MaterialCommunityIcons name="television-classic" size={24} color={COLORS.gold.mid} />
+          <Text style={styles.quickCardText}>Series</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderResultsSection = () => (
     <View style={styles.resultsSection}>
       <View style={[
-        styles.resultsContent, 
+        styles.resultsContent,
         { paddingTop: SPACING.xl }
       ]}>
         <Text style={styles.resultsTitle}>Your Matching Films</Text>
-        
+
         {results?.explanationTokens && (
           <Text style={styles.explanationTokens}>
             Matches based on: <Text style={styles.goldText}>{results.explanationTokens.join(', ')}</Text>
@@ -248,42 +301,42 @@ export const HomeScreen = () => {
         ) : results ? (
           <>
             <View style={styles.highlightSection}>
-               <Text style={styles.sectionLabel}>THE HIGHLIGHT</Text>
-               <HeroCard 
-                movie={results.hero} 
-                onViewDetails={(id: any) => navigation.navigate('TitleDetail', { id, movie: results.hero })}
+              <Text style={styles.sectionLabel}>THE HIGHLIGHT</Text>
+              <HeroCard
+                movie={results.hero as MoviePick}
+                onViewDetails={(id: string) => navigation.navigate('TitleDetail', { id, movie: results.hero })}
               />
             </View>
 
             <View style={styles.alternatesSection}>
               <View style={styles.headerWithAction}>
                 <Text style={styles.sectionLabel}>OTHER RECOMMENDATIONS</Text>
-                <TouchableOpacity 
-                   onPress={() => {
-                     if (viewSize === 'standard') setViewSize('compact');
-                     else if (viewSize === 'compact') setViewSize('large');
-                     else setViewSize('standard');
-                   }}
-                   style={styles.viewToggle}
+                <TouchableOpacity
+                  onPress={() => {
+                    if (viewSize === 'standard') setViewSize('compact');
+                    else if (viewSize === 'compact') setViewSize('large');
+                    else setViewSize('standard');
+                  }}
+                  style={styles.viewToggle}
                 >
-                  <MaterialCommunityIcons 
-                    name={viewSize === 'compact' ? 'view-grid' : viewSize === 'standard' ? 'view-module' : 'view-agenda'} 
-                    size={20} 
-                    color={COLORS.gold.mid} 
+                  <MaterialCommunityIcons
+                    name={viewSize === 'compact' ? 'view-grid' : viewSize === 'standard' ? 'view-module' : 'view-agenda'}
+                    size={20}
+                    color={COLORS.gold.mid}
                   />
                   <Text style={styles.viewToggleText}>
                     {viewSize.toUpperCase()}
                   </Text>
                 </TouchableOpacity>
               </View>
-              
+
               <View style={styles.alternatesGrid}>
                 {results.alternates.map((movie: MoviePick) => (
-                  <TitleTile 
-                    key={movie.id} 
-                    movie={movie} 
+                  <TitleTile
+                    key={movie.id}
+                    movie={movie}
                     width={getTileWidth()}
-                    onPress={(id: any, movieObj: any) => navigation.navigate('TitleDetail', { id, movie: movieObj })}
+                    onPress={(id: string, movieObj: MoviePick) => navigation.navigate('TitleDetail', { id, movie: movieObj })}
                   />
                 ))}
               </View>
@@ -293,8 +346,8 @@ export const HomeScreen = () => {
               <Text style={styles.repickLabel}>Not quite right? Let us know what to adjust:</Text>
               <View style={styles.repickChipsContainer}>
                 {FEEDBACK_OPTIONS.map((feedback) => (
-                  <TouchableOpacity 
-                    key={feedback} 
+                  <TouchableOpacity
+                    key={feedback}
                     style={styles.feedbackChip}
                     onPress={() => handleRepick(feedback)}
                   >
@@ -310,13 +363,14 @@ export const HomeScreen = () => {
   );
 
   return (
-    <ScrollView 
+    <ScrollView
       ref={mainScrollRef}
       showsVerticalScrollIndicator={false}
       style={styles.container}
       scrollEnabled={!isLoading || !!results}
     >
       {renderHeroSection()}
+      {renderLibraryQuickAccess()}
       {(results || isLoading) && renderResultsSection()}
     </ScrollView>
   );
@@ -482,6 +536,62 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.sm,
+  },
+  filterBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  playableToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  playableToggleActive: {
+    backgroundColor: COLORS.gold.mid,
+  },
+  playableToggleText: {
+    color: COLORS.gold.mid,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  playableToggleTextActive: {
+    color: COLORS.background,
+  },
+  quickAccessSection: {
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: 32,
+    backgroundColor: COLORS.background,
+  },
+  quickAccessRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginTop: 16,
+  },
+  quickCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    paddingVertical: 16,
+    gap: 12,
+  },
+  quickCardText: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
   },
   loadingContainer: {
     height: 300,

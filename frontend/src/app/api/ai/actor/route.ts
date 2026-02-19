@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchPerson, searchMoviesByActor } from '@/lib/tmdb';
-import type { ActorRequest, ActorResponse } from '@/types';
+import type { ActorRequest, ActorResponse, MoviePick } from '@/types';
+import { enrichMoviesWithPlayable } from '@/lib/library';
 
 export async function POST(request: NextRequest) {
     try {
@@ -18,17 +19,18 @@ export async function POST(request: NextRequest) {
         }
 
         // 2. Search their movies filtered by mood/genre
-        // We reuse the simple genre mapping from moods here, no advanced AI deep analysis
-        // as per the user's request to "just wire the TMDB API".
         const { movies, tags } = await searchMoviesByActor(actor.id.toString(), moodTags);
 
         if (movies.length === 0) {
             return NextResponse.json({ error: 'No movies found for this actor + mood combo' }, { status: 404 });
         }
 
+        // 3. Enrichment Logic
+        const enrichedPicks = await enrichMoviesWithPlayable(movies as MoviePick[]);
+
         const response: ActorResponse = {
-            hero: movies[0],
-            alternates: movies.slice(1, 10),
+            hero: enrichedPicks[0] as MoviePick,
+            alternates: enrichedPicks.slice(1, 10) as MoviePick[],
             explanationTokens: [actor.name, ...tags]
         };
 

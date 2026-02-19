@@ -104,5 +104,27 @@ export const apiClient = {
       console.error('API Error (searchMovies):', error);
       throw error;
     }
+  },
+
+  getInternalMovies: async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/library/movies`);
+      if (!response.ok) throw new Error('Failed to fetch internal movies');
+      return await response.json();
+    } catch (error) {
+      console.error('API Error (getInternalMovies):', error);
+      throw error;
+    }
+  },
+
+  getInternalTv: async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/library/tv`);
+      if (!response.ok) throw new Error('Failed to fetch internal TV library');
+      return await response.json();
+    } catch (error) {
+      console.error('API Error (getInternalTv):', error);
+      throw error;
+    }
   }
 };

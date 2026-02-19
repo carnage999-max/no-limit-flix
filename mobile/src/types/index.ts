@@ -12,6 +12,9 @@ export interface MoviePick extends Movie {
     explanation: string;
     trailerUrl?: string;
     watchProviders: WatchProvider[];
+    playable?: boolean;
+    assetId?: string;
+    cloudfrontUrl?: string;
     permanence?: 'Permanent Core' | 'Long-Term' | 'Licensed';
 }
 

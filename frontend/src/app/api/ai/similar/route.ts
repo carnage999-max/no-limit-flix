@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { searchMovie, getMovieDetails, searchMoviesByMood } from '@/lib/tmdb';
-import type { SimilarRequest, SimilarResponse } from '@/types';
+import type { SimilarRequest, SimilarResponse, MoviePick } from '@/types';
+import { enrichMoviesWithPlayable } from '@/lib/library';
 import { OpenRouter } from '@openrouter/sdk';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Reference movie not found' }, { status: 404 });
         }
 
-        // 2. Get Full Details (genres, etc)
+        // 2. Get Full Details
         const refDetails = await getMovieDetails(refMovie.id);
 
         let aiParams: any = {};
@@ -45,7 +46,6 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Search with derived params
-        // We use the existing searchMoviesByMood which supports our advanced params object
         const { movies, tags } = await searchMoviesByMood(adjustedMoods, aiParams);
 
         // Filter out the reference movie itself
@@ -57,10 +57,14 @@ export async function POST(request: NextRequest) {
 
         const sessionId = `session_similar_${Date.now()}`;
 
+        // 5. Enrichment Logic
+        const allPicks = [filteredMovies[0], ...filteredMovies.slice(1, 10)];
+        const enrichedPicks = await enrichMoviesWithPlayable(allPicks as MoviePick[]);
+
         const response: SimilarResponse = {
             sessionId,
-            hero: filteredMovies[0],
-            alternates: filteredMovies.slice(1, 10),
+            hero: enrichedPicks[0],
+            alternates: enrichedPicks.slice(1),
             explanationTokens: tags,
             confidenceScore: 0.85,
             inferredParams: {
@@ -90,16 +94,16 @@ USER REQUESTED EXTRA MOODS: ${userMoods.join(', ')}
 
 INSTRUCTIONS:
 1. Analyze the reference movie's specific sub-genre, tone, pacing, and emotional impact.
-2. If User Moods are present, SKEW the results towards those moods (e.g. "Matrix" + "Funny" -> Sci-Fi Action Comedy).
-3. Generate specific TMDB Genres and Keywords to find *other* movies with this fingerprint.
-4. Do NOT just return the same genre. Be specific (e.g. for "Die Hard", add keywords like "hostage", "terrorist", "one man army").
+2. If User Moods are present, SKEW the results towards those moods.
+3. Generate specific TMDB Genres and Keywords.
+4. DO NOT return Thinking blocks. ONLY JSON.
 
-OUTPUT FORMAT (JSON ONLY, NO THINKING):
+OUTPUT FORMAT:
 {
   "mood_tags": ["Vibe1", "Vibe2"],
   "tmdb_genres": ["Action", "Thriller"],
   "keywords": ["specific", "keywords"],
-  "year_range": [min, max] (Optional, only if relevant to the vibe, otherwise null),
+  "year_range": [min, max],
   "sort_by": "popularity.desc"
 }`;
 
@@ -114,11 +118,6 @@ OUTPUT FORMAT (JSON ONLY, NO THINKING):
     let jsonStr = '{}';
     if (typeof messageContent === 'string') {
         jsonStr = messageContent;
-    } else if (Array.isArray(messageContent)) {
-        jsonStr = messageContent
-            .filter((p: any) => p.type === 'text')
-            .map((p: any) => p.text)
-            .join('');
     }
 
     try {

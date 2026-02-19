@@ -62,6 +62,7 @@ export async function getMovieDetails(id: string) {
 
     return {
         id: data.id.toString(),
+        tmdb_id: data.id.toString(),   // explicit field for library join
         title: data.title,
         year: data.release_date ? new Date(data.release_date).getFullYear() : 0,
         runtime: data.runtime || 120,
@@ -77,6 +78,7 @@ export async function getMovieDetails(id: string) {
         genres: data.genres?.map((g: any) => g.name) || [],
     };
 }
+
 
 export async function searchKeywords(query: string) {
     const data = await fetchFromTMDB('/search/keyword', { query });

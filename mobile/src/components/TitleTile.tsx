@@ -13,9 +13,10 @@ interface TitleTileProps {
   movie: MoviePick;
   onPress: (id: string, movie: MoviePick) => void;
   width?: number;
+  key?: string | number;
 }
 
-export const TitleTile: React.FC<TitleTileProps> = ({ movie, onPress, width: customWidth }) => {
+export const TitleTile = ({ movie, onPress, width: customWidth }: TitleTileProps) => {
   const { isFavorite, toggleFavorite } = useFavorites();
   const isFav = isFavorite(movie.id);
 
@@ -25,27 +26,34 @@ export const TitleTile: React.FC<TitleTileProps> = ({ movie, onPress, width: cus
   };
 
   return (
-    <TouchableOpacity 
-      style={[styles.container, customWidth ? { width: customWidth } : null]} 
+    <TouchableOpacity
+      style={[styles.container, customWidth ? { width: customWidth } : null]}
       onPress={() => onPress(movie.id, movie)}
       activeOpacity={0.7}
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: movie.poster }} style={styles.poster} resizeMode="cover" />
         <View style={styles.badgeOverlay}>
-           <PermanenceBadge type={movie.permanence} />
+          <PermanenceBadge type={movie.permanence} />
         </View>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.favoriteButton}
           onPress={handleFavoritePress}
           activeOpacity={0.7}
         >
-          <Ionicons 
-            name={isFav ? "heart" : "heart-outline"} 
-            size={20} 
+          <Ionicons
+            name={isFav ? "heart" : "heart-outline"}
+            size={20}
             color={isFav ? "#EF4444" : COLORS.text}
           />
         </TouchableOpacity>
+
+        {movie.playable && (
+          <View style={styles.playableTag}>
+            <Ionicons name="play" size={10} color={COLORS.background} />
+            <Text style={styles.playableTagText}>Play</Text>
+          </View>
+        )}
       </View>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{movie.title}</Text>
@@ -62,7 +70,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: '100%',
-    aspectRatio: 2/3,
+    aspectRatio: 2 / 3,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: 'rgba(167, 171, 180, 0.1)',
@@ -102,5 +110,28 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontSize: 12,
     opacity: 0.8,
+  },
+  playableTag: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: COLORS.gold.mid,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+    shadowColor: COLORS.gold.mid,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  playableTagText: {
+    color: COLORS.background,
+    fontSize: 9,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
 });

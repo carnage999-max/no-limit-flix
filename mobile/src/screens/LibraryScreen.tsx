@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING } from '../theme/tokens';
 import { COLLECTIONS } from '../lib/constants';
 import { useFavorites } from '../context/FavoritesContext';
@@ -32,15 +33,15 @@ export const LibraryScreen = () => {
               <Text style={styles.sectionTitle}>My Favorites</Text>
               <Text style={styles.sectionCount}>{favorites.length} {favorites.length === 1 ? 'film' : 'films'}</Text>
             </View>
-            <ScrollView 
-              horizontal 
+            <ScrollView
+              horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.favoritesScroll}
             >
               {favorites.map((movie) => (
                 <View key={movie.id} style={styles.favoriteItem}>
-                  <TitleTile 
-                    movie={movie} 
+                  <TitleTile
+                    movie={movie}
                     onPress={(movieId: string) => navigation.navigate('TitleDetail', { id: movieId, movie })}
                     width={140}
                   />
@@ -59,6 +60,42 @@ export const LibraryScreen = () => {
             </Text>
           </View>
         )}
+
+        {/* Available to Watch — Internal Library Entry */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Available to Watch</Text>
+          <View style={styles.libraryGateGrid}>
+            <TouchableOpacity
+              style={styles.libraryCard}
+              onPress={() => navigation.navigate('InternalMovies')}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)']}
+                style={styles.cardGradient}
+              >
+                <Ionicons name="film" size={32} color={COLORS.gold.mid} style={styles.cardIcon} />
+                <Text style={styles.cardLabel}>Movies</Text>
+                <Text style={styles.cardCount}>Internal Library</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.libraryCard}
+              onPress={() => navigation.navigate('InternalTv')}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['rgba(0,0,0,0.2)', 'rgba(0,0,0,0.8)']}
+                style={styles.cardGradient}
+              >
+                <Ionicons name="tv" size={32} color={COLORS.gold.mid} style={styles.cardIcon} />
+                <Text style={styles.cardLabel}>TV Library</Text>
+                <Text style={styles.cardCount}>Full Series</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Curated Collections</Text>
@@ -261,5 +298,40 @@ const styles = StyleSheet.create({
   actionSubtitle: {
     fontSize: 13,
     color: COLORS.silver,
+  },
+  libraryGateGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  libraryCard: {
+    flex: 1,
+    height: 180,
+    borderRadius: 20,
+    backgroundColor: 'rgba(212, 175, 55, 0.05)',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
+  },
+  cardGradient: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'flex-end',
+  },
+  cardIcon: {
+    marginBottom: 8,
+  },
+  cardLabel: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  cardCount: {
+    color: COLORS.gold.mid,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
 });

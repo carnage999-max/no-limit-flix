@@ -201,6 +201,8 @@ export default function AdminUploadPage() {
     const [error, setError] = useState('');
     const [codecWarning, setCodecWarning] = useState<string | null>(null);
     const [thumbError, setThumbError] = useState(false);
+    const [tmdbId, setTmdbId] = useState('');
+    const [seriesTitle, setSeriesTitle] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -323,6 +325,8 @@ export default function AdminUploadPage() {
                     type: assetType,
                     seasonNumber: assetType === 'series' ? seasonNumber : null,
                     episodeNumber: assetType === 'series' ? episodeNumber : null,
+                    seriesTitle: assetType === 'series' ? seriesTitle : null,
+                    tmdbId: tmdbId.trim() || null,
                     releaseYear,
                     duration,
                     resolution,
@@ -395,6 +399,8 @@ export default function AdminUploadPage() {
             setDescription('');
             setSeasonNumber('');
             setEpisodeNumber('');
+            setSeriesTitle('');
+            setTmdbId('');
             setReleaseYear('');
             setGenre('');
             setRating('');
@@ -552,6 +558,15 @@ export default function AdminUploadPage() {
                             value={rating}
                             onChange={e => setRating(e.target.value)}
                             placeholder="e.g. 18+ or PG-13"
+                        />
+                    </div>
+                    <div style={styles.inputSection}>
+                        <label style={styles.label}>TMDb ID <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}>(optional — enables ‚Playable Now’ badge)</span></label>
+                        <input
+                            style={styles.input}
+                            value={tmdbId}
+                            onChange={e => setTmdbId(e.target.value)}
+                            placeholder="e.g. 335984 (from themoviedb.org URL)"
                         />
                     </div>
                 </div>

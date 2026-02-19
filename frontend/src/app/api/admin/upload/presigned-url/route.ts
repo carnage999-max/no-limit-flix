@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
             fileName, fileType,
             thumbFileName, thumbFileType,
             title, description, type, seasonNumber, episodeNumber,
+            seriesTitle, tmdbId,
             releaseYear, duration, resolution,
             genre, rating
         } = body;
@@ -35,18 +36,18 @@ export async function POST(request: NextRequest) {
         // Always derive content type from extension — browser MIME types can be unreliable
         // (e.g., MKV, AVI, MOV are frequently misreported or missing)
         const extTypeMap: Record<string, string> = {
-            'mp4':  'video/mp4',
-            'mkv':  'video/x-matroska',
+            'mp4': 'video/mp4',
+            'mkv': 'video/x-matroska',
             'webm': 'video/webm',
-            'mov':  'video/quicktime',
-            'avi':  'video/x-msvideo',
-            'wmv':  'video/x-ms-wmv',
-            'flv':  'video/x-flv',
-            'm4v':  'video/x-m4v',
-            'jpg':  'image/jpeg',
+            'mov': 'video/quicktime',
+            'avi': 'video/x-msvideo',
+            'wmv': 'video/x-ms-wmv',
+            'flv': 'video/x-flv',
+            'm4v': 'video/x-m4v',
+            'jpg': 'image/jpeg',
             'jpeg': 'image/jpeg',
-            'png':  'image/png',
-            'gif':  'image/gif',
+            'png': 'image/png',
+            'gif': 'image/gif',
             'webp': 'image/webp',
         };
         const contentType = (fileExtension && extTypeMap[fileExtension])
@@ -109,6 +110,8 @@ export async function POST(request: NextRequest) {
                 type: type || 'movie',
                 seasonNumber: safeParseInt(seasonNumber),
                 episodeNumber: safeParseInt(episodeNumber),
+                seriesTitle: seriesTitle || null,
+                tmdbId: tmdbId ? String(tmdbId).trim() : null,
                 releaseYear: safeParseInt(releaseYear),
                 duration: safeParseFloat(duration),
                 resolution: resolution || null,

@@ -27,6 +27,8 @@ interface SearchState {
     setSessionId: (id: string | null) => void;
     viewSize: ViewSize;
     setViewSize: (size: ViewSize) => void;
+    onlyPlayable: boolean;
+    setOnlyPlayable: (val: boolean) => void;
 }
 
 const SearchContext = createContext<SearchState | undefined>(undefined);
@@ -42,6 +44,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [viewSize, setViewSize] = useState<ViewSize>('standard');
+    const [onlyPlayable, setOnlyPlayable] = useState(false);
 
     return (
         <SearchContext.Provider value={{
@@ -54,7 +57,8 @@ export function SearchProvider({ children }: { children: ReactNode }) {
             isLoading, setIsLoading,
             results, setResults,
             sessionId, setSessionId,
-            viewSize, setViewSize
+            viewSize, setViewSize,
+            onlyPlayable, setOnlyPlayable
         }}>
             {children}
         </SearchContext.Provider>

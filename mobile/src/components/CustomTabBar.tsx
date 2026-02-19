@@ -21,16 +21,16 @@ const ICONS: Record<string, any> = {
   Collections: { active: 'layers-triple', inactive: 'layers-triple-outline' },
   Search: { active: 'magnify', inactive: 'magnify' },
   Library: { active: 'bookmark', inactive: 'bookmark-outline' },
-  Account: { active: 'account', inactive: 'account-outline' },
+  Settings: { active: 'cog', inactive: 'cog-outline' },
 };
 
-export const CustomTabBar: React.FC<BottomTabBarProps> = ({ state, descriptors, navigation }) => {
+export const CustomTabBar = ({ state, descriptors, navigation }: any) => {
   const insets = useSafeAreaInsets();
-  
+
   return (
     <View style={[styles.container, { bottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
       <View style={styles.content}>
-        {state.routes.map((route, index) => {
+        {state.routes.map((route: any, index: number) => {
           const { options } = descriptors[route.key];
           const isFocused = state.index === index;
 
@@ -64,9 +64,10 @@ interface TabItemProps {
   isFocused: boolean;
   onPress: () => void;
   name: string;
+  key?: string | number;
 }
 
-const TabItem: React.FC<TabItemProps> = ({ isFocused, onPress, name }) => {
+const TabItem = ({ isFocused, onPress, name }: TabItemProps) => {
   const animatedValue = useRef(new Animated.Value(isFocused ? 1 : 0)).current;
 
   useEffect(() => {
@@ -134,12 +135,11 @@ const TabItem: React.FC<TabItemProps> = ({ isFocused, onPress, name }) => {
         </Animated.View>
 
         {/* Icon */}
-        <Animated.View style={{ transform: [{ translateY }, { scale }] }}>
+        <Animated.View style={[{ transform: [{ translateY }, { scale }] }, !isFocused ? { opacity: 0.6 } : {}]}>
           <MaterialCommunityIcons
             name={isFocused ? ICONS[name].active : ICONS[name].inactive}
             size={24}
             color={isFocused ? COLORS.background : COLORS.silver}
-            style={!isFocused ? { opacity: 0.6 } : {}}
           />
         </Animated.View>
 
