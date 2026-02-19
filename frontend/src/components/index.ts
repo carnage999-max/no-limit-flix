@@ -8,4 +8,5 @@ export { default as HeroCard } from './HeroCard';
 export { default as Skeleton, HeroSkeleton, TileSkeleton } from './Skeleton';
 export { default as Navbar } from './Navbar';
 export { default as TrailerModal } from './TrailerModal';
+export { default as PermanenceBadge } from './PermanenceBadge';
 export { AppBanner } from './AppBanner';

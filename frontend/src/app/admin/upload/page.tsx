@@ -199,6 +199,7 @@ export default function AdminUploadPage() {
     const [thumbProgress, setThumbProgress] = useState(0);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [error, setError] = useState('');
+    const [codecWarning, setCodecWarning] = useState<string | null>(null);
     const [thumbError, setThumbError] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -209,7 +210,12 @@ export default function AdminUploadPage() {
             setFile(videoFile);
             setStatus('idle');
             setThumbError(false);
+            setCodecWarning(null);
             setThumbnailPreview(null);
+
+            if (!videoFile.name.toLowerCase().endsWith('.mp4')) {
+                setCodecWarning('Warning: This file is not an MP4. For best compatibility, use H.264 MP4 with AAC audio.');
+            }
 
             if (!title) {
                 const nameWithoutExt = videoFile.name.replace(/\.[^/.]+$/, "");
@@ -238,13 +244,20 @@ export default function AdminUploadPage() {
         const timeout = setTimeout(() => {
             console.error('Thumbnail extraction timed out');
             setThumbError(true);
+            setCodecWarning('Warning: Could not probe video metadata. The encoding might be incompatible with web playback.');
             cleanup();
-        }, 10000);
+        }, 12000);
 
         video.onloadedmetadata = () => {
             setDuration(video.duration);
             const res = video.videoWidth >= 3840 ? '4K' : video.videoWidth >= 1920 ? '1080p' : '720p';
             setResolution(res);
+
+            // Basic "can play" check
+            if (video.videoWidth === 0 || video.videoHeight === 0) {
+                setCodecWarning('Warning: Video dimensions not detected. This file may be corrupted or use an unsupported codec.');
+            }
+
             // Seek to 1s or 10% of duration
             const timeToSeek = Math.min(1, video.duration / 10);
             video.currentTime = timeToSeek;
@@ -276,6 +289,7 @@ export default function AdminUploadPage() {
             clearTimeout(timeout);
             console.error('Video loading error during thumbnail extraction');
             setThumbError(true);
+            setCodecWarning('Critical: The browser cannot play this video. Please ensure it is H.264 MP4.');
             cleanup();
         };
     };
@@ -434,6 +448,22 @@ export default function AdminUploadPage() {
                                 {duration && <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{Math.floor(duration / 60)}m {Math.floor(duration % 60)}s</span>}
                                 <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)', fontWeight: 700 }}>{(file.size / (1024 * 1024)).toFixed(1)} MB</span>
                             </div>
+
+                            {codecWarning && (
+                                <div style={{
+                                    background: 'rgba(212, 175, 55, 0.1)',
+                                    border: '1px solid rgba(212, 175, 55, 0.2)',
+                                    padding: '12px 20px',
+                                    borderRadius: '16px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                    marginTop: '-12px'
+                                }}>
+                                    <AlertCircle size={14} color="#D4AF37" />
+                                    <span style={{ fontSize: '11px', color: '#D4AF37', fontWeight: 600, letterSpacing: '0.02em' }}>{codecWarning}</span>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div style={styles.uploadInner}>

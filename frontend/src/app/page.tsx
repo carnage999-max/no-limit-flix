@@ -180,7 +180,10 @@ export default function HomePage() {
       const response = await fetch('/api/ai/interpret', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ freeText: vibeText }),
+        body: JSON.stringify({
+          freeText: vibeText,
+          existingMoods: selectedMoods
+        }),
       });
 
       if (!response.ok) throw new Error('Interpretation failed');
@@ -921,7 +924,7 @@ export default function HomePage() {
           </div>
         </section>
       )}
-      
+
       {/* Powered by Scene Aware Footer */}
       <section
         style={{

@@ -281,7 +281,7 @@ export async function getMoviesByCollection(slug: string) {
         include_adult: 'false'
     });
 
-    return results.results.slice(0, 20).map((movie: any) => ({
+    return results.results.slice(0, 60).map((movie: any) => ({
         id: movie.id.toString(),
         title: movie.title,
         year: movie.release_date ? new Date(movie.release_date).getFullYear() : 0,

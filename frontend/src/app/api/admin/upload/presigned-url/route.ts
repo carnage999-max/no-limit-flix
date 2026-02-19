@@ -24,18 +24,39 @@ export async function POST(request: NextRequest) {
             genre, rating
         } = body;
 
-        if (!fileName || !fileType || !title) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+        if (!fileName || !title) {
+            return NextResponse.json({ error: 'Missing required fields: fileName and title are mandatory.' }, { status: 400 });
         }
 
         const videoId = uuidv4();
-        const fileExtension = fileName.split('.').pop();
+        const fileExtension = fileName.split('.').pop()?.toLowerCase();
         const s3Key = `videos/${videoId}.${fileExtension}`;
+
+        // Force video/mp4 for mp4 files to avoid playback issues
+        // If fileType is missing, default to octet-stream or derive from extension
+        let contentType = fileType || 'application/octet-stream';
+        if (fileExtension === 'mp4') {
+            contentType = 'video/mp4';
+        } else if (!fileType && fileExtension) {
+            // Basic fallback for common types if fileType is missing from browser
+            const typeMap: Record<string, string> = {
+                'mov': 'video/quicktime',
+                'webm': 'video/webm',
+                'avi': 'video/x-msvideo',
+                'mkv': 'video/x-matroska',
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png'
+            };
+            if (typeMap[fileExtension]) {
+                contentType = typeMap[fileExtension];
+            }
+        }
 
         const videoCommand = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: s3Key,
-            ContentType: fileType,
+            ContentType: contentType,
         });
 
         const presignedUrl = await getSignedUrl(s3Client, videoCommand, { expiresIn: 3600 });
@@ -67,25 +88,37 @@ export async function POST(request: NextRequest) {
                 : `https://${BUCKET_NAME}.s3.amazonaws.com/${thumbS3Key}`)
             : null;
 
+        const safeParseInt = (val: any) => {
+            if (val === null || val === undefined || val === '') return null;
+            const parsed = parseInt(val);
+            return isNaN(parsed) ? null : parsed;
+        };
+
+        const safeParseFloat = (val: any) => {
+            if (val === null || val === undefined || val === '') return null;
+            const parsed = parseFloat(val);
+            return isNaN(parsed) ? null : parsed;
+        };
+
         // Create a pending record in the database
         const video = await (prisma.video as any).create({
             data: {
                 id: videoId,
                 title,
-                description,
+                description: description || null,
                 type: type || 'movie',
-                seasonNumber: seasonNumber ? parseInt(seasonNumber) : null,
-                episodeNumber: episodeNumber ? parseInt(episodeNumber) : null,
-                releaseYear: releaseYear ? parseInt(releaseYear) : null,
-                duration: duration ? parseFloat(duration) : null,
-                resolution,
-                genre,
-                rating,
+                seasonNumber: safeParseInt(seasonNumber),
+                episodeNumber: safeParseInt(episodeNumber),
+                releaseYear: safeParseInt(releaseYear),
+                duration: safeParseFloat(duration),
+                resolution: resolution || null,
+                genre: genre || null,
+                rating: rating || null,
                 s3Key,
                 s3Url: publicUrl,
                 thumbnailUrl: publicThumbUrl,
                 status: 'pending',
-                mimeType: fileType,
+                mimeType: contentType,
             },
         });
 
@@ -97,7 +130,7 @@ export async function POST(request: NextRequest) {
             videoId: video.id,
         });
     } catch (error: any) {
-        console.error('Error generating presigned URL:', error);
+        console.error('Presigned URL error:', error?.message, error?.stack);
         return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
     }
 }

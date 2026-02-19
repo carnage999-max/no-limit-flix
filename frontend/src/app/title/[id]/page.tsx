@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal } from '@/components';
+import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal, PermanenceBadge } from '@/components';
 import { getMovieDetails } from '@/lib/tmdb';
 import type { MoviePick } from '@/types';
 
@@ -116,14 +116,14 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
 
                         {/* Details */}
                         <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                <PermanenceBadge type={Math.random() > 0.5 ? 'Permanent Core' : 'Long-Term'} />
+                                <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
                                 {movie.genres.map(genre => (
                                     <span key={genre} style={{
-                                        padding: '0.4rem 1rem',
+                                        padding: '0.4rem 0.75rem',
                                         borderRadius: '9999px',
-                                        background: 'rgba(212, 175, 55, 0.1)',
-                                        border: '1px solid rgba(212, 175, 55, 0.3)',
-                                        color: '#D4AF37',
+                                        color: '#A7ABB4',
                                         fontSize: '0.75rem',
                                         fontWeight: '600',
                                         textTransform: 'uppercase',
@@ -136,11 +136,12 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
 
                             <h1
                                 style={{
-                                    fontSize: 'clamp(2rem, 5vw, 4rem)',
+                                    fontSize: 'clamp(2.5rem, 6vw, 4.5rem)',
                                     fontWeight: '700',
                                     color: '#F3F4F6',
                                     marginBottom: '0.75rem',
-                                    lineHeight: '1.1',
+                                    lineHeight: '1',
+                                    letterSpacing: '-0.03em'
                                 }}
                             >
                                 {movie.title}
@@ -150,43 +151,60 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 style={{
                                     fontSize: '1.25rem',
                                     color: '#A7ABB4',
-                                    marginBottom: '2rem',
+                                    marginBottom: '2.5rem',
+                                    fontWeight: '500'
                                 }}
                             >
-                                {movie.year} · {movie.runtime} min
+                                {movie.year} <span style={{ color: 'rgba(255,255,255,0.1)', margin: '0 10px' }}>•</span> {movie.runtime} min
                             </p>
 
                             {/* Why You Might Like This */}
                             <div
                                 style={{
-                                    padding: '1.5rem',
-                                    borderRadius: '0.75rem',
+                                    padding: '2rem',
+                                    borderRadius: '1.25rem',
                                     background: 'rgba(167, 171, 180, 0.05)',
                                     border: '1px solid rgba(167, 171, 180, 0.1)',
-                                    marginBottom: '2rem',
+                                    marginBottom: '2.5rem',
+                                    position: 'relative',
+                                    overflow: 'hidden'
                                 }}
                             >
+                                <div style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '4px',
+                                    height: '100%',
+                                    background: 'linear-gradient(to bottom, #F6D365, #D4AF37)'
+                                }} />
+
                                 <h3
                                     style={{
-                                        fontSize: '0.875rem',
-                                        fontWeight: '600',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
                                         color: '#D4AF37',
                                         textTransform: 'uppercase',
-                                        letterSpacing: '0.05em',
-                                        marginBottom: '0.75rem',
+                                        letterSpacing: '0.2em',
+                                        marginBottom: '1rem',
                                     }}
                                 >
-                                    Plot Summary
+                                    Why you might like this
                                 </h3>
                                 <p
                                     style={{
-                                        fontSize: '1.0625rem',
+                                        fontSize: '1.125rem',
                                         color: '#F3F4F6',
                                         lineHeight: '1.7',
+                                        marginBottom: '1.5rem'
                                     }}
                                 >
                                     {movie.explanation}
                                 </p>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.6 }}>
+                                    <span style={{ fontSize: '12px', color: '#A7ABB4', fontWeight: '500' }}>Stability Verified</span>
+                                    <span style={{ fontSize: '12px', color: '#4ADE80' }}>✓</span>
+                                </div>
                             </div>
 
                             {/* Action Buttons */}

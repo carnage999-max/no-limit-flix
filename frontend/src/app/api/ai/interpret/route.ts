@@ -5,6 +5,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
 interface InterpretRequest {
     freeText: string;
+    existingMoods?: string[];
 }
 
 interface InterpretResponse {
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     try {
         const body: InterpretRequest = await request.json();
         requestBody = body;
-        const { freeText } = body;
+        const { freeText, existingMoods } = body;
 
         if (!freeText || freeText.trim().length === 0) {
             return NextResponse.json(
@@ -37,23 +38,23 @@ export async function POST(request: NextRequest) {
 
         if (!OPENROUTER_API_KEY) {
             // Fallback to basic keyword matching if API key not configured
-            return NextResponse.json(getFallbackInterpretation(freeText));
+            return NextResponse.json(getFallbackInterpretation(freeText, existingMoods));
         }
 
         // Call DeepSeek R1 via OpenRouter to interpret mood
-        const interpretation = await interpretMoodWithDeepSeek(freeText);
+        const interpretation = await interpretMoodWithDeepSeek(freeText, existingMoods);
 
         return NextResponse.json(interpretation);
     } catch (error: any) {
         console.error('Error in /api/ai/interpret:', error);
 
         // Fallback on error
-        const fallback = getFallbackInterpretation(requestBody?.freeText || '');
+        const fallback = getFallbackInterpretation(requestBody?.freeText || '', requestBody?.existingMoods);
         return NextResponse.json(fallback);
     }
 }
 
-async function interpretMoodWithDeepSeek(freeText: string): Promise<InterpretResponse> {
+async function interpretMoodWithDeepSeek(freeText: string, existingMoods?: string[]): Promise<InterpretResponse> {
     const systemPrompt = `You are a mood interpretation assistant for a movie discovery app.
 
 Your ONLY job is to convert user free-text mood descriptions into structured search parameters for the TMDB API.
@@ -96,7 +97,13 @@ Example output:
   "adjustments": { "tension_bias": 0.8, "intensity_bias": 0.5 }
 }`;
 
-    const userPrompt = `Interpret this mood description: "${freeText}"
+    const moodsContext = existingMoods && existingMoods.length > 0
+        ? `The user has already selected these moods: ${existingMoods.join(', ')}. `
+        : '';
+
+    const userPrompt = `${moodsContext}Interpret this additional mood description: "${freeText}"
+
+Consider both the existing moods and this description to create a cohesive set of search parameters.
 
 Return ONLY valid JSON.`;
 
@@ -200,9 +207,9 @@ function sanitizeInterpretation(raw: any): InterpretResponse {
     };
 }
 
-function getFallbackInterpretation(freeText: string): InterpretResponse {
+function getFallbackInterpretation(freeText: string, existingMoods?: string[]): InterpretResponse {
     const text = freeText.toLowerCase();
-    const mood_tags: string[] = [];
+    const mood_tags: string[] = existingMoods ? [...existingMoods] : [];
     const tmdb_genres: string[] = [];
     const keywords: string[] = [];
     const adjustments: InterpretResponse['adjustments'] = {};
