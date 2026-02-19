@@ -16,6 +16,7 @@ import { COLORS } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { transformToCloudFront } from '../lib/utils';
+import { BASE_URL } from '../lib/api';
 
 const styles = StyleSheet.create({
     container: {
@@ -103,12 +104,16 @@ const styles = StyleSheet.create({
     errorActionRow: {
         flexDirection: 'row',
         gap: 12,
+        alignItems: 'center',
     },
     errorButton: {
         backgroundColor: COLORS.gold.mid,
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 24,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     errorButtonText: {
         color: COLORS.background,
@@ -117,7 +122,7 @@ const styles = StyleSheet.create({
     },
     secondaryButton: {
         backgroundColor: 'rgba(255,255,255,0.1)',
-        paddingHorizontal: 24,
+        paddingHorizontal: 20,
         paddingVertical: 12,
         borderRadius: 24,
         borderWidth: 1,
@@ -145,6 +150,7 @@ export const WatchScreen = () => {
     const insets = useSafeAreaInsets();
     const params = route.params || {};
     const title = params.title;
+    const assetId = params.assetId;
     const rawUrl = params.videoUrl;
     const videoUrl = transformToCloudFront(rawUrl);
 
@@ -153,22 +159,31 @@ export const WatchScreen = () => {
     const [isPlaying, setIsPlaying] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
     const [serverMime, setServerMime] = useState<string | null>(null);
+    const [useCompatMode, setUseCompatMode] = useState(false);
+
+    const streamUrl = useMemo(() => {
+        if (!assetId) return null;
+        return `${BASE_URL}/api/stream/${assetId}`;
+    }, [assetId]);
+
+    const finalVideoUrl = useCompatMode && streamUrl ? streamUrl : videoUrl;
 
     // Deep debug logging
     useEffect(() => {
-        if (!videoUrl) return;
+        if (!finalVideoUrl) return;
 
-        console.log(`[WatchScreen] Attempting to play: ${videoUrl}`);
+        console.log(`[WatchScreen] Mode: ${useCompatMode ? 'COMPAT (Transcoding)' : 'DIRECT'}`);
+        console.log(`[WatchScreen] URL: ${finalVideoUrl}`);
 
         // Investigative fetch to check headers
-        fetch(videoUrl, { method: 'HEAD' })
+        fetch(finalVideoUrl, { method: 'HEAD' })
             .then(res => {
                 const mime = res.headers.get('Content-Type');
                 console.log(`[WatchScreen] Server Content-Type: ${mime}`);
                 setServerMime(mime);
             })
             .catch(e => console.log('[WatchScreen] Header Check Failed', e));
-    }, [videoUrl, retryCount]);
+    }, [finalVideoUrl, retryCount, useCompatMode]);
 
     useEffect(() => {
         async function lockOrientation() {
@@ -186,9 +201,9 @@ export const WatchScreen = () => {
     }, []);
 
     const videoSource = useMemo(() => {
-        if (!videoUrl) return null;
+        if (!finalVideoUrl) return null;
         return {
-            uri: videoUrl,
+            uri: finalVideoUrl,
             metadata: {
                 title: title || 'Playing Video'
             },
@@ -196,7 +211,7 @@ export const WatchScreen = () => {
                 'User-Agent': 'NoLimitFlixMobile/1.0',
             }
         };
-    }, [videoUrl, retryCount]);
+    }, [finalVideoUrl, retryCount]);
 
     const player = useVideoPlayer(videoSource, (p) => {
         p.loop = false;
@@ -243,6 +258,13 @@ export const WatchScreen = () => {
         }
     };
 
+    const handleEnableCompat = () => {
+        setError(null);
+        setIsBuffering(true);
+        setUseCompatMode(true);
+        setRetryCount(prev => prev + 1);
+    };
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" hidden={isPlaying} />
@@ -278,29 +300,39 @@ export const WatchScreen = () => {
                         <Ionicons name="alert-circle" size={64} color={COLORS.accent.red || '#EF4444'} />
                         <Text style={styles.errorTitle}>Playback Error</Text>
                         <Text style={styles.errorSubtitle}>
-                            {error.includes('Format') || error.includes('Decoder') || (videoUrl && videoUrl.toLowerCase().endsWith('.mkv'))
-                                ? `Unsupported format detected (MKV/HEVC). This device may require a standard MP4.`
+                            {error.includes('Format') || error.includes('Decoder') || (finalVideoUrl && finalVideoUrl.toLowerCase().endsWith('.mkv')) || (serverMime && serverMime.includes('matroska'))
+                                ? `Unsupported format (MKV/HEVC) for this device.`
                                 : `Playback Issue: ${error}`}
                         </Text>
 
-                        <Text style={{ color: COLORS.silver, opacity: 0.5, fontSize: 10, marginVertical: 10, textAlign: 'center' }}>
-                            {videoUrl}{"\n"}
-                            Server MIME: {serverMime || 'checking...'}
-                        </Text>
+                        <View style={{ marginVertical: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 8 }}>
+                            <Text style={{ color: COLORS.silver, opacity: 0.7, fontSize: 10, textAlign: 'center' }}>
+                                MIME: {serverMime || 'checking...'}{"\n"}
+                                Mode: {useCompatMode ? 'Compat (Transcoding)' : 'Direct'}
+                            </Text>
+                        </View>
 
                         <View style={styles.errorActionRow}>
                             <TouchableOpacity style={styles.secondaryButton} onPress={() => navigation.goBack()}>
-                                <Text style={styles.secondaryButtonText}>Go Back</Text>
+                                <Text style={styles.secondaryButtonText}>Exit</Text>
                             </TouchableOpacity>
 
-                            <TouchableOpacity style={styles.errorButton} onPress={handleRetry}>
-                                <Text style={styles.errorButtonText}>Retry Now</Text>
-                            </TouchableOpacity>
+                            {!useCompatMode && assetId ? (
+                                <TouchableOpacity style={styles.errorButton} onPress={handleEnableCompat}>
+                                    <Ionicons name="flash" size={18} color={COLORS.background} />
+                                    <Text style={styles.errorButtonText}>Force Smart Fix</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity style={styles.errorButton} onPress={handleRetry}>
+                                    <Ionicons name="refresh" size={18} color={COLORS.background} />
+                                    <Text style={styles.errorButtonText}>Retry</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
 
-                        {Platform.OS === 'ios' && (
+                        {Platform.OS === 'ios' && !useCompatMode && (
                             <Text style={styles.iosHint}>
-                                Tip: iOS requires a valid MP4/H.264 container.
+                                Tip: Tap "Force Smart Fix" to transcode for iOS playback.
                             </Text>
                         )}
                     </View>
@@ -309,7 +341,14 @@ export const WatchScreen = () => {
                 {isBuffering && !error && (
                     <View style={styles.loaderContainer} pointerEvents="none">
                         <ActivityIndicator size="large" color={COLORS.gold.mid} />
-                        <Text style={{ color: '#fff', marginTop: 15, fontWeight: '600' }}>Buffering...</Text>
+                        <Text style={{ color: '#fff', marginTop: 15, fontWeight: '600' }}>
+                            {useCompatMode ? 'Transcoding for Compatibility...' : 'Buffering...'}
+                        </Text>
+                        {useCompatMode && (
+                            <Text style={{ color: COLORS.silver, fontSize: 12, marginTop: 5 }}>
+                                This might take a few seconds
+                            </Text>
+                        )}
                     </View>
                 )}
             </View>

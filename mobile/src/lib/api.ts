@@ -1,6 +1,6 @@
 import { AIPickRequest, AIPickResponse, RepickResponse } from '../types';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+export const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 
 export const apiClient = {
   pickForMe: async (moods: string[], freeText?: string): Promise<AIPickResponse> => {

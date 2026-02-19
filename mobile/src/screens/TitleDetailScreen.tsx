@@ -138,7 +138,8 @@ export const TitleDetailScreen = () => {
                 style={styles.playButton}
                 onPress={() => navigation.navigate('Watch', {
                   videoUrl: playableUrl,
-                  title: movie.title
+                  title: movie.title,
+                  assetId: movie.assetId
                 })}
               >
                 <Ionicons name="play" size={24} color={COLORS.background} />

@@ -59,7 +59,8 @@ export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
                     e.stopPropagation();
                     navigation.navigate('Watch', {
                       videoUrl: videoUrl,
-                      title: movie.title
+                      title: movie.title,
+                      assetId: movie.assetId
                     });
                   }}
                 >
