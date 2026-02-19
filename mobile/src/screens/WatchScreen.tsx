@@ -272,24 +272,23 @@ export const WatchScreen = () => {
 
         try {
             if (Platform.OS === 'ios') {
-                // Specific iOS Schemes for pro players
-                // encodeURIComponent is critical for URLs as params
-                const vlcScheme = `vlc-x-callback://x-callback-url/stream?url=${encodeURIComponent(videoUrl)}`;
+                // Try open source VLC first
+                const vlcUrl = `vlc://${videoUrl.replace(/^https?:\/\//, '')}`;
+                const canOpenVlc = await Linking.canOpenURL('vlc://').catch(() => false);
 
-                const canVlc = await Linking.canOpenURL('vlc://').catch(() => false);
-                if (canVlc) {
-                    await Linking.openURL(vlcScheme);
+                if (canOpenVlc) {
+                    await Linking.openURL(vlcUrl);
                 } else {
-                    // Fallback to direct linking - will open Safari or App Store/Prompt
+                    // Fallback to direct URL which may trigger Infuse or Safari
                     await Linking.openURL(videoUrl);
                 }
             } else {
-                // Android handles direct video URLs beautifully by offering an App Picker
+                // Android is brilliant with 'openURL', it shows the app picker (VLC, MX Player, etc)
                 await Linking.openURL(videoUrl);
             }
         } catch (e) {
             console.error('Failed to open external player:', e);
-            Alert.alert('External Player', 'Please install VLC or another media player that supports MKV files.');
+            Alert.alert('External Player', 'To play this file, please install VLC from the App Store.');
         }
     };
 

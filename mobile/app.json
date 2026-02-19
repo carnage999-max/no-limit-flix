@@ -14,7 +14,13 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nolimitflix.app"
+      "bundleIdentifier": "com.nolimitflix.app",
+      "infoPlist": {
+        "LSApplicationQueriesSchemes": [
+          "vlc",
+          "infuse"
+        ]
+      }
     },
     "android": {
       "package": "com.nolimitflix.app",
