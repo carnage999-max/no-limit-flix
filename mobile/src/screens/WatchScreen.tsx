@@ -40,17 +40,26 @@ export const WatchScreen = () => {
     });
 
     useEffect(() => {
+        console.log('Attempting to play:', videoUrl);
+
         const subscription = player.addListener('statusChange', (event) => {
+            console.log('Player status changed:', event.status);
             if (event.status === 'readyToPlay') {
                 setIsBuffering(false);
+                if (player.duration > 0) {
+                    setDuration(player.duration);
+                }
             } else if (event.status === 'loading') {
                 setIsBuffering(true);
+            } else if (event.status === 'error') {
+                setIsBuffering(false);
+                // The error details are often in the event object or player
+                console.error('Player failed to load video');
             }
         });
 
         const timeUpdateSub = player.addListener('timeUpdate', (event) => {
             setCurrentTime(event.currentTime);
-            // player.duration is more reliable
             if (player.duration > 0 && duration === 0) {
                 setDuration(player.duration);
             }
@@ -60,7 +69,7 @@ export const WatchScreen = () => {
             subscription.remove();
             timeUpdateSub.remove();
         };
-    }, [player, duration]);
+    }, [player, duration, videoUrl]);
 
     const toggleControls = () => {
         if (showControls) {
@@ -93,6 +102,7 @@ export const WatchScreen = () => {
     };
 
     const formatTime = (seconds: number) => {
+        if (!seconds || isNaN(seconds)) return '00:00';
         const hrs = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
         const secs = Math.floor(seconds % 60);
@@ -101,21 +111,13 @@ export const WatchScreen = () => {
 
     const handleSeek = (direction: 'forward' | 'backward') => {
         const seekAmount = 10;
-        const newPosition = direction === 'forward'
-            ? Math.min(currentTime + seekAmount, duration)
-            : Math.max(currentTime - seekAmount, 0);
         player.seekBy(direction === 'forward' ? seekAmount : -seekAmount);
         showControlsUI();
     };
 
-    const onDoubleTap = (e: any, direction: 'left' | 'right') => {
-        // Simple double tap logic can be added here if needed with a ref
-        handleSeek(direction === 'right' ? 'forward' : 'backward');
-    };
-
     return (
         <View style={styles.container}>
-            <StatusBar hidden={!showControls} />
+            <StatusBar barStyle="light-content" hidden={!showControls} />
 
             <TouchableWithoutFeedback onPress={toggleControls}>
                 <View style={styles.videoContainer}>
@@ -135,16 +137,16 @@ export const WatchScreen = () => {
                     {showControls && (
                         <Animated.View style={[styles.controlsOverlay, { opacity: controlsOpacity }]}>
                             <LinearGradient
-                                colors={['rgba(0,0,0,0.6)', 'transparent', 'rgba(0,0,0,0.6)']}
+                                colors={['rgba(0,0,0,0.8)', 'transparent', 'rgba(0,0,0,0.8)']}
                                 style={StyleSheet.absoluteFill}
                             />
 
                             {/* Header */}
-                            <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+                            <View style={[styles.header, { paddingTop: insets.top + (Platform.OS === 'ios' ? 0 : 20) }]}>
                                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
                                     <Ionicons name="chevron-back" size={28} color={COLORS.text} />
                                 </TouchableOpacity>
-                                <Text style={styles.videoTitle} numberOfLines={1}>{title}</Text>
+                                <Text style={styles.videoTitle} numberOfLines={1}>{title || 'Playing Video'}</Text>
                                 <View style={{ width: 44 }} />
                             </View>
 

@@ -17,25 +17,44 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
 
     try {
         // 2. Look up which of these titles we actually host
-        // We cast prisma.video as any to bypass potential type mismatch if schemas are out of sync in memory
         const hostedVideos = await (prisma.video as any).findMany({
             where: {
                 tmdbId: { in: tmdbIds },
                 status: 'completed',
             },
-            select: { id: true, tmdbId: true, s3Url: true },
+            select: {
+                id: true,
+                tmdbId: true,
+                s3Url: true,
+                duration: true,
+                releaseYear: true
+            },
         });
 
-        const hostedMap: Record<string, { id: string; s3Url: string }> = {};
+        const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+
+        const hostedMap: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null }> = {};
         for (const v of hostedVideos) {
             if (v.tmdbId) {
-                hostedMap[v.tmdbId] = { id: v.id, s3Url: v.s3Url };
+                let publicUrl = v.s3Url;
+                if (cloudFrontUrl) {
+                    const cfBase = cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`;
+                    const s3Pattern = /https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//;
+                    publicUrl = v.s3Url.replace(s3Pattern, cfBase.startsWith('http') ? cfBase : `https://${cfBase}`);
+                }
+
+                hostedMap[v.tmdbId] = {
+                    id: v.id,
+                    s3Url: publicUrl,
+                    duration: v.duration,
+                    releaseYear: v.releaseYear
+                };
             }
         }
 
         // 3. Enrich each pick
         return movies.map((movie) => {
-            const tmdbId = movie.tmdb_id || movie.id;
+            const tmdbId = movie.tmdb_id?.toString() || movie.id?.toString();
             if (tmdbId && hostedMap[tmdbId]) {
                 const asset = hostedMap[tmdbId];
                 return {
@@ -43,6 +62,9 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
                     playable: true,
                     assetId: asset.id,
                     cloudfrontUrl: asset.s3Url,
+                    runtime: asset.duration ? Math.floor(asset.duration / 60) : movie.runtime,
+                    year: asset.releaseYear || movie.year,
+                    permanence: 'Permanent Core'
                 };
             }
             return { ...movie, playable: false };

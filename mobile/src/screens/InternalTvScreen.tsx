@@ -16,10 +16,21 @@ import { apiClient } from '../lib/api';
 
 const { width } = Dimensions.get('window');
 
+import { RefreshControl } from 'react-native';
+
+const transformToCloudFront = (url: string | null) => {
+    if (!url) return '';
+    const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
+    if (!cfUrl) return url;
+    return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//,
+        cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`);
+};
+
 export const InternalTvScreen = () => {
     const navigation = useNavigation<any>();
     const [series, setSeries] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [selectedSeries, setSelectedSeries] = useState<any | null>(null);
 
     useEffect(() => {
@@ -34,7 +45,13 @@ export const InternalTvScreen = () => {
             console.error(error);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    };
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        fetchTvLibrary();
     };
 
     const renderSeriesItem = ({ item }: { item: any }) => (
@@ -42,33 +59,45 @@ export const InternalTvScreen = () => {
             style={styles.seriesCard}
             onPress={() => setSelectedSeries(item)}
         >
-            <Image source={{ uri: item.thumbnailUrl }} style={styles.seriesPoster} />
+            <Image
+                source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }}
+                style={styles.seriesPoster}
+            />
             <View style={styles.seriesInfo}>
-                <Text style={styles.seriesTitle}>{item.seriesTitle}</Text>
-                <Text style={styles.seriesMeta}>{item.genre} • {item.episodeCount} Episodes</Text>
+                <Text style={styles.seriesTitle}>{item.seriesTitle || 'Unknown Series'}</Text>
+                <Text style={styles.seriesMeta}>{item.genre || 'TV Series'} • {item.episodeCount} Episodes</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={COLORS.silver} />
         </TouchableOpacity>
     );
 
-    const renderEpisodeItem = ({ item }: { item: any }) => (
-        <TouchableOpacity
-            style={styles.episodeCard}
-            onPress={() => navigation.navigate('Watch', {
-                videoUrl: item.s3Url,
-                title: `${item.seriesTitle} - S${item.seasonNumber}E${item.episodeNumber}: ${item.title}`
-            })}
-        >
-            <View style={styles.episodeNumberContainer}>
-                <Text style={styles.episodeNumber}>E{item.episodeNumber}</Text>
-            </View>
-            <View style={styles.episodeInfo}>
-                <Text style={styles.episodeTitle}>{item.title}</Text>
-                <Text style={styles.episodeMeta}>Season {item.seasonNumber}</Text>
-            </View>
-            <Ionicons name="play-circle" size={32} color={COLORS.gold.mid} />
-        </TouchableOpacity>
-    );
+    const renderEpisodeItem = ({ item }: { item: any }) => {
+        const seriesName = selectedSeries?.seriesTitle || item.seriesTitle || 'Series';
+        const videoUrl = transformToCloudFront(item.s3Url);
+        const durationMins = item.duration ? Math.floor(item.duration / 60) : 0;
+        const year = item.releaseYear || 2024;
+
+        return (
+            <TouchableOpacity
+                style={styles.episodeCard}
+                onPress={() => navigation.navigate('Watch', {
+                    videoUrl: videoUrl,
+                    title: `${seriesName} - S${item.seasonNumber}E${item.episodeNumber}: ${item.title}`
+                })}
+            >
+                <View style={styles.episodeNumberContainer}>
+                    <Text style={styles.episodeNumber}>E{item.episodeNumber}</Text>
+                </View>
+                <View style={styles.episodeInfo}>
+                    <Text style={styles.episodeTitle}>{item.title}</Text>
+                    <Text style={styles.episodeMeta}>
+                        S{item.seasonNumber} • {year} {durationMins > 0 ? `• ${durationMins}m` : ''}
+                    </Text>
+                </View>
+                <Ionicons name="play-circle" size={32} color={COLORS.gold.mid} />
+            </TouchableOpacity>
+        );
+    };
 
     if (selectedSeries) {
         return (
@@ -77,7 +106,7 @@ export const InternalTvScreen = () => {
                     <TouchableOpacity onPress={() => setSelectedSeries(null)}>
                         <Ionicons name="chevron-back" size={28} color={COLORS.text} />
                     </TouchableOpacity>
-                    <Text style={styles.title} numberOfLines={1}>{selectedSeries.seriesTitle}</Text>
+                    <Text style={styles.title} numberOfLines={1}>{selectedSeries.seriesTitle || 'TV Series'}</Text>
                     <View style={{ width: 28 }} />
                 </View>
 
@@ -88,7 +117,7 @@ export const InternalTvScreen = () => {
                     contentContainerStyle={styles.episodeList}
                     ListHeaderComponent={() => (
                         <View style={styles.seriesHeader}>
-                            <Image source={{ uri: selectedSeries.thumbnailUrl }} style={styles.headerPoster} />
+                            <Image source={{ uri: selectedSeries.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }} style={styles.headerPoster} />
                             <Text style={styles.headerDescription}>Available Episodes</Text>
                         </View>
                     )}
@@ -107,7 +136,7 @@ export const InternalTvScreen = () => {
                 <View style={{ width: 28 }} />
             </View>
 
-            {loading ? (
+            {loading && !refreshing ? (
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={COLORS.gold.mid} />
                 </View>
@@ -115,12 +144,23 @@ export const InternalTvScreen = () => {
                 <FlatList
                     data={series}
                     renderItem={renderSeriesItem}
-                    keyExtractor={(item) => item.seriesTitle}
+                    keyExtractor={(item) => item.seriesTitle || item.id}
                     contentContainerStyle={styles.listContent}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={COLORS.gold.mid}
+                            colors={[COLORS.gold.mid]}
+                        />
+                    }
                 />
             ) : (
                 <View style={styles.center}>
                     <Text style={styles.emptyText}>No hosted series found.</Text>
+                    <TouchableOpacity onPress={onRefresh} style={{ marginTop: 20 }}>
+                        <Text style={{ color: COLORS.gold.mid }}>Refresh</Text>
+                    </TouchableOpacity>
                 </View>
             )}
         </View>
@@ -148,6 +188,7 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         flex: 1,
         textAlign: 'center',
+        marginRight: 28, // Offset for back button to center exactly
     },
     listContent: {
         padding: 20,

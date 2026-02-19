@@ -31,8 +31,30 @@ export async function GET() {
             },
         });
 
-        // Serialize safely (no BigInt fields selected above)
-        return NextResponse.json({ movies: videos });
+        const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+        const cfBase = cloudFrontUrl ? (cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`) : null;
+        const s3Pattern = /https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//;
+
+        const transformedVideos = videos.map((video: any) => {
+            let publicUrl = video.s3Url;
+            let publicThumb = video.thumbnailUrl;
+
+            if (cfBase) {
+                const cfPrefix = cfBase.startsWith('http') ? cfBase : `https://${cfBase}`;
+                publicUrl = video.s3Url.replace(s3Pattern, cfPrefix);
+                if (video.thumbnailUrl) {
+                    publicThumb = video.thumbnailUrl.replace(s3Pattern, cfPrefix);
+                }
+            }
+
+            return {
+                ...video,
+                s3Url: publicUrl,
+                thumbnailUrl: publicThumb
+            };
+        });
+
+        return NextResponse.json({ movies: transformedVideos });
     } catch (error: any) {
         console.error('GET /api/library/movies error:', error);
         return NextResponse.json(

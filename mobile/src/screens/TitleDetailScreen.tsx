@@ -30,6 +30,14 @@ const getYoutubeId = (url?: string) => {
   return (match && match[2].length === 11) ? match[2] : null;
 };
 
+const transformToCloudFront = (url: string | null) => {
+  if (!url) return '';
+  const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
+  if (!cfUrl) return url;
+  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//,
+    cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`);
+};
+
 export const TitleDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
@@ -102,13 +110,16 @@ export const TitleDetailScreen = () => {
     );
   }
 
+  const backdropUri = transformToCloudFront(movie.backdrop || movie.poster);
+  const playableUrl = transformToCloudFront(movie.cloudfrontUrl || movie.assetId || '');
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Backdrop & Header */}
         <View style={styles.heroSection}>
           <Image
-            source={{ uri: movie.backdrop || movie.poster }}
+            source={{ uri: backdropUri }}
             style={styles.backdrop}
           />
           <LinearGradient
@@ -126,11 +137,11 @@ export const TitleDetailScreen = () => {
           </View>
 
           <View style={styles.actionRow}>
-            {movie.playable ? (
+            {movie.playable && playableUrl ? (
               <TouchableOpacity
                 style={styles.playButton}
                 onPress={() => navigation.navigate('Watch', {
-                  videoUrl: movie.cloudfrontUrl,
+                  videoUrl: playableUrl,
                   title: movie.title
                 })}
               >

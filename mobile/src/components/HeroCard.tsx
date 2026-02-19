@@ -14,7 +14,21 @@ interface HeroCardProps {
   key?: string | number;
 }
 
+import { useNavigation } from '@react-navigation/native';
+
+const transformToCloudFront = (url: string | null) => {
+  if (!url) return '';
+  const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
+  if (!cfUrl) return url;
+  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//,
+    cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`);
+};
+
 export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
+  const navigation = useNavigation<any>();
+  const posterUrl = transformToCloudFront(movie.backdrop || movie.poster);
+  const videoUrl = transformToCloudFront(movie.cloudfrontUrl || '');
+
   return (
     <TouchableOpacity
       activeOpacity={0.9}
@@ -22,7 +36,7 @@ export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
       style={styles.container}
     >
       <View style={styles.card}>
-        <Image source={{ uri: movie.backdrop || movie.poster }} style={styles.backdrop} />
+        <Image source={{ uri: posterUrl }} style={styles.backdrop} />
         <LinearGradient
           colors={['transparent', 'rgba(11, 11, 13, 0.5)', '#0B0B0D']}
           style={styles.gradient}
@@ -45,12 +59,15 @@ export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
           <View style={styles.footer}>
             <Text style={styles.meta}>{movie.year}  ·  {movie.runtime}m</Text>
             <View style={styles.actionButtons}>
-              {movie.playable ? (
+              {movie.playable && videoUrl ? (
                 <TouchableOpacity
                   style={styles.heroPlayBtn}
                   onPress={(e: any) => {
                     e.stopPropagation();
-                    // In a real app we'd navigate to WatchScreen here
+                    navigation.navigate('Watch', {
+                      videoUrl: videoUrl,
+                      title: movie.title
+                    });
                   }}
                 >
                   <Ionicons name="play" size={18} color={COLORS.background} />

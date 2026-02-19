@@ -117,8 +117,8 @@ export const HomeScreen = () => {
       }
 
       setResults(response);
-    } catch (error) {
-      console.error('Search failed:', error);
+    } catch (error: any) {
+      console.error('Search failed:', error.message || error);
     } finally {
       setIsLoading(false);
     }
@@ -142,8 +142,8 @@ export const HomeScreen = () => {
     try {
       const response = await apiClient.repick(results.sessionId, feedback);
       setResults({ ...response, sessionId: results.sessionId });
-    } catch (error) {
-      console.error(error);
+    } catch (error: any) {
+      console.error('Repick failed:', error.message || error);
     } finally {
       setIsLoading(false);
     }
@@ -233,7 +233,7 @@ export const HomeScreen = () => {
           <View style={{ gap: 16 }}>
             {(selectedMoods.length > 0 || vibeText.trim().length > 0) ? (
               <ButtonPrimary
-                onPress={handleSearch}
+                onPress={() => handleSearch()}
                 fullWidth
                 style={styles.primaryBtn}
                 disabled={isLoading}
@@ -253,29 +253,28 @@ export const HomeScreen = () => {
 
           <Text style={styles.microcopy}>"Permanent library feel. No rotation."</Text>
         </View>
-      </Animated.View>
-    </View>
-  );
 
-  const renderLibraryQuickAccess = () => (
-    <View style={styles.quickAccessSection}>
-      <Text style={styles.sectionLabel}>Available to Watch</Text>
-      <View style={styles.quickAccessRow}>
-        <TouchableOpacity
-          style={styles.quickCard}
-          onPress={() => navigation.navigate('InternalMovies')}
-        >
-          <MaterialCommunityIcons name="filmstrip" size={24} color={COLORS.gold.mid} />
-          <Text style={styles.quickCardText}>Movies</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.quickCard}
-          onPress={() => navigation.navigate('InternalTv')}
-        >
-          <MaterialCommunityIcons name="television-classic" size={24} color={COLORS.gold.mid} />
-          <Text style={styles.quickCardText}>Series</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Available to Watch - Integrated into Hero for better flow */}
+        <View style={styles.quickAccessCompact}>
+          <Text style={styles.sectionLabel}>Available to Watch</Text>
+          <View style={styles.quickAccessRow}>
+            <TouchableOpacity
+              style={styles.quickCard}
+              onPress={() => navigation.navigate('InternalMovies')}
+            >
+              <MaterialCommunityIcons name="filmstrip" size={24} color={COLORS.gold.mid} />
+              <Text style={styles.quickCardText}>Movies</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.quickCard}
+              onPress={() => navigation.navigate('InternalTv')}
+            >
+              <MaterialCommunityIcons name="television-classic" size={24} color={COLORS.gold.mid} />
+              <Text style={styles.quickCardText}>Series</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Animated.View>
     </View>
   );
 
@@ -370,7 +369,6 @@ export const HomeScreen = () => {
       scrollEnabled={!isLoading || !!results}
     >
       {renderHeroSection()}
-      {renderLibraryQuickAccess()}
       {(results || isLoading) && renderResultsSection()}
     </ScrollView>
   );
@@ -382,7 +380,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   section: {
-    height: height,
     width: width,
     justifyContent: 'center',
   },
@@ -413,7 +410,7 @@ const styles = StyleSheet.create({
   },
   heroContent: {
     paddingHorizontal: SPACING.xl,
-    paddingBottom: 40,
+    paddingBottom: 110,
   },
   resultsSection: {
     width: width,
@@ -634,6 +631,10 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontSize: 13,
     fontWeight: '600',
+  },
+  quickAccessCompact: {
+    marginTop: 32,
+    width: '100%',
   },
   cutout: {
     position: 'absolute',
