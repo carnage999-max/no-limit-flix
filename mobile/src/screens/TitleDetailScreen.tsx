@@ -32,10 +32,15 @@ const getYoutubeId = (url?: string) => {
 
 const transformToCloudFront = (url: string | null) => {
   if (!url) return '';
-  const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
+  let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
   if (!cfUrl) return url;
-  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//,
-    cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`);
+
+  if (!cfUrl.startsWith('http')) {
+    cfUrl = `https://${cfUrl}`;
+  }
+
+  const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
+  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
 };
 
 export const TitleDetailScreen = () => {
@@ -111,7 +116,10 @@ export const TitleDetailScreen = () => {
   }
 
   const backdropUri = transformToCloudFront(movie.backdrop || movie.poster);
-  const playableUrl = transformToCloudFront(movie.cloudfrontUrl || movie.assetId || '');
+
+  // CRITICAL: Ensure we use the direct asset cloudfrontUrl if available, 
+  // or fallback to the movie's cloudfrontUrl.
+  const playableUrl = movie.cloudfrontUrl ? transformToCloudFront(movie.cloudfrontUrl) : '';
 
   return (
     <View style={styles.container}>
@@ -184,8 +192,8 @@ export const TitleDetailScreen = () => {
                 <Text style={styles.metaText}>{movie.runtime}m</Text>
                 <Text style={styles.bullet}>•</Text>
                 <View style={styles.genresRow}>
-                  {movie.genres.slice(0, 2).map((g, i) => (
-                    <Text key={i} style={styles.metaText}>{g}{i < 1 && movie.genres.length > 1 ? ', ' : ''}</Text>
+                  {(movie.genres || []).slice(0, 2).map((g, i) => (
+                    <Text key={i} style={styles.metaText}>{g}{i < 1 && (movie.genres?.length || 0) > 1 ? ', ' : ''}</Text>
                   ))}
                 </View>
               </View>

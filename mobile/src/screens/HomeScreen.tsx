@@ -10,12 +10,16 @@ import {
   ActivityIndicator,
   FlatList,
   TouchableOpacity,
-  Platform
+  Platform,
+  RefreshControl,
+  Image,
+  NativeSyntheticEvent,
+  NativeScrollEvent
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
 import {
   ButtonPrimary,
@@ -30,11 +34,30 @@ import { AIPickResponse, MoviePick } from '../types';
 
 const { height, width } = Dimensions.get('window');
 
+const transformToCloudFront = (url: string | null) => {
+  if (!url) return '';
+  let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
+  if (!cfUrl) return url;
+
+  // Ensure cfUrl has protocol
+  if (!cfUrl.startsWith('http')) {
+    cfUrl = `https://${cfUrl}`;
+  }
+
+  const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
+  return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
+};
+
 export const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
+  const isFocused = useIsFocused();
   const mainScrollRef = useRef<ScrollView>(null);
+  const horizontalScrollRef = useRef<ScrollView>(null);
 
-  // State
+  // View state: 'discovery' or 'watch'
+  const [activeTab, setActiveTab] = useState<'discovery' | 'watch'>('watch');
+
+  // Discovery State
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
   const [vibeText, setVibeText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -42,11 +65,17 @@ export const HomeScreen = () => {
   const [viewSize, setViewSize] = useState<'compact' | 'standard' | 'large'>('standard');
   const [onlyPlayable, setOnlyPlayable] = useState(false);
 
+  // Watch Mode State
+  const [hostedMovies, setHostedMovies] = useState<any[]>([]);
+  const [hostedSeries, setHostedSeries] = useState<any[]>([]);
+  const [isWatchLoading, setIsWatchLoading] = useState(true);
+
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const bubble1Anim = useRef(new Animated.Value(0)).current;
   const bubble2Anim = useRef(new Animated.Value(0)).current;
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   const insets = useSafeAreaInsets();
 
@@ -77,6 +106,44 @@ export const HomeScreen = () => {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    if (isFocused) {
+      fetchHostedContent();
+    }
+  }, [isFocused]);
+
+  const fetchHostedContent = async () => {
+    try {
+      setIsWatchLoading(true);
+      const [moviesData, tvData] = await Promise.all([
+        apiClient.getInternalMovies(),
+        apiClient.getInternalTv()
+      ]);
+      setHostedMovies(moviesData.movies?.slice(0, 4) || []);
+      setHostedSeries(tvData.series?.slice(0, 4) || []);
+    } catch (error) {
+      console.error('Failed to pre-fetch hosted content', error);
+    } finally {
+      setIsWatchLoading(false);
+    }
+  };
+
+  const handleTabChange = (tab: 'discovery' | 'watch') => {
+    setActiveTab(tab);
+    horizontalScrollRef.current?.scrollTo({
+      x: tab === 'watch' ? 0 : width,
+      animated: true
+    });
+  };
+
+  const onHorizontalScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const tab = offsetX < width / 2 ? 'watch' : 'discovery';
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+    }
+  };
+
   const handleMoodToggle = (moodLabel: string, selected: boolean) => {
     setSelectedMoods((prev: string[]) =>
       selected ? [...prev, moodLabel] : prev.filter((m: string) => m !== moodLabel)
@@ -86,8 +153,15 @@ export const HomeScreen = () => {
   const handleSearch = async (overrideMoods?: string[], overrideVibe?: string) => {
     if (isLoading) return;
 
-    // Smoothly scroll to results section
-    mainScrollRef.current?.scrollTo({ y: height, animated: true });
+    // Switch to discovery tab if search is triggered from somewhere else
+    if (activeTab === 'watch') {
+      handleTabChange('discovery');
+    }
+
+    // Give a small delay for tab switch animation if needed, or just scroll down
+    setTimeout(() => {
+      mainScrollRef.current?.scrollTo({ y: height, animated: true });
+    }, 100);
 
     setIsLoading(true);
     try {
@@ -102,20 +176,14 @@ export const HomeScreen = () => {
         response = await apiClient.pickForMe(effectiveMoods);
       }
 
-      // Phase 2: Client-side filter if "Only show playable" is checked
-      // In a real prod app, the API would handle this to ensure we still get N results,
-      // but for this implementation we'll filter the results.
       if (onlyPlayable && response) {
-        // We'll keep results that are playable. If hero isn't playable, we'll swap it.
         const allPicks: MoviePick[] = [response.hero, ...response.alternates];
         const playables = allPicks.filter((m: MoviePick) => m.playable);
-
         if (playables.length > 0) {
           response.hero = playables[0];
           response.alternates = playables.slice(1);
         }
       }
-
       setResults(response);
     } catch (error: any) {
       console.error('Search failed:', error.message || error);
@@ -125,14 +193,10 @@ export const HomeScreen = () => {
   };
 
   const handleShuffle = () => {
-    // Pick 2 random moods from options
     const shuffled = [...MOOD_OPTIONS].sort(() => 0.5 - Math.random());
     const randomMoods = shuffled.slice(0, 2).map(m => m.label);
-
     setVibeText('');
     setSelectedMoods(randomMoods);
-
-    // Trigger search immediately with the new moods
     handleSearch(randomMoods, '');
   };
 
@@ -152,15 +216,227 @@ export const HomeScreen = () => {
   const getTileWidth = () => {
     const horizontalPadding = SPACING.md + SPACING.sm;
     const availableWidth = width - (horizontalPadding * 2);
-
     if (viewSize === 'compact') return (availableWidth - (SPACING.sm * 2)) / 3;
     if (viewSize === 'standard') return (availableWidth - SPACING.sm) / 2;
     return availableWidth;
   };
 
+  const renderTabToggle = () => {
+    const translateX = scrollX.interpolate({
+      inputRange: [0, width],
+      outputRange: [0, 126],
+    });
+
+    return (
+      <View style={styles.tabToggleContainer}>
+        <Animated.View
+          style={[
+            styles.tabSlider,
+            { transform: [{ translateX }] }
+          ]}
+        />
+        <TouchableOpacity
+          onPress={() => handleTabChange('watch')}
+          style={styles.tabButton}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="play-circle"
+            size={18}
+            color={activeTab === 'watch' ? COLORS.background : COLORS.gold.mid}
+          />
+          <Text style={[styles.tabButtonText, activeTab === 'watch' && styles.activeTabButtonText]}>Watch</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => handleTabChange('discovery')}
+          style={styles.tabButton}
+          activeOpacity={0.8}
+        >
+          <MaterialCommunityIcons
+            name="auto-fix"
+            size={18}
+            color={activeTab === 'discovery' ? COLORS.background : COLORS.gold.mid}
+          />
+          <Text style={[styles.tabButtonText, activeTab === 'discovery' && styles.activeTabButtonText]}>Discovery</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
+
+  const renderWatchMode = () => (
+    <View style={styles.tabWidth}>
+      <View style={styles.watchHeader}>
+        <Text style={styles.watchTitle}>Premium Content</Text>
+        <Text style={styles.watchSubtitle}>Hand-picked, permanent library</Text>
+      </View>
+
+      <View style={styles.hostedSummary}>
+        <View style={styles.hostedHeader}>
+          <Text style={styles.hostedLabel}>READY TO STREAM</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('InternalMovies')}>
+            <Text style={styles.seeAllText}>See all movies</Text>
+          </TouchableOpacity>
+        </View>
+
+        {isWatchLoading ? (
+          <ActivityIndicator color={COLORS.gold.mid} style={{ marginVertical: 20 }} />
+        ) : (
+          <View style={styles.hostedGrid}>
+            {hostedMovies.map((item, index) => (
+              <TouchableOpacity
+                key={`movie-${item.id || index}`}
+                style={styles.hostedMiniCard}
+                onPress={() => {
+                  const posterUrl = transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+                  const videoUrl = transformToCloudFront(item.s3Url);
+
+                  if (item.tmdbId) {
+                    navigation.navigate('TitleDetail', {
+                      id: item.tmdbId.toString(),
+                      movie: {
+                        id: item.tmdbId.toString(),
+                        title: item.title,
+                        poster: posterUrl,
+                        playable: true,
+                        assetId: item.id,
+                        cloudfrontUrl: videoUrl,
+                        year: item.releaseYear,
+                        runtime: Math.floor((item.duration || 0) / 60),
+                        permanence: 'Permanent Core'
+                      }
+                    });
+                  } else {
+                    navigation.navigate('Watch', {
+                      videoUrl: videoUrl,
+                      title: item.title
+                    });
+                  }
+                }}
+              >
+                <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
+                <Text style={styles.hostedMiniTitle} numberOfLines={1}>{item.title}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={styles.hostedSummary}>
+        <View style={styles.hostedHeader}>
+          <Text style={styles.hostedLabel}>SERIES & DOCUMENTARIES</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('InternalTv')}>
+            <Text style={styles.seeAllText}>See all tv</Text>
+          </TouchableOpacity>
+        </View>
+
+        {isWatchLoading ? (
+          <ActivityIndicator color={COLORS.gold.mid} style={{ marginVertical: 20 }} />
+        ) : (
+          <View style={styles.hostedGrid}>
+            {hostedSeries.map((item, index) => (
+              <TouchableOpacity
+                key={`series-${item.id || index}`}
+                style={styles.hostedMiniCard}
+                onPress={() => navigation.navigate('InternalTv')}
+              >
+                <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
+                <Text style={styles.hostedMiniTitle} numberOfLines={1}>{item.seriesTitle}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <TouchableOpacity
+        style={styles.discoveryPrompt}
+        onPress={() => handleTabChange('discovery')}
+      >
+        <Ionicons name="sparkles" size={24} color={COLORS.gold.mid} />
+        <View style={{ flex: 1, marginLeft: 16 }}>
+          <Text style={styles.promptTitle}>Can't find what you need?</Text>
+          <Text style={styles.promptSubtitle}>Use AI Discovery to find matches from our global catalog</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={COLORS.silver} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderDiscoveryMode = () => (
+    <View style={styles.tabWidth}>
+      <View style={{ alignItems: 'center' }}>
+        <Text style={styles.heroTitle}>What should you{'\n'}watch tonight?</Text>
+        <Text style={styles.heroSubtitle}>
+          Select your moods, we'll find the perfect match
+        </Text>
+
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Describe your vibe..."
+            placeholderTextColor={COLORS.silver}
+            value={vibeText}
+            onChangeText={setVibeText}
+          />
+        </View>
+
+        <View style={styles.filterBar}>
+          <TouchableOpacity
+            style={[styles.playableToggle, onlyPlayable && styles.playableToggleActive]}
+            onPress={() => setOnlyPlayable(!onlyPlayable)}
+          >
+            <MaterialCommunityIcons
+              name={onlyPlayable ? "play-box-multiple" : "play-box-multiple-outline"}
+              size={20}
+              color={onlyPlayable ? COLORS.background : COLORS.gold.mid}
+            />
+            <Text style={[styles.playableToggleText, onlyPlayable && styles.playableToggleTextActive]}>
+              Playable Now
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.moodGrid}>
+          {MOOD_OPTIONS.map((mood) => (
+            <MoodChip
+              key={mood.label}
+              label={mood.label}
+              emoji={mood.emoji}
+              selected={selectedMoods.includes(mood.label)}
+              onToggle={(selected: boolean) => handleMoodToggle(mood.label, selected)}
+            />
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.ctaContainer}>
+        <View style={{ gap: 16 }}>
+          {(selectedMoods.length > 0 || vibeText.trim().length > 0) ? (
+            <ButtonPrimary
+              onPress={() => handleSearch()}
+              fullWidth
+              style={styles.primaryBtn}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Finding magic...' : 'See my picks'}
+            </ButtonPrimary>
+          ) : null}
+
+          <ButtonSecondary
+            onPress={() => handleShuffle()}
+            fullWidth
+            disabled={isLoading}
+          >
+            {(selectedMoods.length > 0 || vibeText.trim().length > 0) ? 'Surprise me' : 'Shuffle selection'}
+          </ButtonSecondary>
+        </View>
+
+        <Text style={styles.microcopy}>"Permanent library feel. No rotation."</Text>
+      </View>
+    </View>
+  );
+
   const renderHeroSection = () => (
     <View style={styles.section}>
-      {/* Animated Background */}
       <View style={styles.bgContainer}>
         <Animated.View style={[
           styles.bubble,
@@ -175,106 +451,40 @@ export const HomeScreen = () => {
       </View>
 
       <Animated.View style={[
-        styles.heroContent,
+        styles.heroHeader,
         {
           opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-          paddingTop: insets.top + SPACING.xl,
-          minHeight: height,
-          justifyContent: 'center',
+          paddingTop: insets.top + SPACING.lg,
         }
       ]}>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={styles.heroTitle}>What should you{'\n'}watch tonight?</Text>
-          <Text style={styles.heroSubtitle}>
-            Select your moods, we'll find the perfect match
-          </Text>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Describe your vibe..."
-              placeholderTextColor={COLORS.silver}
-              value={vibeText}
-              onChangeText={setVibeText}
-            />
-          </View>
-
-          <View style={styles.filterBar}>
-            <TouchableOpacity
-              style={[styles.playableToggle, onlyPlayable && styles.playableToggleActive]}
-              onPress={() => setOnlyPlayable(!onlyPlayable)}
-            >
-              <MaterialCommunityIcons
-                name={onlyPlayable ? "play-box-multiple" : "play-box-multiple-outline"}
-                size={20}
-                color={onlyPlayable ? COLORS.background : COLORS.gold.mid}
-              />
-              <Text style={[styles.playableToggleText, onlyPlayable && styles.playableToggleTextActive]}>
-                Playable Now
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.moodGrid}>
-            {MOOD_OPTIONS.map((mood) => (
-              <MoodChip
-                key={mood.label}
-                label={mood.label}
-                emoji={mood.emoji}
-                selected={selectedMoods.includes(mood.label)}
-                onToggle={(selected: boolean) => handleMoodToggle(mood.label, selected)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.ctaContainer}>
-          <View style={{ gap: 16 }}>
-            {(selectedMoods.length > 0 || vibeText.trim().length > 0) ? (
-              <ButtonPrimary
-                onPress={() => handleSearch()}
-                fullWidth
-                style={styles.primaryBtn}
-                disabled={isLoading}
-              >
-                {isLoading ? 'Finding magic...' : 'See my picks'}
-              </ButtonPrimary>
-            ) : null}
-
-            <ButtonSecondary
-              onPress={handleShuffle}
-              fullWidth
-              disabled={isLoading}
-            >
-              {(selectedMoods.length > 0 || vibeText.trim().length > 0) ? 'Surprise me' : 'Shuffle selection'}
-            </ButtonSecondary>
-          </View>
-
-          <Text style={styles.microcopy}>"Permanent library feel. No rotation."</Text>
-        </View>
-
-        {/* Available to Watch - Integrated into Hero for better flow */}
-        <View style={styles.quickAccessCompact}>
-          <Text style={styles.sectionLabel}>Available to Watch</Text>
-          <View style={styles.quickAccessRow}>
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('InternalMovies')}
-            >
-              <MaterialCommunityIcons name="filmstrip" size={24} color={COLORS.gold.mid} />
-              <Text style={styles.quickCardText}>Movies</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.quickCard}
-              onPress={() => navigation.navigate('InternalTv')}
-            >
-              <MaterialCommunityIcons name="television-classic" size={24} color={COLORS.gold.mid} />
-              <Text style={styles.quickCardText}>Series</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {renderTabToggle()}
       </Animated.View>
+
+      <Animated.ScrollView
+        ref={horizontalScrollRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={onHorizontalScroll}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
+        scrollEventThrottle={16}
+        decelerationRate="fast"
+      >
+        <Animated.View style={[
+          styles.tabContentContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+            minHeight: height - 150,
+          }
+        ]}>
+          {renderWatchMode()}
+          {renderDiscoveryMode()}
+        </Animated.View>
+      </Animated.ScrollView>
     </View>
   );
 
@@ -381,7 +591,6 @@ const styles = StyleSheet.create({
   },
   section: {
     width: width,
-    justifyContent: 'center',
   },
   bgContainer: {
     position: 'absolute',
@@ -408,29 +617,38 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.gold.mid,
     filter: 'blur(80px)',
   },
-  heroContent: {
+  heroHeader: {
     paddingHorizontal: SPACING.xl,
-    paddingBottom: 110,
+    zIndex: 10,
+  },
+  tabContentContainer: {
+    flexDirection: 'row',
+    width: width * 2,
+    paddingBottom: 40,
+  },
+  tabWidth: {
+    width: width,
+    paddingHorizontal: SPACING.xl,
   },
   resultsSection: {
     width: width,
     backgroundColor: COLORS.background,
   },
   heroTitle: {
-    fontSize: 36,
+    fontSize: 32,
     fontWeight: '700',
     color: COLORS.gold.mid,
     textAlign: 'center',
-    lineHeight: 44,
+    lineHeight: 40,
     marginBottom: 8,
     letterSpacing: -1,
   },
   heroSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: COLORS.silver,
     textAlign: 'center',
     marginBottom: 20,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   inputContainer: {
     width: '100%',
@@ -470,6 +688,7 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontStyle: 'italic',
     opacity: 0.6,
+    textAlign: 'center',
   },
   resultsContent: {
     paddingHorizontal: SPACING.md,
@@ -563,33 +782,6 @@ const styles = StyleSheet.create({
   playableToggleTextActive: {
     color: COLORS.background,
   },
-  quickAccessSection: {
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: 32,
-    backgroundColor: COLORS.background,
-  },
-  quickAccessRow: {
-    flexDirection: 'row',
-    gap: 16,
-    marginTop: 16,
-  },
-  quickCard: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 16,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  quickCardText: {
-    color: COLORS.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
   loadingContainer: {
     height: 300,
     justifyContent: 'center',
@@ -632,15 +824,126 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
-  quickAccessCompact: {
-    marginTop: 32,
+  tabToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(167, 171, 180, 0.1)',
+    borderRadius: 25,
+    padding: 4,
+    marginBottom: 32,
+    alignSelf: 'center',
+    width: 260,
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 21,
+    gap: 6,
+  },
+  tabSlider: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    width: 126, // (260 - 8) / 2
+    height: 42, // container height 50 approx - 8
+    backgroundColor: COLORS.gold.mid,
+    borderRadius: 21,
+    shadowColor: COLORS.gold.mid,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  activeTabButtonText: {
+    color: COLORS.background,
+  },
+  tabButtonText: {
+    color: COLORS.silver,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  watchModeContainer: {
     width: '100%',
   },
-  cutout: {
-    position: 'absolute',
-    bottom: 0,
+  watchHeader: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  watchTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  watchSubtitle: {
+    fontSize: 16,
+    color: COLORS.gold.mid,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  hostedSummary: {
+    marginBottom: 32,
+  },
+  hostedHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  hostedLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.silver,
+    letterSpacing: 2,
+  },
+  seeAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gold.mid,
+  },
+  hostedGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  hostedMiniCard: {
+    width: (width - SPACING.xl * 2 - 12) / 2,
+    marginBottom: 4,
+  },
+  hostedMiniPoster: {
     width: '100%',
-    height: 40,
-    backgroundColor: COLORS.background,
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  hostedMiniTitle: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  discoveryPrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.2)',
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 16,
+  },
+  promptTitle: {
+    color: COLORS.gold.mid,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  promptSubtitle: {
+    color: COLORS.silver,
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
   }
 });

@@ -20,10 +20,15 @@ import { RefreshControl } from 'react-native';
 
 const transformToCloudFront = (url: string | null) => {
     if (!url) return '';
-    const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
+    let cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
     if (!cfUrl) return url;
-    return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//,
-        cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`);
+
+    if (!cfUrl.startsWith('http')) {
+        cfUrl = `https://${cfUrl}`;
+    }
+
+    const cfBase = cfUrl.endsWith('/') ? cfUrl : `${cfUrl}/`;
+    return url.replace(/https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//, cfBase);
 };
 
 export const InternalTvScreen = () => {

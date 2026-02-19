@@ -7,8 +7,17 @@ export async function GET(
 ) {
     try {
         const { id } = await params;
+
+        // Safety: If it's not a numeric string, it's not a TMDb ID.
+        if (!/^\d+$/.test(id)) {
+            return NextResponse.json(
+                { error: 'Invalid TMDb ID format' },
+                { status: 400 }
+            );
+        }
+
         const movie = await getMovieDetails(id);
-        
+
         if (!movie) {
             return NextResponse.json(
                 { error: 'Movie not found' },

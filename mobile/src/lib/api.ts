@@ -5,16 +5,24 @@ const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000'
 export const apiClient = {
   pickForMe: async (moods: string[], freeText?: string): Promise<AIPickResponse> => {
     try {
+      console.log('Finalizing search with moods:', moods, 'and text:', freeText);
+
+      // Defensively ensure we only send primitive data to prevent [TypeError: cyclical structure]
+      const moodsArray = Array.isArray(moods)
+        ? moods.filter(m => typeof m === 'string')
+        : [];
+      const vibeText = typeof freeText === 'string' ? freeText : '';
+
       const response = await fetch(`${BASE_URL}/api/ai/pick`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          moods,
-          freeText,
+          moods: moodsArray,
+          freeText: vibeText,
           constraints: {},
-        } as AIPickRequest),
+        }),
       });
 
       if (!response.ok) {
