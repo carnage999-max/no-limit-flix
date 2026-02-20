@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useState, useEffect } from 'react';
-import { notFound } from 'next/navigation';
+import { notFound, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal, PermanenceBadge } from '@/components';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -11,6 +11,7 @@ import type { MoviePick } from '@/types';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const searchParams = useSearchParams();
     const [movie, setMovie] = useState<MoviePick | null>(null);
     const [loading, setLoading] = useState(true);
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
@@ -18,6 +19,20 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
     useEffect(() => {
         async function loadMovie() {
             try {
+                // Check if movie data is passed via query params (hosted content)
+                const movieData = searchParams.get('data');
+                if (movieData) {
+                    try {
+                        const decodedData = JSON.parse(atob(movieData));
+                        setMovie(decodedData as MoviePick);
+                        setLoading(false);
+                        return;
+                    } catch (e) {
+                        console.error('Failed to decode movie data:', e);
+                    }
+                }
+
+                // Otherwise, fetch from TMDB (TMDB content)
                 const details = await getMovieDetails(id);
                 setMovie(details);
             } catch (e) {
@@ -28,7 +43,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
             }
         }
         loadMovie();
-    }, [id]);
+    }, [id, searchParams]);
 
     if (loading) {
         return (
