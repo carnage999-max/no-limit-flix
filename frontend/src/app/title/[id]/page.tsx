@@ -4,6 +4,7 @@ import { use, useState, useEffect } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal, PermanenceBadge } from '@/components';
+import VideoPlayer from '@/components/VideoPlayer';
 import { getMovieDetails } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import type { MoviePick } from '@/types';
@@ -208,7 +209,27 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 </div>
                             </div>
 
-                            {/* === WATCH ON APP CTA === */}
+                            {/* === VIDEO PLAYER (for playable/hosted content) === */}
+                            {movie.playable && movie.cloudfrontUrl && (
+                                <div style={{ marginBottom: '3rem' }}>
+                                    <div
+                                        style={{
+                                            borderRadius: '1.5rem',
+                                            overflow: 'hidden',
+                                            background: '#000',
+                                            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+                                        }}
+                                    >
+                                        <VideoPlayer
+                                            src={movie.cloudfrontUrl}
+                                            poster={movie.poster}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* === WATCH ON APP CTA (hide if already playing) === */}
+                            {!(movie.playable && movie.cloudfrontUrl) && (
                             <div style={{
                                 padding: '2rem',
                                 borderRadius: '1.5rem',
@@ -280,6 +301,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                     Web browsing is for discovery only. No browser-based playback by design.
                                 </p>
                             </div>
+                            )}
 
                             {/* Trailer + Back buttons */}
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '3rem' }}>
