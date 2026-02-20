@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton } from '@/components';
+import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
 
@@ -51,6 +51,10 @@ export default function HomePage() {
 
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const resultsRef = useRef<HTMLDivElement>(null);
+    const [activeTab, setActiveTab] = useState<'watch' | 'discovery'>('watch');
+    const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
+    const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
+    const [isWatchLoading, setIsWatchLoading] = useState(true);
 
     // Auto-scroll on mount if results exist (for "Back to Results" behavior)
     useEffect(() => {
@@ -58,6 +62,70 @@ export default function HomePage() {
             resultsRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, []);
+
+    // Fetch hosted content on mount
+    useEffect(() => {
+        fetchHostedContent();
+    }, []);
+
+    const fetchHostedContent = async () => {
+        try {
+            setIsWatchLoading(true);
+            console.log('Fetching hosted content...');
+            
+            const [moviesRes, tvRes] = await Promise.all([
+                fetch('/api/library/movies'),
+                fetch('/api/library/tv')
+            ]);
+
+            console.log('Movies response status:', moviesRes.status);
+            console.log('TV response status:', tvRes.status);
+
+            if (moviesRes.ok) {
+                const moviesData = await moviesRes.json();
+                console.log('Movies data:', moviesData);
+                const movies = (moviesData.movies || []).slice(0, 8).map((video: any) => ({
+                    id: video.id,
+                    title: video.title,
+                    year: video.releaseYear || new Date().getFullYear(),
+                    runtime: Math.floor((video.duration || 0) / 60),
+                    poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+                    genres: video.genre ? [video.genre] : [],
+                    explanation: video.description || '',
+                    watchProviders: [],
+                    permanence: 'Permanent Core' as const,
+                    playable: true,
+                    assetId: video.id,
+                    cloudfrontUrl: video.s3Url,
+                }));
+                setHostedMovies(movies);
+            }
+
+            if (tvRes.ok) {
+                const tvData = await tvRes.json();
+                console.log('TV data:', tvData);
+                const series = (tvData.series || []).slice(0, 8).map((tv: any) => ({
+                    id: tv.seriesTitle || tv.id,
+                    title: tv.seriesTitle,
+                    year: tv.releaseYear || new Date().getFullYear(),
+                    runtime: 45,
+                    poster: tv.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400',
+                    genres: tv.genre ? [tv.genre] : [],
+                    explanation: `${tv.episodeCount || 0} episodes`,
+                    watchProviders: [],
+                    permanence: 'Permanent Core' as const,
+                    playable: true,
+                    assetId: tv.id,
+                    cloudfrontUrl: tv.thumbnailUrl,
+                }));
+                setHostedSeries(series);
+            }
+        } catch (error) {
+            console.error('Failed to fetch hosted content:', error);
+        } finally {
+            setIsWatchLoading(false);
+        }
+    };
 
     // ... (keep handleMoodToggle) ...
     const handleMoodToggle = (moodLabel: string, selected: boolean) => {
@@ -346,6 +414,299 @@ export default function HomePage() {
 
     return (
         <div>
+            {/* Tab Switch */}
+            <div
+                style={{
+                    background: 'rgba(11, 11, 13, 0.8)',
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 40,
+                    borderBottom: '1px solid rgba(167, 171, 180, 0.1)',
+                    padding: '1rem 0',
+                }}
+            >
+                <TabSwitch activeTab={activeTab} onTabChange={setActiveTab} />
+            </div>
+
+            {/* Watch Tab */}
+            {activeTab === 'watch' && (
+                <section
+                    style={{
+                        minHeight: '100vh',
+                        padding: '2rem',
+                    }}
+                >
+                    <div
+                        style={{
+                            maxWidth: '1400px',
+                            margin: '0 auto',
+                        }}
+                    >
+                        {/* Watch Header */}
+                        <div
+                            style={{
+                                textAlign: 'center',
+                                marginBottom: '3rem',
+                            }}
+                        >
+                            <h2
+                                style={{
+                                    fontSize: 'clamp(2rem, 5vw, 3rem)',
+                                    fontWeight: '800',
+                                    color: '#F3F4F6',
+                                    margin: 0,
+                                    marginBottom: '0.5rem',
+                                    letterSpacing: '-0.5px',
+                                }}
+                            >
+                                Premium Content
+                            </h2>
+                            <p
+                                style={{
+                                    fontSize: '1rem',
+                                    color: '#D4AF37',
+                                    fontWeight: '600',
+                                    margin: 0,
+                                }}
+                            >
+                                Hand-picked, permanent library
+                            </p>
+                        </div>
+
+                        {/* Movies Section */}
+                        {isWatchLoading ? (
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    minHeight: '400px',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        width: '40px',
+                                        height: '40px',
+                                        border: '3px solid rgba(212, 175, 55, 0.2)',
+                                        borderTop: '3px solid #D4AF37',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                    }}
+                                />
+                                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                            </div>
+                        ) : (
+                            <>
+                                {hostedMovies.length > 0 && (
+                                    <div style={{ marginBottom: '4rem' }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                marginBottom: '2rem',
+                                            }}
+                                        >
+                                            <h3
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: '700',
+                                                    margin: 0,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.1em',
+                                                    color: '#A7ABB4',
+                                                }}
+                                            >
+                                                READY TO STREAM
+                                            </h3>
+                                            <a
+                                                href="/collections/internal-movies"
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    color: '#D4AF37',
+                                                    textDecoration: 'none',
+                                                    fontWeight: '600',
+                                                    transition: 'color 0.2s',
+                                                    cursor: 'pointer',
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.color = '#F6D365')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
+                                            >
+                                                See all movies →
+                                            </a>
+                                        </div>
+                                        <div
+                                            style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                                                gap: '1.5rem',
+                                            }}
+                                        >
+                                            {hostedMovies.map((movie) => (
+                                                <div
+                                                    key={movie.id}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        transition: 'transform 0.2s',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                                                    }}
+                                                >
+                                                    <TitleTile
+                                                        movie={movie}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {hostedSeries.length > 0 && (
+                                    <div style={{ marginBottom: '4rem' }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                marginBottom: '2rem',
+                                            }}
+                                        >
+                                            <h3
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: '700',
+                                                    margin: 0,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.1em',
+                                                    color: '#A7ABB4',
+                                                }}
+                                            >
+                                                SERIES & DOCUMENTARIES
+                                            </h3>
+                                            <a
+                                                href="/collections/internal-tv"
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    color: '#D4AF37',
+                                                    textDecoration: 'none',
+                                                    fontWeight: '600',
+                                                    transition: 'color 0.2s',
+                                                    cursor: 'pointer',
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.color = '#F6D365')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
+                                            >
+                                                See all tv →
+                                            </a>
+                                        </div>
+                                        <div
+                                            style={{
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                                                gap: '1.5rem',
+                                                marginBottom: '3rem',
+                                            }}
+                                        >
+                                            {hostedSeries.map((series) => (
+                                                <div
+                                                    key={series.id}
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        transition: 'transform 0.2s',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                                                    }}
+                                                >
+                                                    <TitleTile
+                                                        movie={series}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* "Can't find what you need?" Prompt */}
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '1.5rem',
+                                        padding: '1.5rem',
+                                        background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(20, 184, 166, 0.1) 100%)',
+                                        border: '1px solid rgba(212, 175, 55, 0.2)',
+                                        borderRadius: '1rem',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    }}
+                                    onClick={() => setActiveTab('discovery')}
+                                    onMouseEnter={(e) => {
+                                        const elem = e.currentTarget as HTMLElement;
+                                        elem.style.borderColor = '#D4AF37';
+                                        elem.style.transform = 'translateY(-2px)';
+                                        elem.style.boxShadow = '0 8px 16px rgba(212, 175, 55, 0.15)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        const elem = e.currentTarget as HTMLElement;
+                                        elem.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                                        elem.style.transform = 'translateY(0)';
+                                        elem.style.boxShadow = 'none';
+                                    }}
+                                >
+                                    <span style={{ fontSize: '1.5rem' }}>✨</span>
+                                    <div style={{ flex: 1 }}>
+                                        <p
+                                            style={{
+                                                margin: 0,
+                                                fontSize: '1rem',
+                                                fontWeight: '600',
+                                                color: '#F3F4F6',
+                                            }}
+                                        >
+                                            Can't find what you need?
+                                        </p>
+                                        <p
+                                            style={{
+                                                margin: '0.25rem 0 0 0',
+                                                fontSize: '0.875rem',
+                                                color: '#A7ABB4',
+                                            }}
+                                        >
+                                            Use AI Discovery to find matches from our global catalog
+                                        </p>
+                                    </div>
+                                    <span style={{ fontSize: '1.25rem', color: '#A7ABB4' }}>→</span>
+                                </div>
+
+                                {hostedMovies.length === 0 && hostedSeries.length === 0 && (
+                                    <div
+                                        style={{
+                                            textAlign: 'center',
+                                            padding: '4rem 2rem',
+                                            color: '#A7ABB4',
+                                        }}
+                                    >
+                                        <p style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>No content available yet.</p>
+                                        <p style={{ fontSize: '0.95rem' }}>Check back soon or use AI Discovery to find movies from our global catalog!</p>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </section>
+            )}
+
+            {/* Discovery Tab */}
+            {activeTab === 'discovery' && (
+                <>
             {/* Hero Section - Full Screen */}
             <section
                 className="snap-section"
@@ -1039,6 +1400,8 @@ export default function HomePage() {
                     </p>
                 </div>
             </section>
+                </>
+            )}
         </div>
     );
 }
