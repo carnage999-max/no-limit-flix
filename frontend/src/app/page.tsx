@@ -538,9 +538,10 @@ export default function HomePage() {
                                         <div
                                             style={{
                                                 display: 'grid',
-                                                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                                                gap: '1.5rem',
-                                            }}
+                                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                                gap: '1rem',
+                                                width: '100%',
+                                            } as React.CSSProperties}
                                         >
                                             {hostedMovies.map((movie) => (
                                                 <div
@@ -606,10 +607,11 @@ export default function HomePage() {
                                         <div
                                             style={{
                                                 display: 'grid',
-                                                gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                                                gap: '1.5rem',
+                                                gridTemplateColumns: 'repeat(2, 1fr)',
+                                                gap: '1rem',
                                                 marginBottom: '3rem',
-                                            }}
+                                                width: '100%',
+                                            } as React.CSSProperties}
                                         >
                                             {hostedSeries.map((series) => (
                                                 <div
