@@ -6,588 +6,1039 @@ import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
 
 const MOOD_OPTIONS = [
-  { label: 'Thrilling', emoji: '🚀' },
-  { label: 'Heartwarming', emoji: '❤️' },
-  { label: 'Mind-bending', emoji: '🌀' },
-  { label: 'Funny', emoji: '😂' },
-  { label: 'Dark', emoji: '🌑' },
-  { label: 'Uplifting', emoji: '✨' },
-  { label: 'Intense', emoji: '🔥' },
-  { label: 'Relaxing', emoji: '🌿' },
-  { label: 'Romantic', emoji: '💖' },
-  { label: 'Epic', emoji: '⚔️' },
-  { label: 'Magical', emoji: '✨' },
-  { label: 'Gritty', emoji: '🚬' },
-  { label: 'Futuristic', emoji: '🤖' },
-  { label: 'Nostalgic', emoji: '🎞️' },
-  { label: 'Artistic', emoji: '🎨' },
-  { label: 'Spooky', emoji: '👻' },
-  { label: 'Mysterious', emoji: '🕵️' },
-  { label: 'Action-packed', emoji: '🎦' },
+    { label: 'Thrilling', emoji: '🚀' },
+    { label: 'Heartwarming', emoji: '❤️' },
+    { label: 'Mind-bending', emoji: '🌀' },
+    { label: 'Funny', emoji: '😂' },
+    { label: 'Dark', emoji: '🌑' },
+    { label: 'Uplifting', emoji: '✨' },
+    { label: 'Intense', emoji: '🔥' },
+    { label: 'Relaxing', emoji: '🌿' },
+    { label: 'Romantic', emoji: '💖' },
+    { label: 'Epic', emoji: '⚔️' },
+    { label: 'Magical', emoji: '✨' },
+    { label: 'Gritty', emoji: '🚬' },
+    { label: 'Futuristic', emoji: '🤖' },
+    { label: 'Nostalgic', emoji: '🎞️' },
+    { label: 'Artistic', emoji: '🎨' },
+    { label: 'Spooky', emoji: '👻' },
+    { label: 'Mysterious', emoji: '🕵️' },
+    { label: 'Action-packed', emoji: '🎦' },
 ];
 
 const FEEDBACK_OPTIONS = [
-  'Too slow',
-  'Too dark',
-  'Seen it',
-  'Not intense enough',
-  'Try something lighter',
+    'Too slow',
+    'Too dark',
+    'Seen it',
+    'Not intense enough',
+    'Try something lighter',
 ];
 
 export default function HomePage() {
-  const {
-    searchMode, setSearchMode,
-    selectedMoods, setSelectedMoods,
-    vibeText, setVibeText,
-    isInterpreting, setIsInterpreting,
-    adjustments, setAdjustments,
-    searchParams, setSearchParams,
-    isLoading, setIsLoading,
-    results, setResults,
-    sessionId, setSessionId,
-    viewSize, setViewSize,
-    onlyPlayable, setOnlyPlayable
-  } = useSearch();
+    const {
+        searchMode, setSearchMode,
+        selectedMoods, setSelectedMoods,
+        vibeText, setVibeText,
+        isInterpreting, setIsInterpreting,
+        adjustments, setAdjustments,
+        searchParams, setSearchParams,
+        isLoading, setIsLoading,
+        results, setResults,
+        sessionId, setSessionId,
+        viewSize, setViewSize,
+        onlyPlayable, setOnlyPlayable
+    } = useSearch();
 
-  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
-  const resultsRef = useRef<HTMLDivElement>(null);
+    const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+    const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll on mount if results exist (for "Back to Results" behavior)
-  useEffect(() => {
-    if (results && resultsRef.current) {
-      resultsRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, []);
-
-  const handleMoodToggle = (moodLabel: string, selected: boolean) => {
-    setSelectedMoods(prev =>
-      selected ? [...prev, moodLabel] : prev.filter(m => m !== moodLabel)
-    );
-  };
-
-  const [searchError, setSearchError] = useState<string | null>(null);
-
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (isLoading || isInterpreting) return;
-
-    setSearchError(null);
-    setResults(null);
-
-    try {
-      if (searchMode === 'vibe') {
-        if (vibeText.trim()) {
-          await handleInterpretVibe();
-        } else if (selectedMoods.length > 0) {
-          await handlePickForMe();
-        } else {
-          setSearchError("Please select a mood or describe your vibe.");
+    // Auto-scroll on mount if results exist (for "Back to Results" behavior)
+    useEffect(() => {
+        if (results && resultsRef.current) {
+            resultsRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-      } else if (searchMode === 'title') {
-        if (!vibeText.trim()) {
-          setSearchError("Please enter a movie title.");
-          return;
-        }
-        await handleTitleSearch();
-      } else if (searchMode === 'actor') {
-        if (!vibeText.trim()) {
-          setSearchError("Please enter an actor's name.");
-          return;
-        }
-        await handleActorSearch();
-      }
-    } catch (err: any) {
-      console.error("Search Handler Error:", err);
-      setSearchError(err.message || "An unexpected error occurred. Please try again.");
-    }
-  };
+    }, []);
 
-  const handleActorSearch = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/ai/actor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actorName: vibeText,
-          moodTags: selectedMoods
-        }),
-      });
+    // ... (keep handleMoodToggle) ...
+    const handleMoodToggle = (moodLabel: string, selected: boolean) => {
+        setSelectedMoods(prev =>
+            selected ? [...prev, moodLabel] : prev.filter(m => m !== moodLabel)
+        );
+    };
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Actor search failed');
-      }
+    const [searchError, setSearchError] = useState<string | null>(null);
 
-      const data = await response.json();
+    const handleSearch = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (isLoading || isInterpreting) return;
 
-      let finalResults = {
-        hero: data.hero,
-        alternates: data.alternates,
-        explanationTokens: data.explanationTokens
-      };
+        setSearchError(null);
+        setResults(null); // Clear previous results on new search
 
-      if (onlyPlayable) {
-        const all = [data.hero, ...data.alternates];
-        const playables = all.filter((m: any) => m.playable);
-        if (playables.length > 0) {
-          finalResults.hero = playables[0];
-          finalResults.alternates = playables.slice(1);
-        }
-      }
+        console.log("Search Flow Start:", { mode: searchMode, text: vibeText, moods: selectedMoods });
 
-      setResults(finalResults);
-      setSessionId(null);
-
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleTitleSearch = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/ai/similar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          referenceTitle: vibeText,
-          moodTags: selectedMoods
-        }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Title search failed');
-      }
-
-      const data = await response.json();
-
-      let finalResults = {
-        hero: data.hero,
-        alternates: data.alternates,
-        explanationTokens: data.explanationTokens
-      };
-
-      if (onlyPlayable) {
-        const all = [data.hero, ...data.alternates];
-        const playables = all.filter((m: any) => m.playable);
-        if (playables.length > 0) {
-          finalResults.hero = playables[0];
-          finalResults.alternates = playables.slice(1);
-        }
-      }
-
-      setResults(finalResults);
-      setSessionId(data.sessionId);
-      if (data.inferredParams) setSearchParams(data.inferredParams);
-
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleInterpretVibe = async () => {
-    setIsInterpreting(true);
-
-    try {
-      const response = await fetch('/api/ai/interpret', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          freeText: vibeText,
-          existingMoods: selectedMoods
-        }),
-      });
-
-      if (!response.ok) throw new Error('Interpretation failed');
-
-      const data = await response.json();
-
-      if (data.mood_tags && Array.isArray(data.mood_tags) && data.mood_tags.length > 0) {
-        const validMoods = data.mood_tags.filter((t: string) => MOOD_OPTIONS.some(m => m.label === t));
-        setSelectedMoods(validMoods);
-
-        if (data.adjustments) setAdjustments(data.adjustments);
-
-        const newSearchParams = {
-          tmdb_genres: data.tmdb_genres,
-          keywords: data.keywords,
-          year_range: data.year_range,
-          sort_by: data.sort_by
-        };
-        setSearchParams(newSearchParams);
-
-        await handlePickForMe(validMoods, data.adjustments, newSearchParams);
-      } else {
-        const fallbackParams = {
-          keywords: data.keywords || [vibeText],
-          tmdb_genres: data.tmdb_genres,
-        };
-        await handlePickForMe([], {}, fallbackParams);
-      }
-
-    } catch (error) {
-      console.error('Error interpreting vibe:', error);
-    } finally {
-      setIsInterpreting(false);
-    }
-  };
-
-  const handlePickForMe = async (
-    overrideMoods?: string[],
-    overrideAdjustments?: AIPickRequest['adjustments'],
-    overrideSearchParams?: AIPickRequest['searchParams']
-  ) => {
-    setIsLoading(true);
-
-    const moodsToUse = overrideMoods || selectedMoods;
-    const adjustmentsToUse = overrideAdjustments || adjustments;
-    const searchParamsToUse = overrideSearchParams || searchParams;
-
-    try {
-      const response = await fetch('/api/ai/pick', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          moods: moodsToUse,
-          adjustments: adjustmentsToUse,
-          searchParams: searchParamsToUse,
-          constraints: {},
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch picks');
-      }
-
-      const data = await response.json();
-
-      let finalResults = {
-        hero: data.hero,
-        alternates: data.alternates,
-        explanationTokens: data.explanationTokens
-      };
-
-      if (onlyPlayable) {
-        const all = [data.hero, ...data.alternates];
-        const playables = all.filter((m: any) => m.playable);
-        if (playables.length > 0) {
-          finalResults.hero = playables[0];
-          finalResults.alternates = playables.slice(1);
-        }
-      }
-
-      setResults(finalResults);
-      setSessionId(data.sessionId);
-
-      setTimeout(() => {
-        resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
-    } catch (error: any) {
-      console.error('Error fetching picks:', error);
-      setSearchError(error.message || 'No movies found matching your criteria.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSurprise = async () => {
-    setSelectedMoods([]);
-    await handlePickForMe();
-  };
-
-  const handleRepick = async (feedback: string) => {
-    if (!sessionId) return;
-    setSearchError(null);
-    setIsLoading(true);
-
-    try {
-      const response = await fetch('/api/ai/repick', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          feedback: [feedback],
-          currentSearchParams: searchParams,
-        }),
-      });
-
-      if (!response.ok) throw new Error('Failed to adjust picks');
-
-      const data = await response.json();
-      setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
-    } catch (error: any) {
-      console.error('Error re-picking:', error);
-      setSearchError(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <main className="min-h-screen bg-[#050505] text-white selection:bg-gold/30 selection:text-gold">
-      {/* Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-[-10%] left-[-5%] w-[500px] h-[500px] rounded-full bg-gold/5 blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-gold/10 blur-[150px] animate-pulse" style={{ animationDuration: '4s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_70%)]" />
-      </div>
-
-      {/* Navbar */}
-      <div className="sticky top-0 z-50">
-        <div className="absolute inset-0 bg-black/40 backdrop-blur-md border-b border-white/5" />
-        <div className="relative max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-black tracking-tighter text-white">NO LIMIT<span className="text-gold">FLIX</span></span>
-          </div>
-        </div>
-      </div>
-
-      {/* Hero Content Section */}
-      <section className="relative z-10 pt-20 pb-12 px-6 flex flex-col items-center justify-center text-center">
-        <div className="max-w-4xl w-full animate-fade-in">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/10 border border-gold/20 mb-6 transition-all hover:bg-gold/20 group">
-            <span className="w-1.5 h-1.5 rounded-full bg-gold animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gold">AI Movie Intelligence</span>
-          </div>
-
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] mb-8 bg-gradient-to-br from-white via-white to-white/40 bg-clip-text text-transparent italic">
-            WATCH<br />SOMETHING<br />
-            <span className="text-gold bg-none italic not-italic font-black">LEGENDARY</span>
-          </h1>
-
-          <p className="text-lg md:text-xl text-silver/60 max-w-2xl mx-auto leading-relaxed mb-12 font-medium">
-            {searchMode === 'vibe' ? "Select your moods or describe a vibe. Our AI scans the deep library to find your perfect cinema match." :
-              searchMode === 'title' ? "Enter a movie you love, we'll find its true soulmates based on plot and atmosphere." :
-                "Find every masterpiece starring your favorite actor."}
-          </p>
-        </div>
-
-        <div className="max-w-3xl mx-auto w-full z-10 px-4">
-          {/* Mode Toggles */}
-          <div className="flex flex-wrap justify-center gap-2 mb-8">
-            {[
-              { id: 'vibe', label: 'Match My Vibe', icon: '✨' },
-              { id: 'title', label: 'Similar Movies', icon: '🎬' },
-              { id: 'actor', label: 'Actor Search', icon: '👤' }
-            ].map(mode => (
-              <button
-                key={mode.id}
-                onClick={() => { setSearchMode(mode.id as any); setSearchError(null); }}
-                className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-widest transition-all duration-300 border ${searchMode === mode.id
-                  ? 'bg-gold text-black border-gold shadow-[0_0_20px_rgba(212,175,55,0.3)]'
-                  : 'bg-white/5 text-silver/40 border-white/10 hover:bg-white/10'
-                  }`}
-              >
-                {mode.icon} {mode.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Bar */}
-          <div className="relative group mb-12">
-            <div className="absolute inset-0 bg-gold/20 blur-2xl opacity-0 group-focus-within:opacity-100 transition-opacity" />
-            <form onSubmit={handleSearch} className="relative">
-              <input
-                type="text"
-                value={vibeText}
-                onChange={(e) => { setVibeText(e.target.value); setSearchError(null); }}
-                placeholder={
-                  searchMode === 'vibe' ? "E.g. 'Slow-burn thriller with a massive twist'..." :
-                    searchMode === 'title' ? "E.g. 'Blade Runner 2049'..." :
-                      "E.g. 'Christopher Nolan'..."
+        try {
+            if (searchMode === 'vibe') {
+                if (vibeText.trim()) {
+                    await handleInterpretVibe();
+                } else if (selectedMoods.length > 0) {
+                    await handlePickForMe();
+                } else {
+                    setSearchError("Please select a mood or describe your vibe.");
                 }
-                disabled={isInterpreting || isLoading}
-                className={`w-full h-16 pl-8 pr-20 rounded-2xl bg-black/40 backdrop-blur-xl border-2 transition-all outline-none text-lg font-medium ${searchError ? 'border-red-500/50' : 'border-white/10 focus:border-gold shadow-2xl'
-                  }`}
-              />
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="absolute right-3 top-2 bottom-2 px-6 rounded-xl bg-gold text-black font-black uppercase text-[10px] tracking-widest hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                ) : 'Match'}
-              </button>
-            </form>
-            {searchError && (
-              <p className="absolute -bottom-7 left-4 text-xs font-bold text-red-400 animate-fade-in">
-                ⚠️ {searchError}
-              </p>
-            )}
-          </div>
+            } else if (searchMode === 'title') {
+                if (!vibeText.trim()) {
+                    setSearchError("Please enter a movie title.");
+                    return;
+                }
+                await handleTitleSearch();
+            } else if (searchMode === 'actor') {
+                if (!vibeText.trim()) {
+                    setSearchError("Please enter an actor's name.");
+                    return;
+                }
+                await handleActorSearch();
+            }
+        } catch (err: any) {
+            console.error("Search Handler Error:", err);
+            setSearchError(err.message || "An unexpected error occurred. Please try again.");
+        }
+    };
 
-          {/* Playable Filter */}
-          <div className="flex justify-center mb-8">
-            <button
-              onClick={() => setOnlyPlayable(!onlyPlayable)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all duration-300 text-[10px] font-black uppercase tracking-widest ${onlyPlayable
-                  ? 'bg-gold text-black border-gold shadow-[0_0_20px_rgba(212,175,55,0.3)]'
-                  : 'bg-white/5 text-gold border-gold/20 hover:bg-gold/10'
-                }`}
+    const handleActorSearch = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/ai/actor', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    actorName: vibeText,
+                    moodTags: selectedMoods
+                }),
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Actor search failed');
+            }
+
+            const data = await response.json();
+
+            let finalResults = {
+                hero: data.hero,
+                alternates: data.alternates,
+                explanationTokens: data.explanationTokens
+            };
+
+            if (onlyPlayable) {
+                const all = [data.hero, ...data.alternates];
+                const playables = all.filter((m: any) => m.playable);
+                if (playables.length > 0) {
+                    finalResults.hero = playables[0];
+                    finalResults.alternates = playables.slice(1);
+                }
+            }
+
+            setResults(finalResults);
+            setSessionId(null);
+
+            setTimeout(() => {
+                resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleTitleSearch = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/ai/similar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    referenceTitle: vibeText,
+                    moodTags: selectedMoods
+                }),
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Title search failed');
+            }
+
+            const data = await response.json();
+
+            let finalResults = {
+                hero: data.hero,
+                alternates: data.alternates,
+                explanationTokens: data.explanationTokens
+            };
+
+            if (onlyPlayable) {
+                const all = [data.hero, ...data.alternates];
+                const playables = all.filter((m: any) => m.playable);
+                if (playables.length > 0) {
+                    finalResults.hero = playables[0];
+                    finalResults.alternates = playables.slice(1);
+                }
+            }
+
+            setResults(finalResults);
+            setSessionId(data.sessionId);
+            if (data.inferredParams) setSearchParams(data.inferredParams);
+
+            setTimeout(() => {
+                resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleInterpretVibe = async () => {
+        setIsInterpreting(true);
+
+        try {
+            const response = await fetch('/api/ai/interpret', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    freeText: vibeText,
+                    existingMoods: selectedMoods
+                }),
+            });
+
+            if (!response.ok) throw new Error('Interpretation failed');
+
+            const data = await response.json();
+
+            // Update state with interpreted results
+            if (data.mood_tags && Array.isArray(data.mood_tags) && data.mood_tags.length > 0) {
+                const validMoods = data.mood_tags.filter((t: string) => MOOD_OPTIONS.some(m => m.label === t));
+                setSelectedMoods(validMoods);
+
+                if (data.adjustments) setAdjustments(data.adjustments);
+
+                const newSearchParams = {
+                    tmdb_genres: data.tmdb_genres,
+                    keywords: data.keywords,
+                    year_range: data.year_range,
+                    sort_by: data.sort_by
+                };
+                setSearchParams(newSearchParams);
+
+                // Chain to Pick
+                await handlePickForMe(validMoods, data.adjustments, newSearchParams);
+            } else {
+                // If AI fails to interpret specific moods, try a direct search with keywords if present
+                const fallbackParams = {
+                    keywords: data.keywords || [vibeText],
+                    tmdb_genres: data.tmdb_genres,
+                };
+                await handlePickForMe([], {}, fallbackParams);
+            }
+
+        } catch (error) {
+            console.error('Error interpreting vibe:', error);
+        } finally {
+            setIsInterpreting(false);
+        }
+    };
+
+    // ... (keep handlePickForMe, handleSurprise, handleRepick) ...
+    const handlePickForMe = async (
+        overrideMoods?: string[],
+        overrideAdjustments?: AIPickRequest['adjustments'],
+        overrideSearchParams?: AIPickRequest['searchParams']
+    ) => {
+        setIsLoading(true);
+
+        const moodsToUse = overrideMoods || selectedMoods;
+        const adjustmentsToUse = overrideAdjustments || adjustments;
+        const searchParamsToUse = overrideSearchParams || searchParams;
+
+        console.log("Picking for:", { moods: moodsToUse });
+
+        try {
+            const response = await fetch('/api/ai/pick', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    moods: moodsToUse,
+                    adjustments: adjustmentsToUse, // Pass adjustments to backend
+                    searchParams: searchParamsToUse,
+                    constraints: {},
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fetch picks');
+            }
+
+            const data = await response.json();
+
+            let finalResults = {
+                hero: data.hero,
+                alternates: data.alternates,
+                explanationTokens: data.explanationTokens
+            };
+
+            if (onlyPlayable) {
+                const all = [data.hero, ...data.alternates];
+                const playables = all.filter((m: any) => m.playable);
+                if (playables.length > 0) {
+                    finalResults.hero = playables[0];
+                    finalResults.alternates = playables.slice(1);
+                }
+            }
+
+            setResults(finalResults);
+            setSessionId(data.sessionId);
+
+            // Auto-scroll to results
+            setTimeout(() => {
+                resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }, 100);
+        } catch (error: any) {
+            console.error('Error fetching picks:', error);
+            setSearchError(error.message || 'No movies found matching your criteria.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSurprise = async () => {
+        setSelectedMoods([]);
+        await handlePickForMe();
+    };
+
+    const handleRepick = async (feedback: string) => {
+        if (!sessionId) return;
+        setSearchError(null);
+        setIsLoading(true);
+
+        try {
+            const response = await fetch('/api/ai/repick', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    feedback: [feedback],
+                    currentSearchParams: searchParams,
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to adjust picks');
+
+            const data = await response.json();
+            setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
+        } catch (error: any) {
+            console.error('Error re-picking:', error);
+            setSearchError(error.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div>
+            {/* Hero Section - Full Screen */}
+            <section
+                className="snap-section"
+                style={{
+                    minHeight: '100vh',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '2rem',
+                    position: 'relative',
+                    overflow: 'hidden',
+                }}
             >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-              </svg>
-              <span>Playable Now</span>
-            </button>
-          </div>
-
-          {/* Mood Grid */}
-          <div className="flex flex-wrap gap-2 justify-center mb-12">
-            {MOOD_OPTIONS.map((mood) => (
-              <MoodChip
-                key={mood.label}
-                label={mood.label}
-                emoji={mood.emoji}
-                selected={selectedMoods.includes(mood.label)}
-                onToggle={(selected) => handleMoodToggle(mood.label, selected)}
-              />
-            ))}
-          </div>
-
-          {/* CTA Section */}
-          <div className="flex flex-col items-center gap-6 pb-20 border-b border-white/5 mb-12">
-            {selectedMoods.length > 0 ? (
-              <ButtonPrimary
-                onClick={() => handleSearch()}
-                disabled={isLoading}
-                className="py-5 px-16 text-lg tracking-widest shadow-[0_0_40px_rgba(212,175,55,0.4)]"
-              >
-                {isLoading ? 'Finding magic...' : (
-                  searchMode === 'title' ? `Find Movies like ${vibeText || 'this'}` : `Find ${selectedMoods.length > 0 ? selectedMoods[0] : ''} Films`
-                )}
-              </ButtonPrimary>
-            ) : (
-              <ButtonSecondary onClick={handleSurprise} disabled={isLoading} className="opacity-60 hover:opacity-100">
-                Just Surprise Me
-              </ButtonSecondary>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Results Section */}
-      {(results || isLoading) && (
-        <section ref={resultsRef} className="relative z-10 py-20 px-6 max-w-7xl mx-auto">
-          <div className="mb-16">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
-              <div>
-                <h2 className="text-4xl md:text-5xl font-black tracking-tighter text-white mb-4">
-                  {isLoading ? 'FINDING YOUR PERFECT MATCH' : 'THE GOLD SELECTION'}
-                </h2>
-                {!isLoading && results?.explanationTokens && results.explanationTokens.length > 0 && (
-                  <p className="text-silver/60 text-lg font-medium">
-                    Matches decoded by mood: <span className="text-gold uppercase text-sm tracking-widest">{results.explanationTokens.slice(0, 5).join(' • ')}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Grid View Controls */}
-              {!isLoading && results && (
-                <div className="flex items-center gap-2 p-1 bg-white/5 rounded-xl border border-white/10">
-                  {['compact', 'standard', 'large'].map((size) => (
-                    <button
-                      key={size}
-                      onClick={() => setViewSize(size as any)}
-                      className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewSize === size ? 'bg-gold text-black' : 'text-silver/40 hover:text-silver hover:bg-white/5'
-                        }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
+                {/* Animated Background Elements */}
+                <div
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        opacity: 0.1,
+                        pointerEvents: 'none',
+                    }}
+                >
+                    <div
+                        className="animate-fade-in"
+                        style={{
+                            position: 'absolute',
+                            top: '10%',
+                            left: '10%',
+                            width: '300px',
+                            height: '300px',
+                            borderRadius: '50%',
+                            background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
+                            filter: 'blur(60px)',
+                        }}
+                    />
+                    <div
+                        className="animate-fade-in"
+                        style={{
+                            position: 'absolute',
+                            bottom: '10%',
+                            right: '10%',
+                            width: '400px',
+                            height: '400px',
+                            borderRadius: '50%',
+                            background: 'radial-gradient(circle, #D4AF37 0%, transparent 70%)',
+                            filter: 'blur(80px)',
+                            animationDelay: '0.3s',
+                        }}
+                    />
                 </div>
-              )}
-            </div>
 
-            {/* Main Hero Pick */}
-            <div className="mb-20">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-gold/40">The Highlight</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              </div>
-              {isLoading ? <HeroSkeleton /> : results?.hero && <HeroCard movie={results.hero} />}
-            </div>
-
-            {/* Grid Results */}
-            <div className="mb-20">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-                <span className="text-[10px] font-black uppercase tracking-[0.4em] text-gold/40">Broad Spectrum Recommendations</span>
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-              </div>
-
-              <div
-                className={`grid gap-6 ${viewSize === 'compact' ? 'grid-cols-2 lg:grid-cols-4' :
-                    viewSize === 'standard' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2' :
-                      'grid-cols-1'
-                  }`}
-              >
-                {isLoading ? (
-                  Array(8).fill(0).map((_, i) => <TileSkeleton key={i} />)
-                ) : (
-                  results?.alternates?.map((movie) => (
-                    <TitleTile key={movie.id} movie={movie} />
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Feedback Loop */}
-            {!isLoading && results && (
-              <div className="max-w-2xl mx-auto text-center p-12 rounded-3xl bg-white/5 border border-white/10 backdrop-blur-xl">
-                <h3 className="text-xl font-bold text-white mb-2 italic">Not quite the right vibe?</h3>
-                <p className="text-silver/60 text-sm mb-8">Refine your search with one click and let DeepSeek R1 re-calculate your path.</p>
-                <div className="flex flex-wrap justify-center gap-3">
-                  {FEEDBACK_OPTIONS.map((feedback) => (
-                    <button
-                      key={feedback}
-                      onClick={() => handleRepick(feedback)}
-                      className="px-6 py-3 rounded-xl border border-white/10 text-xs font-black uppercase tracking-widest text-silver/60 hover:text-gold hover:border-gold/30 hover:bg-gold/5 transition-all active:scale-95"
+                {/* Hero Content */}
+                <div
+                    className="animate-slide-up"
+                    style={{
+                        maxWidth: '900px',
+                        width: '100%',
+                        textAlign: 'center',
+                        position: 'relative',
+                        zIndex: 1,
+                    }}
+                >
+                    <h1
+                        style={{
+                            fontSize: 'clamp(2.5rem, 8vw, 5rem)',
+                            fontWeight: '700',
+                            lineHeight: '1.1',
+                            letterSpacing: '-0.02em',
+                            marginBottom: '1.5rem',
+                            background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
+                            WebkitBackgroundClip: 'text',
+                            backgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                        }}
                     >
-                      {feedback}
-                    </button>
-                  ))}
+                        What should you watch tonight?
+                    </h1>
+
+                    <p
+                        style={{
+                            fontSize: 'clamp(1.125rem, 3vw, 1.5rem)',
+                            color: '#A7ABB4',
+                            marginBottom: '3rem',
+                            lineHeight: '1.6',
+                        }}
+                    >
+                        {searchMode === 'vibe' ? "Select your moods, we'll find the perfect match" :
+                            searchMode === 'title' ? "Enter a movie you love, we'll find its soulmates" :
+                                "Find movies starring your favorite actor"}
+                    </p>
+
+                    {/* Search Toggle */}
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        flexWrap: 'wrap',
+                        gap: '0.5rem',
+                        marginBottom: '1.5rem',
+                        width: '100%'
+                    }}>
+                        <button
+                            onClick={() => { setSearchMode('vibe'); setSearchError(null); }}
+                            style={{
+                                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
+                                borderRadius: '2rem',
+                                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
+                                border: searchMode === 'vibe' ? '1px solid #D4AF37' : '1px solid transparent',
+                                background: searchMode === 'vibe' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                                color: searchMode === 'vibe' ? '#D4AF37' : '#A7ABB4',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            ✨ Match My Vibe
+                        </button>
+                        <button
+                            onClick={() => { setSearchMode('title'); setSearchError(null); }}
+                            style={{
+                                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
+                                borderRadius: '2rem',
+                                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
+                                border: searchMode === 'title' ? '1px solid #D4AF37' : '1px solid transparent',
+                                background: searchMode === 'title' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                                color: searchMode === 'title' ? '#D4AF37' : '#A7ABB4',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            🎬 Similar Movies
+                        </button>
+                        <button
+                            onClick={() => { setSearchMode('actor'); setSearchError(null); }}
+                            style={{
+                                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
+                                borderRadius: '2rem',
+                                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
+                                border: searchMode === 'actor' ? '1px solid #D4AF37' : '1px solid transparent',
+                                background: searchMode === 'actor' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
+                                color: searchMode === 'actor' ? '#D4AF37' : '#A7ABB4',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            👤 Actor Search
+                        </button>
+                    </div>
+
+                    {/* Vibe/Title/Actor Search Input */}
+                    <div className="animate-slide-up" style={{ maxWidth: '600px', margin: '0 auto 3rem', position: 'relative' }}>
+                        <form onSubmit={handleSearch} style={{ position: 'relative' }}>
+                            <input
+                                type="text"
+                                value={vibeText}
+                                onChange={(e) => { setVibeText(e.target.value); setSearchError(null); }}
+                                placeholder={
+                                    searchMode === 'vibe' ? "Describe your vibe... (e.g. 'Chill sci-fi with a twist')" :
+                                        searchMode === 'title' ? "Enter a movie title... (e.g. 'Inception')" :
+                                            "Enter an actor's name... (e.g. 'Ryan Gosling')"
+                                }
+                                disabled={isInterpreting || isLoading}
+                                style={{
+                                    width: '100%',
+                                    padding: '1.25rem 3.5rem 1.25rem 1.5rem',
+                                    background: 'rgba(167, 171, 180, 0.05)',
+                                    border: searchError ? '1px solid #F43F5E' : '1px solid rgba(167, 171, 180, 0.2)',
+                                    borderRadius: '9999px', // Pill shape
+                                    fontSize: '1.125rem',
+                                    color: '#F3F4F6',
+                                    outline: 'none',
+                                    transition: 'all 0.3s',
+                                    backdropFilter: 'blur(10px)'
+                                }}
+                                onFocus={(e) => {
+                                    if (!searchError) {
+                                        e.currentTarget.style.borderColor = '#D4AF37';
+                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
+                                        e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
+                                    }
+                                }}
+                                onBlur={(e) => {
+                                    if (!searchError) {
+                                        e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
+                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }
+                                }}
+                            />
+                            <button
+                                type="submit"
+                                disabled={
+                                    isInterpreting ||
+                                    isLoading ||
+                                    (searchMode === 'vibe' ? (!vibeText.trim() && selectedMoods.length === 0) : !vibeText.trim())
+                                }
+                                style={{
+                                    position: 'absolute',
+                                    right: '0.75rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: vibeText.trim() || (searchMode === 'vibe' && selectedMoods.length > 0) ? '#D4AF37' : 'rgba(167, 171, 180, 0.3)',
+                                    cursor: vibeText.trim() || (searchMode === 'vibe' && selectedMoods.length > 0) ? 'pointer' : 'default',
+                                    padding: '0.5rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    transition: 'all 0.2s',
+                                }}
+                            >
+                                {isInterpreting || isLoading ? (
+                                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" opacity="0.2" />
+                                        <path d="M21 12c0 4.97-4.03 9-9 9m9-9H3" />
+                                    </svg>
+                                )}
+                            </button>
+                        </form>
+
+                        {searchError && (
+                            <p className="animate-fade-in" style={{ textAlign: 'center', marginTop: '1rem', color: '#F43F5E', fontSize: '0.9375rem', fontWeight: '500' }}>
+                                ⚠️ {searchError}
+                            </p>
+                        )}
+
+                        <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.875rem', color: '#A7ABB4', opacity: 0.7 }}>
+                            Powered by DeepSeek R1 • No Limit Flix
+                        </p>
+                    </div>
+
+                    {/* Playable Filter Toggle */}
+                    <div className="flex justify-center mb-8">
+                        <button
+                            onClick={() => setOnlyPlayable(!onlyPlayable)}
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                padding: '0.75rem 1.5rem',
+                                borderRadius: '1.25rem',
+                                background: onlyPlayable ? '#D4AF37' : 'rgba(212, 175, 55, 0.1)',
+                                border: '1px solid rgba(212, 175, 55, 0.3)',
+                                color: onlyPlayable ? '#0B0B0D' : '#D4AF37',
+                                fontWeight: '800',
+                                fontSize: '0.875rem',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.1em',
+                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                                boxShadow: onlyPlayable ? '0 0 20px rgba(212, 175, 55, 0.4)' : 'none',
+                            }}
+                        >
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                            </svg>
+                            <span>Playable Now</span>
+                        </button>
+                    </div>
+
+                    {/* Mood Chips */}
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 'clamp(0.25rem, 1.5vw, 0.75rem)',
+                            justifyContent: 'center',
+                            marginBottom: '3rem',
+                            maxWidth: '800px',
+                            width: '100%',
+                            margin: '0 auto 3rem'
+                        }}
+                    >
+                        {MOOD_OPTIONS.map((mood) => (
+                            <MoodChip
+                                key={mood.label}
+                                label={mood.label}
+                                emoji={mood.emoji}
+                                selected={selectedMoods.includes(mood.label)}
+                                onToggle={(selected) => handleMoodToggle(mood.label, selected)}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Primary CTA */}
+                    <div
+                        style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '1.5rem',
+                            marginTop: '1rem'
+                        }}
+                    >
+                        {selectedMoods.length > 0 ? (
+                            <ButtonPrimary
+                                onClick={() => handleSearch()}
+                                disabled={isLoading}
+                                className="animate-slide-up"
+                                style={{
+                                    padding: '1.25rem 4rem',
+                                    fontSize: '1.125rem',
+                                    transform: 'scale(1.1)',
+                                    boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)'
+                                }}
+                            >
+                                {isLoading ? 'Finding magic...' : (
+                                    searchMode === 'title' ? `Find Movies like ${vibeText || 'this'}` : `Find ${selectedMoods.length > 0 ? selectedMoods[0] : ''} Films`
+                                )}
+                            </ButtonPrimary>
+                        ) : (
+                            <ButtonSecondary onClick={handleSurprise} disabled={isLoading}>
+                                Surprise me
+                            </ButtonSecondary>
+                        )}
+
+                        {selectedMoods.length > 0 && (
+                            <button
+                                onClick={handleSurprise}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#A7ABB4',
+                                    fontSize: '0.875rem',
+                                    textDecoration: 'underline',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Actually, just surprise me
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Microcopy */}
+                    <p
+                        style={{
+                            marginTop: '4rem',
+                            fontSize: '0.875rem',
+                            color: '#A7ABB4',
+                            fontStyle: 'italic',
+                        }}
+                    >
+                        "Permanent library feel. No rotation."
+                    </p>
                 </div>
-              </div>
+            </section>
+
+            {/* Results Section */}
+            {(results || isLoading) && (
+                <section
+                    ref={resultsRef}
+                    style={{
+                        minHeight: '100vh',
+                        padding: '4rem 2rem',
+                    }}
+                >
+                    <div
+                        style={{
+                            maxWidth: '1400px',
+                            margin: '0 auto',
+                        }}
+                    >
+                        {/* Header / Tags */}
+                        <div style={{ marginBottom: '3rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
+                                <div>
+                                    <h2
+                                        style={{
+                                            fontSize: 'clamp(1.75rem, 5vw, 2.5rem)',
+                                            fontWeight: '600',
+                                            color: '#F3F4F6',
+                                            margin: 0,
+                                            marginBottom: '0.5rem'
+                                        }}
+                                    >
+                                        {isLoading ? 'Finding your perfect match...' : 'Your Matching Films'}
+                                    </h2>
+                                    {!isLoading && results?.explanationTokens && results.explanationTokens.length > 0 && (
+                                        <p style={{
+                                            color: '#A7ABB4',
+                                            fontSize: '1rem',
+                                            maxWidth: '700px',
+                                            lineHeight: '1.5'
+                                        }}>
+                                            Matches based on: <span style={{ color: '#D4AF37' }}>{results.explanationTokens.slice(0, 5).join(', ')}</span>...
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Fixed View Size Toggle */}
+                                {!isLoading && results && (
+                                    <div style={{
+                                        position: 'fixed',
+                                        bottom: '2rem',
+                                        right: '2rem',
+                                        zIndex: 100
+                                    }}>
+                                        {/* (Dropdown Menu same as before) */}
+                                        {isViewMenuOpen && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: '4.5rem',
+                                                right: 0,
+                                                background: 'rgba(11, 11, 13, 0.95)',
+                                                backdropFilter: 'blur(12px)',
+                                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                                borderRadius: '0.75rem',
+                                                padding: '0.5rem',
+                                                minWidth: '150px',
+                                                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+                                            }}>
+                                                <button
+                                                    onClick={() => { setViewSize('compact'); setIsViewMenuOpen(false); }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.75rem 1rem',
+                                                        borderRadius: '0.5rem',
+                                                        fontSize: '0.875rem',
+                                                        fontWeight: '500',
+                                                        border: 'none',
+                                                        background: viewSize === 'compact' ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                                                        color: viewSize === 'compact' ? '#D4AF37' : '#A7ABB4',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        textAlign: 'left',
+                                                        marginBottom: '0.25rem'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (viewSize !== 'compact') e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (viewSize !== 'compact') e.currentTarget.style.background = 'transparent';
+                                                    }}
+                                                >
+                                                    ⊞ Compact
+                                                </button>
+                                                <button
+                                                    onClick={() => { setViewSize('standard'); setIsViewMenuOpen(false); }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.75rem 1rem',
+                                                        borderRadius: '0.5rem',
+                                                        fontSize: '0.875rem',
+                                                        fontWeight: '500',
+                                                        border: 'none',
+                                                        background: viewSize === 'standard' ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                                                        color: viewSize === 'standard' ? '#D4AF37' : '#A7ABB4',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        textAlign: 'left',
+                                                        marginBottom: '0.25rem'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (viewSize !== 'standard') e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (viewSize !== 'standard') e.currentTarget.style.background = 'transparent';
+                                                    }}
+                                                >
+                                                    ⊟ Standard
+                                                </button>
+                                                <button
+                                                    onClick={() => { setViewSize('large'); setIsViewMenuOpen(false); }}
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '0.75rem 1rem',
+                                                        borderRadius: '0.5rem',
+                                                        fontSize: '0.875rem',
+                                                        fontWeight: '500',
+                                                        border: 'none',
+                                                        background: viewSize === 'large' ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
+                                                        color: viewSize === 'large' ? '#D4AF37' : '#A7ABB4',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        textAlign: 'left'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        if (viewSize !== 'large') e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        if (viewSize !== 'large') e.currentTarget.style.background = 'transparent';
+                                                    }}
+                                                >
+                                                    ▭ Large
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Toggle Button */}
+                                        <button
+                                            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+                                            style={{
+                                                width: '3.5rem',
+                                                height: '3.5rem',
+                                                borderRadius: '50%',
+                                                background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
+                                                border: 'none',
+                                                color: '#0B0B0D',
+                                                fontSize: '1.5rem',
+                                                cursor: 'pointer',
+                                                boxShadow: '0 4px 12px rgba(212, 175, 55, 0.3)',
+                                                transition: 'all 0.2s',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.transform = 'scale(1.1)';
+                                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(212, 175, 55, 0.4)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.transform = 'scale(1)';
+                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(212, 175, 55, 0.3)';
+                                            }}
+                                        >
+                                            ⊞
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Hero Pick */}
+                        <div
+                            className="animate-slide-up"
+                            style={{ marginBottom: '3rem' }}
+                        >
+                            <h3
+                                style={{
+                                    fontSize: '1rem',
+                                    fontWeight: '600',
+                                    color: '#A7ABB4',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em',
+                                    marginBottom: '1.5rem',
+                                }}
+                            >
+                                The Highlight
+                            </h3>
+                            {isLoading ? <HeroSkeleton /> : results?.hero && <HeroCard movie={results.hero} />}
+                        </div>
+
+                        {/* Alternate Picks */}
+                        <div className="animate-slide-up" style={{ marginBottom: '3rem' }}>
+                            <h3
+                                style={{
+                                    fontSize: '1rem',
+                                    fontWeight: '600',
+                                    color: '#A7ABB4',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '0.1em',
+                                    marginBottom: '1.5rem',
+                                }}
+                            >
+                                Other Recommendations
+                            </h3>
+                            <div
+                                style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: viewSize === 'compact'
+                                        ? 'repeat(3, minmax(0, 1fr))'
+                                        : viewSize === 'standard'
+                                            ? 'repeat(2, minmax(0, 1fr))'
+                                            : '1fr',
+                                    gap: viewSize === 'compact' ? '0.75rem' : '1.5rem',
+                                    width: '100%',
+                                    overflow: 'hidden'
+                                }}
+                                className={
+                                    viewSize === 'compact'
+                                        ? 'grid-compact-responsive'
+                                        : viewSize === 'standard'
+                                            ? 'grid-standard-responsive'
+                                            : 'grid-large-responsive'
+                                }
+                            >
+                                {isLoading ? (
+                                    Array(9).fill(0).map((_, i) => <TileSkeleton key={i} />)
+                                ) : (
+                                    results?.alternates?.map((movie) => (
+                                        <TitleTile key={movie.id} movie={movie} />
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {!isLoading && results && (
+                            /* Feedback Chips - Re-pick */
+                            <div className="animate-fade-in">
+                                <p
+                                    style={{
+                                        fontSize: '1rem',
+                                        color: '#A7ABB4',
+                                        marginBottom: '1rem',
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    Not quite right? Let us know what to adjust:
+                                </p>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: '0.75rem',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    {FEEDBACK_OPTIONS.map((feedback) => (
+                                        <button
+                                            key={feedback}
+                                            onClick={() => handleRepick(feedback)}
+                                            disabled={isLoading}
+                                            style={{
+                                                padding: '0.625rem 1.5rem',
+                                                borderRadius: '9999px',
+                                                fontSize: '0.9375rem',
+                                                fontWeight: '500',
+                                                border: '2px solid #A7ABB4',
+                                                background: 'transparent',
+                                                color: '#A7ABB4',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                transform: 'scale(1)'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.borderColor = '#F3F4F6';
+                                                e.currentTarget.style.color = '#F3F4F6';
+                                                e.currentTarget.style.transform = 'scale(1.05)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.borderColor = '#A7ABB4';
+                                                e.currentTarget.style.color = '#A7ABB4';
+                                                e.currentTarget.style.transform = 'scale(1)';
+                                            }}
+                                        >
+                                            {feedback}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </section>
             )}
-          </div>
-        </section>
-      )}
 
-      {/* Footer Branding */}
-      <footer className="relative z-10 py-24 px-6 mt-20 border-t border-white/5 bg-black">
-        <div className="max-w-7xl mx-auto flex flex-col items-center gap-12 text-center">
-          <div className="flex flex-col items-center gap-4">
-            <img
-              src="/scene-aware.png"
-              alt="Scene Aware"
-              className="h-14 w-auto grayscale brightness-50 hover:grayscale-0 hover:brightness-100 transition-all duration-700 cursor-pointer"
-            />
-            <p className="max-w-md text-silver/30 text-xs font-bold uppercase tracking-[0.3em] leading-relaxed">
-              Powered by Scene Aware — The industry standard for content intelligence and real-time cinematic editing.
-            </p>
-          </div>
-
-          <div className="w-16 h-px bg-gradient-to-r from-transparent via-gold/20 to-transparent" />
-
-          <div className="text-[10px] font-black uppercase tracking-[0.5em] text-silver/20">
-            "Permanent library feel. No rotation."
-          </div>
+            {/* Powered by Scene Aware Footer */}
+            <section
+                style={{
+                    padding: '4rem 1rem',
+                    background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(20, 184, 166, 0.08) 100%)',
+                    borderTop: '1px solid rgba(167, 171, 180, 0.2)',
+                    marginTop: '4rem',
+                }}
+            >
+                <div
+                    style={{
+                        maxWidth: '1400px',
+                        margin: '0 auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '1.5rem',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                    }}
+                >
+                    <img
+                        src="/scene-aware.png"
+                        alt="Scene Aware Logo"
+                        style={{
+                            height: '5rem',
+                            width: 'auto',
+                            opacity: 1,
+                            marginBottom: '1rem',
+                            filter: 'drop-shadow(0 4px 6px rgba(139, 92, 246, 0.1))',
+                        }}
+                    />
+                    <p
+                        style={{
+                            fontSize: '1rem',
+                            color: '#A7ABB4',
+                            fontWeight: '500',
+                            margin: 0,
+                            maxWidth: '600px',
+                        }}
+                    >
+                        Powered by <span style={{ color: '#F3F4F6', fontWeight: '700' }}>Scene Aware</span> — The industry's only real-time content editor
+                    </p>
+                </div>
+            </section>
         </div>
-      </footer>
-    </main>
-  );
+    );
 }
