@@ -11,6 +11,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {
   /* reloading the app might cause some errors here, which is safe to ignore */
 });
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [splashAnimationFinished, setSplashAnimationFinished] = useState(false);
@@ -44,14 +46,16 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider onLayout={onLayoutRootView}>
-      <FavoritesProvider>
-        <StatusBar style="light" />
-        <RootNavigator />
-        {!splashAnimationFinished && (
-          <AnimatedSplashScreen onAnimationFinish={() => setSplashAnimationFinished(true)} />
-        )}
-      </FavoritesProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider onLayout={onLayoutRootView}>
+        <FavoritesProvider>
+          <StatusBar style="light" />
+          <RootNavigator />
+          {!splashAnimationFinished && (
+            <AnimatedSplashScreen onAnimationFinish={() => setSplashAnimationFinished(true)} />
+          )}
+        </FavoritesProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
