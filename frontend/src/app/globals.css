@@ -360,3 +360,67 @@ a:focus-visible {
     gap: 4rem;
   }
 }
+/* ============================================
+   VIDEO.JS — NO LIMIT GOLD THEME
+   ============================================ */
+
+.video-js.vjs-no-limit-theme {
+  font-family: var(--font-display);
+  color: #fff;
+}
+
+.vjs-no-limit-theme .vjs-big-play-button {
+  background: rgba(212, 175, 55, 0.2);
+  backdrop-filter: blur(8px);
+  border: 2px solid var(--gold-mid);
+  width: 80px;
+  height: 80px;
+  line-height: 76px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  margin-top: -40px;
+  margin-left: -40px;
+  transition: all 0.3s ease;
+}
+
+.vjs-no-limit-theme:hover .vjs-big-play-button {
+  background: var(--gold-mid);
+  color: #000;
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(212, 175, 55, 0.4);
+}
+
+.vjs-no-limit-theme .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 100%);
+  height: 60px;
+  padding: 0 10px;
+}
+
+.vjs-no-limit-theme .vjs-play-progress,
+.vjs-no-limit-theme .vjs-volume-level {
+  background-color: var(--gold-mid);
+}
+
+.vjs-no-limit-theme .vjs-slider {
+  background-color: rgba(255,255,255,0.1);
+  border-radius: 4px;
+}
+
+.vjs-no-limit-theme .vjs-load-progress {
+  background-color: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+
+.vjs-no-limit-theme .vjs-playback-rate .vjs-playback-rate-value {
+  font-size: 1.2em;
+  line-height: 2;
+  font-weight: 800;
+  color: var(--gold-mid);
+}
+
+.vjs-no-limit-theme .vjs-control:hover:before,
+.vjs-no-limit-theme .vjs-control:focus:before {
+  text-shadow: 0 0 15px var(--gold-mid);
+  color: var(--gold-mid);
+}
