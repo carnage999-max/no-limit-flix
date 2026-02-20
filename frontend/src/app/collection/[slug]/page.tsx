@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { TitleTile, TileSkeleton } from '@/components';
 import { getMoviesByCollection } from '@/lib/tmdb';
-import type { Movie, FilterLength, FilterIntensity, FilterTone } from '@/types';
+import type { Movie, MoviePick, FilterLength, FilterIntensity, FilterTone } from '@/types';
 
 const COLLECTIONS_META: Record<string, { title: string; promiseStatement: string; accentColor: string }> = {
     'mind-benders': {
@@ -74,7 +74,7 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
     const { slug } = use(params);
     const meta = COLLECTIONS_META[slug] || { title: slug.replace(/-/g, ' '), promiseStatement: 'A stable collection of curated films.', accentColor: '#D4AF37' };
 
-    const [movies, setMovies] = useState<Movie[]>([]);
+    const [movies, setMovies] = useState<MoviePick[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Filters
@@ -86,7 +86,15 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
         async function loadCollection() {
             try {
                 const results = await getMoviesByCollection(slug);
-                setMovies(results);
+                // Transform Movie[] to MoviePick[] by adding required fields
+                const moviePicks: MoviePick[] = results.map((movie: Movie) => ({
+                    ...movie,
+                    explanation: 'Collection feature',
+                    watchProviders: [],
+                    permanence: 'Permanent Core' as const,
+                    playable: false,
+                }));
+                setMovies(moviePicks);
             } catch (e) {
                 console.error('Failed to load collection:', e);
             } finally {

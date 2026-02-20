@@ -2,10 +2,10 @@
 
 import Link from 'next/link';
 
-import type { Movie } from '@/types';
+import type { MoviePick } from '@/types';
 
 interface TitleTileProps {
-    movie: Movie;
+    movie: MoviePick;
 }
 
 export default function TitleTile({ movie }: TitleTileProps) {
