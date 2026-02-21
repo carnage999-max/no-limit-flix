@@ -536,10 +536,8 @@ export default function HomePage() {
                                             </a>
                                         </div>
                                         <div
+                                            className="watch-grid"
                                             style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                                gap: '1rem',
                                                 width: '100%',
                                             } as React.CSSProperties}
                                         >
@@ -605,10 +603,8 @@ export default function HomePage() {
                                             </a>
                                         </div>
                                         <div
+                                            className="watch-grid"
                                             style={{
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(2, 1fr)',
-                                                gap: '1rem',
                                                 marginBottom: '3rem',
                                                 width: '100%',
                                             } as React.CSSProperties}
