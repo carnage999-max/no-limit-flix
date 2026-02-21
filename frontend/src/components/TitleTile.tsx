@@ -82,7 +82,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
                         padding: 'clamp(0.5rem, 2vw, 1rem)',
                     }}
                 >
-                    {movie.genres.length > 0 && (
+                    {movie.genres && movie.genres.length > 0 && (
                         <p style={{
                             fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)',
                             color: '#D4AF37',
