@@ -2,7 +2,6 @@
 
 import { useState, useRef, CSSProperties } from 'react';
 import { Upload, AlertCircle, CheckCircle2, ArrowLeft, X } from 'lucide-react';
-import { ButtonPrimary } from '@/components';
 import Link from 'next/link';
 
 const styles: Record<string, CSSProperties> = {
@@ -90,8 +89,12 @@ const styles: Record<string, CSSProperties> = {
     },
     form: {
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '32px',
+        '@media (max-width: 768px)': {
+            gridTemplateColumns: '1fr',
+            gap: '24px',
+        },
     },
     formGroup: {
         display: 'flex',
@@ -173,6 +176,7 @@ const styles: Record<string, CSSProperties> = {
         display: 'flex',
         gap: '16px',
         justifyContent: 'flex-end',
+        flexWrap: 'wrap',
     },
     status: {
         padding: '16px',
@@ -364,7 +368,7 @@ export default function AdminEditPage() {
                         </div>
                     )}
 
-                    <div style={{ ...styles.section, maxWidth: '500px', margin: '0 auto' }}>
+                    <div style={{ ...styles.section, maxWidth: '500px', margin: '0 auto', padding: '0 24px' }}>
                         <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>Search by Video ID or Title</label>
@@ -376,11 +380,24 @@ export default function AdminEditPage() {
                                     style={styles.input}
                                 />
                             </div>
-                            <ButtonPrimary
-                                label={searchLoading ? 'Searching...' : 'Search'}
-                                onClick={() => {}}
+                            <button
+                                type="submit"
                                 disabled={searchLoading || !searchQuery.trim()}
-                            />
+                                style={{
+                                    background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
+                                    color: '#0B0B0D',
+                                    padding: '12px 24px',
+                                    fontSize: '14px',
+                                    fontWeight: '700',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: searchLoading || !searchQuery.trim() ? 'not-allowed' : 'pointer',
+                                    opacity: (searchLoading || !searchQuery.trim()) ? 0.6 : 1,
+                                    transition: 'all 0.3s',
+                                }}
+                            >
+                                {searchLoading ? 'Searching...' : 'Search'}
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -547,11 +564,24 @@ export default function AdminEditPage() {
                             >
                                 Cancel
                             </button>
-                            <ButtonPrimary
-                                label={loading ? 'Updating...' : 'Save Changes'}
-                                onClick={() => {}}
+                            <button
+                                type="submit"
                                 disabled={loading}
-                            />
+                                style={{
+                                    background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
+                                    color: '#0B0B0D',
+                                    padding: '12px 24px',
+                                    fontSize: '14px',
+                                    fontWeight: '700',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    opacity: loading ? 0.6 : 1,
+                                    transition: 'all 0.3s',
+                                }}
+                            >
+                                {loading ? 'Updating...' : 'Save Changes'}
+                            </button>
                         </div>
                     </div>
                 </form>
