@@ -35,7 +35,11 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
 
                     if (!response.ok) {
                         const err = await response.json();
-                        throw new Error(err.error || 'Failed to fetch playback credentials');
+                        console.warn('⚠️ [VideoPlayer] /api/watch/start failed, using direct URL:', err.error);
+                        // Fallback to direct URL
+                        setPlaybackUrl(src);
+                        setIsLoading(false);
+                        return;
                     }
 
                     const data = await response.json();
@@ -46,7 +50,9 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
                     setIsLoading(false);
                 } catch (err) {
                     console.error('❌ [VideoPlayer] Failed to fetch signed auth:', err);
-                    setError(`Failed to load video: ${(err as Error).message}`);
+                    console.log('⚠️ [VideoPlayer] Falling back to direct URL');
+                    // Fallback to direct URL on error
+                    setPlaybackUrl(src);
                     setIsLoading(false);
                 }
             };
