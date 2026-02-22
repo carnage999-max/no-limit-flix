@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { transformToCloudFront } from '@/lib/utils';
 
 export async function GET(
     request: Request,
@@ -37,7 +38,14 @@ export async function GET(
             );
         }
 
-        return NextResponse.json({ video });
+        // Transform URLs to CloudFront for proper codec compatibility
+        const transformedVideo = {
+            ...video,
+            s3Url: transformToCloudFront(video.s3Url),
+            thumbnailUrl: transformToCloudFront(video.thumbnailUrl),
+        };
+
+        return NextResponse.json({ video: transformedVideo });
     } catch (error) {
         console.error('Error fetching video:', error);
         return NextResponse.json(

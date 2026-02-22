@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
+import { transformToCloudFront } from '@/lib/utils';
 import { Tv } from 'lucide-react';
 
 interface Video {
