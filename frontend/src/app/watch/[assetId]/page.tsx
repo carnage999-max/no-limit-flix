@@ -29,8 +29,9 @@ export default async function WatchPage({ params }: { params: Promise<{ assetId:
         }
     }
 
-    // 3. Prepare Stream URL - VideoPlayer will fetch signed auth if assetId available
-    const streamUrl = transformToCloudFront(video.s3Url);
+    // 3. Prepare Stream URL - use CloudFront URL directly
+    // s3Url is already a CloudFront URL from the presigned-url endpoint
+    const streamUrl = video.s3Url;
 
     return (
         <main className="min-h-screen bg-[#0B0B0D] text-white flex flex-col">
