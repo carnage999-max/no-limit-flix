@@ -122,6 +122,10 @@ export async function POST(request: NextRequest) {
                 thumbnailUrl: publicThumbUrl,
                 status: 'pending',
                 mimeType: contentType,
+                // New HLS fields
+                playbackType: 'mp4',  // Direct uploads are MP4
+                s3KeyPlayback: s3Key,  // Same as s3Key for direct uploads
+                cloudfrontPath: publicUrl,  // Full CloudFront path
             },
         });
 

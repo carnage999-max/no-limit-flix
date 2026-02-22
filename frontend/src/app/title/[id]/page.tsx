@@ -136,7 +136,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem' }}>
                                 <PermanenceBadge type={Math.random() > 0.5 ? 'Permanent Core' : 'Long-Term'} />
                                 <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
-                                {movie.genres.map(genre => (
+                                {movie.genres && movie.genres.map(genre => (
                                     <span key={genre} style={{
                                         padding: '0.4rem 0.75rem',
                                         borderRadius: '9999px',
@@ -331,7 +331,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                             </div>
 
                             {/* Where to Watch (external services) */}
-                            {movie.watchProviders.length > 0 && (
+                            {movie.watchProviders && movie.watchProviders.length > 0 && (
                                 <div>
                                     <h3 style={{ fontSize: '0.75rem', fontWeight: '800', color: '#A7ABB4', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '1rem' }}>
                                         Also Available On

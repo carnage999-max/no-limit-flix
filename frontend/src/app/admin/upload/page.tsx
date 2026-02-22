@@ -184,6 +184,7 @@ export default function AdminUploadPage() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [assetType, setAssetType] = useState<'movie' | 'series'>('movie');
+    const [uploadMethod, setUploadMethod] = useState<'direct' | 'hls'>('direct');
     const [seasonNumber, setSeasonNumber] = useState('');
     const [episodeNumber, setEpisodeNumber] = useState('');
     const [releaseYear, setReleaseYear] = useState('');
@@ -312,6 +313,48 @@ export default function AdminUploadPage() {
         setError('');
 
         try {
+            // HLS Upload Method (FFmpeg conversion)
+            if (uploadMethod === 'hls') {
+                console.log('🎬 [Upload] Using HLS conversion endpoint');
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('title', title);
+                formData.append('description', description);
+
+                const xhr = new XMLHttpRequest();
+                const hlsUploadPromise = new Promise((resolve, reject) => {
+                    xhr.open('POST', '/api/admin/upload-hls');
+                    xhr.upload.onprogress = (event) => {
+                        if (event.lengthComputable) {
+                            setProgress(Math.round((event.loaded / event.total) * 100));
+                        }
+                    };
+                    xhr.onload = () => {
+                        if (xhr.status === 200) {
+                            const response = JSON.parse(xhr.responseText);
+                            console.log('✅ [Upload] HLS conversion successful', response);
+                            resolve(response);
+                        } else {
+                            reject(new Error(`HLS upload failed (${xhr.status})`));
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error('Network error during HLS upload'));
+                    xhr.send(formData);
+                });
+
+                await hlsUploadPromise;
+                setStatus('success');
+                setFile(null);
+                setThumbnailFile(null);
+                setThumbnailPreview(null);
+                setTitle('');
+                setDescription('');
+                setProgress(0);
+                setUploading(false);
+                return;
+            }
+
+            // Direct Upload Method (original flow)
             const res = await fetch('/api/admin/upload/presigned-url', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -569,6 +612,52 @@ export default function AdminUploadPage() {
                             placeholder="e.g. 335984 (from themoviedb.org URL)"
                         />
                     </div>
+                </div>
+
+                {/* Upload Method Selection */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', textAlign: 'center' }}>
+                    <label style={styles.label}>Upload Method</label>
+                    <div style={styles.typeSelector}>
+                        <button
+                            type="button"
+                            onClick={() => setUploadMethod('direct')}
+                            title="Direct MP4 upload (no conversion)"
+                            style={{
+                                ...styles.typeButton,
+                                background: uploadMethod === 'direct' ? '#D4AF37' : 'transparent',
+                                color: uploadMethod === 'direct' ? '#000' : 'rgba(255,255,255,0.4)'
+                            }}
+                        >
+                            Direct MP4
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setUploadMethod('hls')}
+                            title="FFmpeg HLS conversion (supports H.265, MKV, etc.)"
+                            style={{
+                                ...styles.typeButton,
+                                background: uploadMethod === 'hls' ? '#D4AF37' : 'transparent',
+                                color: uploadMethod === 'hls' ? '#000' : 'rgba(255,255,255,0.4)'
+                            }}
+                        >
+                            HLS Conversion
+                        </button>
+                    </div>
+                    {uploadMethod === 'hls' && (
+                        <div style={{
+                            background: 'rgba(34, 197, 94, 0.08)',
+                            border: '1px solid rgba(34, 197, 94, 0.25)',
+                            padding: '10px 16px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            color: '#86EFAC',
+                            fontWeight: 500,
+                            lineHeight: '1.5',
+                            letterSpacing: '0.01em'
+                        }}>
+                            ✅ FFmpeg will convert any codec (H.265, MKV, etc.) to H.264 HLS segments. Perfect for fixing audio-only videos.
+                        </div>
+                    )}
                 </div>
 
                 {/* Type Selection */}

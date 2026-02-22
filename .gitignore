@@ -1,7 +1,11 @@
 .env.local
+.env
+private.pem
+public.pem
+/hls-temp/
+/tmp/hls-*
 about.txt
 instructions.txt
 privacy-policy.txt
-terms.txtions.txt
-privacy
+terms.txt
 admin_upload_plan.md

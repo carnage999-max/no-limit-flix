@@ -2,28 +2,73 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
+import HlsJs from 'hls.js';
 import { AlertTriangle, Smartphone, Monitor } from 'lucide-react';
 import 'video.js/dist/video-js.css';
 
 interface VideoPlayerProps {
     src: string;
+    assetId?: string;  // Asset ID for fetching signed auth
     poster?: string;
     onReady?: (player: any) => void;
 }
 
-export default function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) {
+export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlayerProps) {
     const videoRef = useRef<HTMLDivElement>(null);
     const playerRef = useRef<any>(null);
     const [error, setError] = useState<string | null>(null);
+    const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
+    const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Fetch signed playback credentials if assetId provided
+    useEffect(() => {
+        if (assetId) {
+            const fetchSignedAuth = async () => {
+                try {
+                    console.log(`🎬 [VideoPlayer] Fetching signed auth for assetId: ${assetId}`);
+                    const response = await fetch(`/api/watch/start`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ assetId }),
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'Failed to fetch playback credentials');
+                    }
+
+                    const data = await response.json();
+                    console.log(`✅ [VideoPlayer] Playback type: ${data.playbackType}, expires: ${data.expiresAt}`);
+
+                    setPlaybackType(data.playbackType);
+                    setPlaybackUrl(data.playbackUrl);
+                    setIsLoading(false);
+                } catch (err) {
+                    console.error('❌ [VideoPlayer] Failed to fetch signed auth:', err);
+                    setError(`Failed to load video: ${(err as Error).message}`);
+                    setIsLoading(false);
+                }
+            };
+
+            fetchSignedAuth();
+        } else {
+            // Fallback to direct URL if no assetId (legacy support)
+            setPlaybackUrl(src);
+            setIsLoading(false);
+        }
+    }, [assetId, src]);
 
     useEffect(() => {
         // Make sure Video.js player is only initialized once
-        if (!playerRef.current && videoRef.current) {
+        if (!playerRef.current && videoRef.current && playbackUrl && !isLoading) {
             const videoElement = document.createElement("video-js");
 
             videoElement.classList.add('vjs-big-play-centered');
             videoElement.classList.add('vjs-no-limit-theme');
             videoRef.current.appendChild(videoElement);
+
+            const sourceType = playbackUrl.endsWith('.m3u8') ? 'application/x-mpegURL' : 'video/mp4';
 
             const player = playerRef.current = videojs(videoElement, {
                 autoplay: true,
@@ -31,22 +76,55 @@ export default function VideoPlayer({ src, poster, onReady }: VideoPlayerProps) 
                 responsive: true,
                 fluid: true,
                 sources: [{
-                    src: src,
-                    type: src.endsWith('.m3u8') ? 'application/x-mpegURL' : 'video/mp4'
+                    src: playbackUrl,
+                    type: sourceType
                 }],
                 poster: poster,
-                playbackRates: [0.5, 1, 1.25, 1.5, 2]
+                playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                html5: {
+                    nativeVideoTracks: false,
+                    nativeAudioTracks: false,
+                    nativeTextTracks: false
+                }
             }, () => {
                 onReady && onReady(player);
             });
 
+            // Setup HLS.js for better codec support - wait for player to be ready
+            player.ready(() => {
+                const videoElement_ = player.tech_.el() as HTMLVideoElement;
+                if (HlsJs.isSupported() && playbackUrl.endsWith('.m3u8')) {
+                    console.log('🎬 [VideoPlayer] HLS.js initializing for HLS stream');
+                    const hls = new HlsJs({
+                        // Enable debug logging for HLS issues
+                        debug: false,
+                    });
+                    hls.attachMedia(videoElement_);
+                    hls.on(HlsJs.Events.MANIFEST_PARSED, () => {
+                        console.log('✅ [VideoPlayer] HLS manifest parsed successfully');
+                        videoElement_.play();
+                    });
+                    hls.on(HlsJs.Events.ERROR, (event, data) => {
+                        console.error('❌ [VideoPlayer] HLS.js error:', data);
+                        if (data.fatal) {
+                            setError(`HLS streaming error: ${data.details || 'Unknown error'}`);
+                        }
+                    });
+                    hls.loadSource(playbackUrl);
+                } else if (playbackUrl.endsWith('.m3u8')) {
+                    // Fallback for browsers that support native HLS
+                    console.log('🎬 [VideoPlayer] Using native HLS support');
+                    videoElement_.src = playbackUrl;
+                }
+            });
+
             player.on('error', () => {
                 const err = player.error();
-                console.error('VideoJS Error:', err);
-                setError(`This video format may not be supported by your browser.`);
+                console.error('❌ [VideoPlayer] VideoJS Error:', err);
+                setError(`This video format may not be supported by your browser. Try opening with VLC or the mobile app.`);
             });
         }
-    }, [src, videoRef]);
+    }, [playbackUrl, isLoading, videoRef]);
 
     // Dispose the player on unmount
     useEffect(() => {

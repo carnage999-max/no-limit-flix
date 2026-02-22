@@ -11,30 +11,44 @@ datasource db {
 }
 
 model Video {
-  id            String   @id @default(cuid())
-  title         String
-  description   String?
-  type          String   @default("movie") // movie, series
-  seasonNumber  Int?
-  episodeNumber Int?
-  s3Key         String   @unique
-  s3Url         String
-  thumbnailUrl  String?
-  status        String   @default("pending") // pending, uploading, completed, failed
-  releaseYear   Int?
-  duration      Float?   // Duration in seconds
-  resolution    String?  // e.g., 4K, 1080p
-  genre         String?
-  rating        String?  // e.g., PG, 18+
-  fileSize      BigInt?
-  mimeType      String?
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  type            String   @default("movie") // movie, series
+  seasonNumber    Int?
+  episodeNumber   Int?
+  
+  // Original upload tracking (optional, for source reference)
+  s3KeySource     String?  // Original uploaded file key
+  
+  // Playback configuration
+  playbackType    String   @default("mp4") // mp4 | hls
+  s3KeyPlayback   String   @unique // HLS master manifest key OR MP4 key
+  cloudfrontPath  String   // Same as s3KeyPlayback, used for URL construction
+  
+  // Legacy fields (kept for backward compatibility, phasing out)
+  s3Key           String?  // Deprecated: will be removed
+  s3Url           String?  // Deprecated: will be removed, compute at runtime instead
+  
+  thumbnailUrl    String?
+  status          String   @default("pending") // pending, uploading, completed, failed
+  releaseYear     Int?
+  duration        Float?   // Duration in seconds
+  resolution      String?  // e.g., 4K, 1080p
+  genre           String?
+  rating          String?  // e.g., PG, 18+
+  fileSize        BigInt?
+  mimeType        String?
+  
   // Phase 2 — linking to global catalog
-  tmdbId        String?  // The TMDb movie/tv ID, nullable for non-catalog items
-  seriesTitle   String?  // For TV episodes: the parent series name for grouping
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  tmdbId          String?  // The TMDb movie/tv ID, nullable for non-catalog items
+  seriesTitle     String?  // For TV episodes: the parent series name for grouping
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([status])
   @@index([type])
   @@index([tmdbId])
+  @@index([playbackType])
 }

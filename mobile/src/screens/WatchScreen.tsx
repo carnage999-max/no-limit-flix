@@ -371,14 +371,16 @@ export const WatchScreen = () => {
     const insets = useSafeAreaInsets();
     const params = route.params || {};
     const title = params.title;
-    const rawUrl = params.videoUrl;
-    const videoUrl = transformToCloudFront(rawUrl);
+    const assetId = params.assetId; // Changed from videoUrl - now using assetId
 
     const [isBuffering, setIsBuffering] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
     const [activeEngine, setActiveEngine] = useState<'native' | 'vlc'>('native');
+    const [videoUrl, setVideoUrl] = useState<string>('');
+    const [hlsCookieHeader, setHlsCookieHeader] = useState<string>('');
+    const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
 
     // VLC States
     const [currentTime, setCurrentTime] = useState(0);
@@ -399,23 +401,73 @@ export const WatchScreen = () => {
     const lastTimeRef = useRef<number>(0);
     const stuckTimerRef = useRef<any>(null);
 
+    // Fetch signed playback URL on mount
+    useEffect(() => {
+        if (!assetId) {
+            setError('No asset ID provided');
+            return;
+        }
+
+        const fetchPlaybackUrl = async () => {
+            try {
+                setIsBuffering(true);
+                console.log(`📺 [Watch] Fetching signed playback URL for assetId: ${assetId}`);
+
+                // Call /api/watch/start to get signed URL/cookies
+                const response = await fetch(`/api/watch/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assetId }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to fetch playback URL');
+                }
+
+                const data = await response.json();
+                console.log(
+                  `✅ [Watch] Playback type: ${data.playbackType}, expires: ${data.expiresAt}`
+                );
+
+                setPlaybackType(data.playbackType);
+                setVideoUrl(data.playbackUrl);
+
+                // If HLS, store the signed cookie header for VLC
+                if (data.playbackType === 'hls' && data.cookieHeader) {
+                    console.log(`🍪 [Watch] HLS detected, storing signed cookie`);
+                    setHlsCookieHeader(data.cookieHeader);
+                }
+
+                setIsBuffering(false);
+            } catch (err) {
+                console.error('❌ [Watch] Failed to fetch playback URL:', err);
+                setError((err as Error).message);
+                setIsBuffering(false);
+            }
+        };
+
+        fetchPlaybackUrl();
+    }, [assetId]);
+
     // Track Names and Lists
     const [audioTracks, setAudioTracks] = useState<{ id: number, name: string }[]>([]);
     const [subtitleTracks, setSubtitleTracks] = useState<{ id: number, name: string }[]>([]);
     const [hasLoaded, setHasLoaded] = useState(false);
     const [vlcProgress, setVlcProgress] = useState(0); // 0-1 ratio
 
-    // Initial Engine Logic
+    // Determine which player engine to use based on playback type
     useEffect(() => {
-        const url = videoUrl?.toLowerCase() || '';
-        if (url.includes('.m3u8')) {
-            setActiveEngine('native');
-        } else if (url.endsWith('.mkv') || url.endsWith('.avi') || url.endsWith('.webm') || url.endsWith('.m4v')) {
+        if (playbackType === 'hls') {
+            // Use VLC for HLS (better codec support)
+            console.log('🎬 [Watch] Using VLC engine for HLS');
             setActiveEngine('vlc');
         } else {
+            // Use native player for MP4
+            console.log('🎬 [Watch] Using native engine for MP4');
             setActiveEngine('native');
         }
-    }, [videoUrl]);
+    }, [playbackType]);
 
     useEffect(() => {
         const lock = async () => {
@@ -562,6 +614,12 @@ export const WatchScreen = () => {
                                     audioTrack={audioTrack}
                                     textTrack={subtitleTrack}
                                     volume={volume}
+                                    // Apply signed CloudFront cookie header for all HLS requests (manifest, playlists, segments)
+                                    initOptions={hlsCookieHeader ? [
+                                        `--http-header=Cookie: ${hlsCookieHeader}`,
+                                        '--network-caching=1500',  // Buffer 1.5s for HLS stability
+                                        '--http-reconnect'         // Auto-reconnect on network failures
+                                    ] : ['--network-caching=1500']}
                                     onProgress={(e: any) => {
                                         if (e.currentTime > 0) {
                                             const time = e.currentTime / 1000;

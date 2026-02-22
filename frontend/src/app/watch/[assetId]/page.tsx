@@ -29,7 +29,7 @@ export default async function WatchPage({ params }: { params: Promise<{ assetId:
         }
     }
 
-    // 3. Prepare Stream URL
+    // 3. Prepare Stream URL - VideoPlayer will fetch signed auth if assetId available
     const streamUrl = transformToCloudFront(video.s3Url);
 
     return (
@@ -56,6 +56,7 @@ export default async function WatchPage({ params }: { params: Promise<{ assetId:
                 <div className="w-full max-w-6xl z-10 animate-fade-in">
                     <div className="relative rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black group">
                         <VideoPlayer
+                            assetId={assetId}
                             src={streamUrl}
                             poster={video.thumbnailUrl || movieDetails?.backdrop}
                         />
