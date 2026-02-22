@@ -1,36 +1,93 @@
-import { notFound } from 'next/navigation';
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import prisma from '@/lib/db';
-import { getMovieDetails } from '@/lib/tmdb';
-import { ButtonSecondary, VideoPlayer } from '@/components';
+import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
-import { Tv, ExternalLink } from 'lucide-react';
-import { transformToCloudFront } from '@/lib/utils';
+import { Tv } from 'lucide-react';
 
-export default async function WatchPage({ params }: { params: Promise<{ assetId: string }> }) {
-    const { assetId } = await params;
+interface Video {
+    id: string;
+    title: string;
+    description?: string;
+    thumbnailUrl?: string;
+    s3Url?: string;
+    resolution?: string;
+    duration?: number;
+    tmdbId?: string;
+}
 
-    // 1. Fetch Video from DB
-    const video = await prisma.video.findUnique({
-        where: { id: assetId }
-    });
+interface MovieDetails {
+    backdrop?: string;
+    explanation?: string;
+}
 
-    if (!video || video.status !== 'completed') {
-        notFound();
-    }
+export default function WatchPage() {
+    const params = useParams();
+    const assetId = params.assetId as string;
+    const [video, setVideo] = useState<Video | null>(null);
+    const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // 2. Fetch TMDb details if linked
-    let movieDetails = null;
-    if (video.tmdbId) {
-        try {
-            movieDetails = await getMovieDetails(video.tmdbId);
-        } catch (e) {
-            console.warn('Metadata fetch failed for watch page:', e);
+    useEffect(() => {
+        if (!assetId) {
+            setError('No asset ID provided');
+            setLoading(false);
+            return;
         }
+
+        const fetchVideoData = async () => {
+            try {
+                const response = await fetch(`/api/watch/video/${assetId}`);
+                if (!response.ok) throw new Error('Failed to fetch video');
+                const data = await response.json();
+                setVideo(data.video);
+                
+                if (data.video.tmdbId) {
+                    try {
+                        const tmdbResponse = await fetch(`/api/title/${data.video.tmdbId}`);
+                        if (tmdbResponse.ok) {
+                            const tmdbData = await tmdbResponse.json();
+                            setMovieDetails(tmdbData);
+                        }
+                    } catch (e) {
+                        console.warn('Failed to fetch TMDb details');
+                    }
+                }
+            } catch (err) {
+                setError((err as Error).message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchVideoData();
+    }, [assetId]);
+
+    if (loading) {
+        return (
+            <main style={{ minHeight: '100vh', background: '#0B0B0D', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '32px', marginBottom: '1rem' }}>⏳</div>
+                    <p>Loading...</p>
+                </div>
+            </main>
+        );
     }
 
-    // 3. Prepare Stream URL - use CloudFront URL directly
-    // s3Url is already a CloudFront URL from the presigned-url endpoint
+    if (error || !video) {
+        return (
+            <main style={{ minHeight: '100vh', background: '#0B0B0D', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ textAlign: 'center' }}>
+                    <p style={{ color: '#F87171' }}>Error: {error || 'Video not found'}</p>
+                    <Link href="/" style={{ color: '#D4AF37', marginTop: '1rem', display: 'inline-block' }}>← Back to home</Link>
+                </div>
+            </main>
+        );
+    }
+
     const streamUrl = video.s3Url || '';
 
     return (
@@ -182,50 +239,24 @@ export default async function WatchPage({ params }: { params: Promise<{ assetId:
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                     <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Play on</span>
-                                    <a
+                                    <ExternalPlayerLink
                                         href={`vlc://${streamUrl}`}
                                         title="Play in VLC"
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '8px',
-                                            padding: '10px 16px',
-                                            background: 'rgba(234, 88, 12, 0.1)',
-                                            border: '1px solid rgba(234, 88, 12, 0.3)',
-                                            borderRadius: '0.75rem',
-                                            textDecoration: 'none',
-                                            transition: 'all 0.3s',
-                                            cursor: 'pointer'
-                                        }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(234, 88, 12, 0.2)')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(234, 88, 12, 0.1)')}
-                                    >
-                                        <Tv size={16} style={{ color: '#EA580C' }} />
-                                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#EA580C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>VLC</span>
-                                    </a>
-                                    <a
+                                        bgColor="rgba(234, 88, 12, 0.1)"
+                                        hoverColor="rgba(234, 88, 12, 0.2)"
+                                        borderColor="rgba(234, 88, 12, 0.3)"
+                                        textColor="#EA580C"
+                                        label="VLC"
+                                    />
+                                    <ExternalPlayerLink
                                         href={`iina://weblink?url=${streamUrl}`}
                                         title="Play in IINA (Mac)"
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: '8px',
-                                            padding: '10px 16px',
-                                            background: 'rgba(59, 130, 246, 0.1)',
-                                            border: '1px solid rgba(59, 130, 246, 0.3)',
-                                            borderRadius: '0.75rem',
-                                            textDecoration: 'none',
-                                            transition: 'all 0.3s',
-                                            cursor: 'pointer'
-                                        }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)')}
-                                    >
-                                        <Tv size={16} style={{ color: '#3B82F6' }} />
-                                        <span style={{ fontSize: '0.75rem', fontWeight: '700', color: '#3B82F6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>IINA</span>
-                                    </a>
+                                        bgColor="rgba(59, 130, 246, 0.1)"
+                                        hoverColor="rgba(59, 130, 246, 0.2)"
+                                        borderColor="rgba(59, 130, 246, 0.3)"
+                                        textColor="#3B82F6"
+                                        label="IINA"
+                                    />
                                 </div>
 
                                 {/* Mobile App Promo */}
@@ -247,5 +278,51 @@ export default async function WatchPage({ params }: { params: Promise<{ assetId:
                 <div style={{ height: '96px', background: 'linear-gradient(to top, black, transparent)', pointerEvents: 'none' }} />
             </main>
         </>
+    );
+}
+
+// Separate component for external player links with hover effects
+function ExternalPlayerLink({
+    href,
+    title,
+    bgColor,
+    hoverColor,
+    borderColor,
+    textColor,
+    label
+}: {
+    href: string;
+    title: string;
+    bgColor: string;
+    hoverColor: string;
+    borderColor: string;
+    textColor: string;
+    label: string;
+}) {
+    const [isHovered, setIsHovered] = useState(false);
+
+    return (
+        <a
+            href={href}
+            title={title}
+            style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                padding: '10px 16px',
+                background: isHovered ? hoverColor : bgColor,
+                border: `1px solid ${borderColor}`,
+                borderRadius: '0.75rem',
+                textDecoration: 'none',
+                transition: 'all 0.3s',
+                cursor: 'pointer'
+            }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <Tv size={16} style={{ color: textColor }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: textColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
+        </a>
     );
 }
