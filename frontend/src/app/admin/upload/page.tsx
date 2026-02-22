@@ -691,26 +691,40 @@ export default function AdminUploadPage() {
 
                 {/* Series Specifics */}
                 {assetType === 'series' && (
-                    <div style={styles.seriesGrid}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
                         <div style={styles.inputSection}>
-                            <label style={styles.label}>Season</label>
+                            <label style={styles.label}>Series Name <span style={{ color: 'rgba(255,255,255,0.3)', fontWeight: 400 }}>(groups all episodes together)</span></label>
                             <input
-                                style={{ ...styles.input, textAlign: 'center' }}
-                                type="number"
-                                value={seasonNumber}
-                                onChange={e => setSeasonNumber(e.target.value)}
-                                placeholder="01"
+                                style={styles.input}
+                                value={seriesTitle}
+                                onChange={e => setSeriesTitle(e.target.value)}
+                                placeholder="e.g. BREAKING BAD"
+                                required={assetType === 'series'}
                             />
                         </div>
-                        <div style={styles.inputSection}>
-                            <label style={styles.label}>Episode</label>
-                            <input
-                                style={{ ...styles.input, textAlign: 'center' }}
-                                type="number"
-                                value={episodeNumber}
-                                onChange={e => setEpisodeNumber(e.target.value)}
-                                placeholder="01"
-                            />
+                        <div style={styles.seriesGrid}>
+                            <div style={styles.inputSection}>
+                                <label style={styles.label}>Season</label>
+                                <input
+                                    style={{ ...styles.input, textAlign: 'center' }}
+                                    type="number"
+                                    value={seasonNumber}
+                                    onChange={e => setSeasonNumber(e.target.value)}
+                                    placeholder="01"
+                                    required={assetType === 'series'}
+                                />
+                            </div>
+                            <div style={styles.inputSection}>
+                                <label style={styles.label}>Episode</label>
+                                <input
+                                    style={{ ...styles.input, textAlign: 'center' }}
+                                    type="number"
+                                    value={episodeNumber}
+                                    onChange={e => setEpisodeNumber(e.target.value)}
+                                    placeholder="01"
+                                    required={assetType === 'series'}
+                                />
+                            </div>
                         </div>
                     </div>
                 )}
