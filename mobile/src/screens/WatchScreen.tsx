@@ -377,7 +377,7 @@ export const WatchScreen = () => {
     const [error, setError] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
-    const [activeEngine, setActiveEngine] = useState<'native' | 'vlc'>('native');
+    const [activeEngine, setActiveEngine] = useState<'native' | 'vlc'>('vlc');
     const [videoUrl, setVideoUrl] = useState<string>('');
     const [hlsCookieHeader, setHlsCookieHeader] = useState<string>('');
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');

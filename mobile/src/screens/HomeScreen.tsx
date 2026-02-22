@@ -295,7 +295,8 @@ export const HomeScreen = () => {
                   } else {
                     navigation.navigate('Watch', {
                       videoUrl: videoUrl,
-                      title: item.title
+                      title: item.title,
+                      assetId: item.id
                     });
                   }
                 }}
