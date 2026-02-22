@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, CSSProperties } from 'react';
-import { Upload, Edit2, CheckCircle2, AlertCircle, Loader2, ArrowLeft, X } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle2, ArrowLeft, X } from 'lucide-react';
 import { ButtonPrimary } from '@/components';
 import Link from 'next/link';
 
@@ -217,10 +217,10 @@ interface EditFormData {
 }
 
 export default function AdminEditPage() {
-    const [videos, setVideos] = useState<Video[]>([]);
     const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
-    const [loadingVideos, setLoadingVideos] = useState(true);
+    const [searchLoading, setSearchLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
@@ -233,18 +233,22 @@ export default function AdminEditPage() {
     });
     const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
-    // Load videos on mount
-    const loadVideos = async () => {
-        setLoadingVideos(true);
+    // Search for a video by ID or title
+    const handleSearch = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        setSearchLoading(true);
+        setError(null);
         try {
-            const res = await fetch('/api/admin/edit/videos');
-            if (!res.ok) throw new Error('Failed to load videos');
+            const res = await fetch(`/api/admin/edit/search?q=${encodeURIComponent(searchQuery)}`);
+            if (!res.ok) throw new Error('Video not found');
             const data = await res.json();
-            setVideos(data.videos);
+            handleSelectVideo(data.video);
         } catch (err) {
             setError((err as Error).message);
         } finally {
-            setLoadingVideos(false);
+            setSearchLoading(false);
         }
     };
 
@@ -350,59 +354,36 @@ export default function AdminEditPage() {
                             Back to Upload
                         </Link>
                         <h1 style={styles.title}>Edit Metadata</h1>
-                        <p style={styles.subtitle}>Update video information, thumbnails, and metadata</p>
+                        <p style={styles.subtitle}>Search for a video to update its information</p>
                     </div>
 
-                    {!loadingVideos && videos.length === 0 ? (
-                        <div style={{ textAlign: 'center', padding: '60px 24px', color: '#A7ABB4' }}>
-                            <p style={{ fontSize: '18px', marginBottom: '16px' }}>No videos found</p>
-                            <p>Upload some videos first using the upload page.</p>
-                        </div>
-                    ) : (
-                        <div style={styles.section}>
-                            <div style={styles.videosList}>
-                                {loadingVideos ? (
-                                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px' }}>
-                                        <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', margin: '0 auto' }} />
-                                    </div>
-                                ) : (
-                                    videos.map(video => (
-                                        <div
-                                            key={video.id}
-                                            style={{ ...styles.videoCard }}
-                                            onMouseEnter={e => {
-                                                Object.assign(e.currentTarget.style, styles.videoCardHover);
-                                            }}
-                                            onMouseLeave={e => {
-                                                Object.assign(e.currentTarget.style, styles.videoCard);
-                                            }}
-                                            onClick={() => handleSelectVideo(video)}
-                                        >
-                                            {video.thumbnailUrl && (
-                                                <img
-                                                    src={video.thumbnailUrl}
-                                                    alt={video.title}
-                                                    style={styles.videoThumbnail}
-                                                />
-                                            )}
-                                            <div style={styles.videoTitle}>{video.title}</div>
-                                            <div style={styles.videoMeta}>
-                                                {video.type === 'series' ? 'TV Series' : 'Movie'}
-                                                {video.releaseYear && ` • ${video.releaseYear}`}
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                    {error && (
+                        <div style={{ ...styles.status, ...styles.statusError }}>
+                            <AlertCircle size={20} />
+                            <div>{error}</div>
                         </div>
                     )}
+
+                    <div style={{ ...styles.section, maxWidth: '500px', margin: '0 auto' }}>
+                        <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Search by Video ID or Title</label>
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    placeholder="Enter video ID or title..."
+                                    style={styles.input}
+                                />
+                            </div>
+                            <ButtonPrimary
+                                label={searchLoading ? 'Searching...' : 'Search'}
+                                onClick={() => {}}
+                                disabled={searchLoading || !searchQuery.trim()}
+                            />
+                        </form>
+                    </div>
                 </div>
-                <style>{`
-                    @keyframes spin {
-                        from { transform: rotate(0deg); }
-                        to { transform: rotate(360deg); }
-                    }
-                `}</style>
             </main>
         );
     }
