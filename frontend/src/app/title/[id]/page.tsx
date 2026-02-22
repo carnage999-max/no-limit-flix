@@ -3,7 +3,7 @@
 import { use, useState, useEffect } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal, PermanenceBadge } from '@/components';
+import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal } from '@/components';
 import VideoPlayer from '@/components/VideoPlayer';
 import { getMovieDetails } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
@@ -134,8 +134,6 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                         {/* Details */}
                         <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem' }}>
-                                <PermanenceBadge type={Math.random() > 0.5 ? 'Permanent Core' : 'Long-Term'} />
-                                <div style={{ width: '1px', height: '12px', background: 'rgba(255,255,255,0.1)', margin: '0 8px' }} />
                                 {movie.genres && movie.genres.map(genre => (
                                     <span key={genre} style={{
                                         padding: '0.4rem 0.75rem',

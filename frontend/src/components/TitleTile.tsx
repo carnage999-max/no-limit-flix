@@ -9,27 +9,13 @@ interface TitleTileProps {
 }
 
 export default function TitleTile({ movie }: TitleTileProps) {
-    // For playable content, we need to pass the full movie data via query params
-    // since the ID is a database ID, not a TMDB ID
+    // For playable content, navigate directly to watch page for immediate player
     const getHref = () => {
         if (movie.playable && movie.assetId) {
-            // Pass movie data as JSON in query param for hosted content
-            const movieData = btoa(JSON.stringify({
-                id: movie.id,
-                title: movie.title,
-                year: movie.year,
-                runtime: movie.runtime,
-                poster: movie.poster,
-                genres: movie.genres,
-                explanation: movie.explanation,
-                playable: movie.playable,
-                assetId: movie.assetId,
-                cloudfrontUrl: movie.cloudfrontUrl,
-                permanence: movie.permanence,
-            }));
-            return `/title/${movie.assetId}?data=${movieData}`;
+            // Go directly to watch page, skipping the title detail page
+            return `/watch/${movie.assetId}`;
         }
-        // For TMDB content, use the tmdb_id or id
+        // For TMDB content, use the title detail page
         return `/title/${movie.tmdb_id || movie.id}`;
     };
 
