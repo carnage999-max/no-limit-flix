@@ -19,6 +19,7 @@ import { COLORS } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { transformToCloudFront } from '../lib/utils';
+import { BASE_URL } from '../lib/api';
 // @ts-ignore - Native module without types
 import { VLCPlayer } from 'react-native-vlc-media-player';
 
@@ -414,7 +415,7 @@ export const WatchScreen = () => {
                 console.log(`📺 [Watch] Fetching signed playback URL for assetId: ${assetId}`);
 
                 // Call /api/watch/start to get signed URL/cookies
-                const response = await fetch(`/api/watch/start`, {
+                const response = await fetch(`${BASE_URL}/api/watch/start`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ assetId }),
