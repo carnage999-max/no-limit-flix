@@ -79,15 +79,23 @@ export async function POST(request: NextRequest) {
         }
 
         const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
-        const publicUrl = cloudFrontUrl
-            ? `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${s3Key}`
+        // For s3Url: use CloudFront if available, otherwise S3 direct URL
+        const s3Url = cloudFrontUrl
+            ? `https://${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${s3Key}`
             : `https://${BUCKET_NAME}.s3.amazonaws.com/${s3Key}`;
+        
+        // For cloudfrontPath: always store just the path (for /api/watch/start to reconstruct)
+        const cloudfrontPath = `/${s3Key}`;
 
-        const publicThumbUrl = thumbS3Key
-            ? (cloudFrontUrl
-                ? `${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${thumbS3Key}`
-                : `https://${BUCKET_NAME}.s3.amazonaws.com/${thumbS3Key}`)
-            : null;
+        // For thumbnails
+        let thumbS3Url = null;
+        let thumbCloudfrontPath = null;
+        if (thumbS3Key) {
+            thumbS3Url = cloudFrontUrl
+                ? `https://${cloudFrontUrl.endsWith('/') ? cloudFrontUrl.slice(0, -1) : cloudFrontUrl}/${thumbS3Key}`
+                : `https://${BUCKET_NAME}.s3.amazonaws.com/${thumbS3Key}`;
+            thumbCloudfrontPath = `/${thumbS3Key}`;
+        }
 
         const safeParseInt = (val: any) => {
             if (val === null || val === undefined || val === '') return null;
@@ -118,14 +126,14 @@ export async function POST(request: NextRequest) {
                 genre: genre || null,
                 rating: rating || null,
                 s3Key,
-                s3Url: publicUrl,
-                thumbnailUrl: publicThumbUrl,
+                s3Url,
+                thumbnailUrl: thumbS3Url,
                 status: 'pending',
                 mimeType: contentType,
                 // New HLS fields
                 playbackType: 'mp4',  // Direct uploads are MP4
                 s3KeyPlayback: s3Key,  // Same as s3Key for direct uploads
-                cloudfrontPath: publicUrl,  // Full CloudFront path
+                cloudfrontPath,  // Path for CloudFront reconstruction in /api/watch/start
             },
         });
 

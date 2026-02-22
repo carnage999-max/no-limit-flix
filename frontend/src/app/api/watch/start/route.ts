@@ -66,23 +66,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cloudfrontDomain = process.env.CLOUDFRONT_DOMAIN;
-    if (!cloudfrontDomain) {
-      console.error('Missing CLOUDFRONT_DOMAIN env var');
+    const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
+    if (!cloudfrontUrl) {
+      console.error('Missing NEXT_PUBLIC_CLOUDFRONT_URL env var');
       return NextResponse.json(
         { error: 'Playback configuration error' },
         { status: 500 }
       );
     }
+    // Remove https:// if present to get just the domain
+    const cloudfrontDomain = cloudfrontUrl.replace(/^https?:\/\//, '');
 
     let playbackUrl: string;
     let cookieHeader: string | undefined;
     let expiresAt: Date;
 
+    // Extract the path from cloudfrontPath (handle both full URLs and paths)
+    let resourcePath = video.cloudfrontPath;
+    if (resourcePath.startsWith('http')) {
+      // If it's a full URL, extract just the path
+      try {
+        const url = new URL(resourcePath);
+        resourcePath = url.pathname;
+      } catch (e) {
+        console.warn('Invalid URL in cloudfrontPath, using as-is:', resourcePath);
+      }
+    }
+    // Ensure path starts with /
+    if (!resourcePath.startsWith('/')) {
+      resourcePath = '/' + resourcePath;
+    }
+
     // Handle HLS playback
     if (video.playbackType === 'hls') {
       // For HLS, we use signed cookies to authorize the manifest + all segments
-      const resourcePath = `/${video.cloudfrontPath}`;
       const cookie = generateCloudFrontSignedCookie(
         `https://${cloudfrontDomain}${resourcePath}*`, // Wildcard for all segments
         10 // 10-minute expiry
@@ -95,7 +112,6 @@ export async function POST(request: NextRequest) {
     // Handle MP4 fallback
     else {
       // For MP4, use signed URL (simpler, doesn't need cookies)
-      const resourcePath = `/${video.cloudfrontPath}`;
       const signed = generateCloudFrontSignedURL(
         cloudfrontDomain,
         resourcePath,
