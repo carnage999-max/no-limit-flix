@@ -3,7 +3,7 @@ import prisma from '@/lib/db';
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
         const adminPassword = process.env.ADMIN_PASSWORD;
@@ -14,7 +14,18 @@ export async function PUT(
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { id } = await params;
+        // Handle both Promise and direct params (for Next.js version compatibility)
+        const resolvedParams = params instanceof Promise ? await params : params;
+        const { id } = resolvedParams;
+
+        if (!id) {
+            console.error('Missing video ID in request');
+            return NextResponse.json(
+                { error: 'Video ID is required' },
+                { status: 400 }
+            );
+        }
+
         const body = await request.json();
         const { title, description, releaseYear, tmdbId, thumbnailUrl } = body;
 
