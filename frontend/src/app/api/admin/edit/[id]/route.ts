@@ -1,6 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
+// Helper to convert BigInt to string for JSON serialization
+function serializeData(data: any): any {
+    if (data === null || data === undefined) return data;
+    
+    if (typeof data === 'bigint') {
+        return data.toString();
+    }
+    
+    if (data instanceof Date) {
+        return data.toISOString();
+    }
+    
+    if (Array.isArray(data)) {
+        return data.map(serializeData);
+    }
+    
+    if (typeof data === 'object') {
+        const serialized: any = {};
+        for (const [key, value] of Object.entries(data)) {
+            serialized[key] = serializeData(value);
+        }
+        return serialized;
+    }
+    
+    return data;
+}
+
 export async function PUT(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> | { id: string } }
@@ -59,11 +86,13 @@ export async function PUT(
             },
         });
 
-        return NextResponse.json({ video: updated });
+        // Serialize the response to handle BigInt values
+        const serialized = serializeData(updated);
+        return NextResponse.json({ video: serialized });
     } catch (error) {
         console.error('Error updating video:', error);
         return NextResponse.json(
-            { error: 'Failed to update video' },
+            { error: 'Failed to update video', details: (error as Error).message },
             { status: 500 }
         );
     }
