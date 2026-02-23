@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { notFound } from 'next/navigation';
-import { Navbar, Skeleton } from '@/components';
+import { Skeleton } from '@/components';
 import Link from 'next/link';
 
 export default function SeriesDetailPage({ params }: { params: { id: string } }) {
@@ -54,9 +54,7 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
 
     if (loading) {
         return (
-            <>
-                <Navbar />
-                <main style={{ minHeight: '100vh', background: '#0B0B0D' }}>
+            <main style={{ minHeight: '100vh', background: '#0B0B0D' }}>
                     <div style={{ height: '60vh', background: '#111' }} />
                     <div style={{ maxWidth: '1200px', margin: '-200px auto 0', padding: '0 2rem 4rem', position: 'relative', zIndex: 1 }}>
                         <div className="detail-grid">
@@ -76,18 +74,15 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                         </div>
                     </div>
                 </main>
-            </>
-        );
-    }
+            );
+        }
 
     if (!series) {
         notFound();
     }
 
     return (
-        <>
-            <Navbar />
-            <main style={{ minHeight: '100vh' }}>
+        <main style={{ minHeight: '100vh' }}>
                 {/* Hero Section with Backdrop */}
                 <div
                     className="relative"
@@ -303,6 +298,5 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                     </div>
                 </div>
             </main>
-        </>
     );
 }

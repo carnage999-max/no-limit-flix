@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
-import { Navbar, Skeleton } from '@/components';
+import { Skeleton } from '@/components';
 import Link from 'next/link';
 
 export default function SeriesDetailContent() {
@@ -55,11 +55,9 @@ export default function SeriesDetailContent() {
 
     if (loading) {
         return (
-            <>
-                <Navbar />
-                <main style={{ minHeight: '100vh', background: '#0B0B0D' }}>
-                    <div style={{ height: '60vh', background: '#111' }} />
-                    <div style={{ maxWidth: '1200px', margin: '-200px auto 0', padding: '0 2rem 4rem', position: 'relative', zIndex: 1 }}>
+            <main style={{ minHeight: '100vh', background: '#0B0B0D' }}>
+                <div style={{ height: '60vh', background: '#111' }} />
+                <div style={{ maxWidth: '1200px', margin: '-200px auto 0', padding: '0 2rem 4rem', position: 'relative', zIndex: 1 }}>
                         <div className="detail-grid">
                             <div style={{ width: '100%', maxWidth: '350px', margin: '0 auto' }}>
                                 <Skeleton height="500px" borderRadius="1rem" />
@@ -77,7 +75,6 @@ export default function SeriesDetailContent() {
                         </div>
                     </div>
                 </main>
-            </>
         );
     }
 
@@ -86,9 +83,7 @@ export default function SeriesDetailContent() {
     }
 
     return (
-        <>
-            <Navbar />
-            <main style={{ minHeight: '100vh' }}>
+        <main style={{ minHeight: '100vh' }}>
                 {/* Hero Section with Backdrop */}
                 <div
                     className="relative"
@@ -304,6 +299,5 @@ export default function SeriesDetailContent() {
                     </div>
                 </div>
             </main>
-        </>
     );
 }

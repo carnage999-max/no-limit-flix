@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navbar } from '@/components';
 
 interface MovieItem {
     id: string;
@@ -41,9 +40,7 @@ export default function InternalMoviesPage() {
     }, []);
 
     return (
-        <>
-            <Navbar />
-            <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
+        <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
                 {/* Content */}
                 <div style={{ maxWidth: '1200px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '2rem' }}>
                     <h1 style={{
@@ -155,6 +152,5 @@ export default function InternalMoviesPage() {
                     )}
                 </div>
             </main>
-        </>
     );
 }
