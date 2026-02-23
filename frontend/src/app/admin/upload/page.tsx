@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, CSSProperties } from 'react';
+import { useState, useRef, CSSProperties, useEffect } from 'react';
 import { Upload, FileVideo, CheckCircle2, AlertCircle, Loader2, ArrowLeft, Sparkles } from 'lucide-react';
 import { ButtonPrimary } from '@/components';
 import Link from 'next/link';
@@ -204,8 +204,43 @@ export default function AdminUploadPage() {
     const [thumbError, setThumbError] = useState(false);
     const [tmdbId, setTmdbId] = useState('');
     const [seriesTitle, setSeriesTitle] = useState('');
+    const [seriesLookupMessage, setSeriesLookupMessage] = useState<{ type: 'success' | 'info', text: string } | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Auto-lookup series metadata when series title changes
+    useEffect(() => {
+        if (assetType !== 'series' || !seriesTitle.trim()) {
+            setSeriesLookupMessage(null);
+            return;
+        }
+
+        const lookupSeriesMetadata = async () => {
+            try {
+                const res = await fetch(`/api/admin/upload/lookup-series?seriesTitle=${encodeURIComponent(seriesTitle)}`);
+                const data = await res.json();
+
+                if (data.metadata) {
+                    // Auto-populate fields from existing series
+                    if (data.metadata.tmdbId && !tmdbId) setTmdbId(data.metadata.tmdbId);
+                    if (data.metadata.description && !description) setDescription(data.metadata.description);
+                    if (data.metadata.releaseYear && !releaseYear) setReleaseYear(String(data.metadata.releaseYear));
+                    if (data.metadata.genre && !genre) setGenre(data.metadata.genre);
+                    if (data.metadata.rating && !rating) setRating(data.metadata.rating);
+                    
+                    setSeriesLookupMessage({ type: 'success', text: '✓ Series metadata auto-populated from existing episodes' });
+                } else {
+                    setSeriesLookupMessage({ type: 'info', text: 'ℹ️ New series - you\'ll need to fill in the metadata' });
+                }
+            } catch (err) {
+                console.warn('Series lookup failed:', err);
+                setSeriesLookupMessage(null);
+            }
+        };
+
+        const debounceTimer = setTimeout(lookupSeriesMetadata, 500);
+        return () => clearTimeout(debounceTimer);
+    }, [seriesTitle, assetType, tmdbId, description, releaseYear, genre, rating]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -701,6 +736,20 @@ export default function AdminUploadPage() {
                                 placeholder="e.g. BREAKING BAD"
                                 required={assetType === 'series'}
                             />
+                            {seriesLookupMessage && (
+                                <div style={{
+                                    padding: '12px 16px',
+                                    borderRadius: '8px',
+                                    fontSize: '12px',
+                                    background: seriesLookupMessage.type === 'success' 
+                                        ? 'rgba(74, 222, 128, 0.1)' 
+                                        : 'rgba(59, 130, 246, 0.1)',
+                                    border: `1px solid ${seriesLookupMessage.type === 'success' ? 'rgba(74, 222, 128, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
+                                    color: seriesLookupMessage.type === 'success' ? '#4ADE80' : '#3B82F6',
+                                }}>
+                                    {seriesLookupMessage.text}
+                                </div>
+                            )}
                         </div>
                         <div style={styles.seriesGrid}>
                             <div style={styles.inputSection}>

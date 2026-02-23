@@ -587,7 +587,7 @@ export default function HomePage() {
                                                 SERIES & DOCUMENTARIES
                                             </h3>
                                             <a
-                                                href="/collections/internal-tv"
+                                                href="/series"
                                                 style={{
                                                     fontSize: '0.875rem',
                                                     color: '#D4AF37',

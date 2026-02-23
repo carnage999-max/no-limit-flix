@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import { transformToCloudFront } from '@/lib/utils';
-import { Tv } from 'lucide-react';
 
 interface Video {
     id: string;
@@ -229,79 +228,15 @@ export default function WatchPage() {
                                 {video.description || movieDetails?.explanation}
                             </p>
 
-                            {/* Why You Might Like This */}
-                            <div
-                                style={{
-                                    padding: '2rem',
-                                    borderRadius: '1.25rem',
-                                    background: 'rgba(167, 171, 180, 0.05)',
-                                    border: '1px solid rgba(167, 171, 180, 0.1)',
-                                    position: 'relative',
-                                    overflow: 'hidden',
-                                    marginBottom: '2.5rem'
-                                }}
-                            >
-                                <div style={{
-                                    position: 'absolute',
-                                    top: 0,
-                                    left: 0,
-                                    width: '4px',
-                                    height: '100%',
-                                    background: 'linear-gradient(to bottom, #F6D365, #D4AF37)'
-                                }} />
-
-                                <h3
-                                    style={{
-                                        fontSize: '0.75rem',
-                                        fontWeight: '800',
-                                        color: '#D4AF37',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.2em',
-                                        marginBottom: '1rem',
-                                    }}
-                                >
-                                    About this video
-                                </h3>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.6 }}>
-                                    <span style={{ fontSize: '12px', color: '#A7ABB4', fontWeight: '500' }}>Streaming Ready</span>
-                                    <span style={{ fontSize: '12px', color: '#4ADE80' }}>✓</span>
+                            {/* Mobile App Promo */}
+                            <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(246,211,101,0.04) 100%)', border: '1px solid rgba(212, 175, 55, 0.2)', display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '2.5rem' }}>
+                                <div>
+                                    <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.25rem' }}>Better on Mobile</p>
+                                    <p style={{ fontSize: '0.875rem', color: '#A7ABB4', lineHeight: '1.5' }}>H.265/4K & offline viewing</p>
                                 </div>
-                            </div>
-
-                            {/* Quick Actions */}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Play on</span>
-                                    <ExternalPlayerLink
-                                        href={`vlc://${streamUrl}`}
-                                        title="Play in VLC"
-                                        bgColor="rgba(234, 88, 12, 0.1)"
-                                        hoverColor="rgba(234, 88, 12, 0.2)"
-                                        borderColor="rgba(234, 88, 12, 0.3)"
-                                        textColor="#EA580C"
-                                        label="VLC"
-                                    />
-                                    <ExternalPlayerLink
-                                        href={`iina://weblink?url=${streamUrl}`}
-                                        title="Play in IINA (Mac)"
-                                        bgColor="rgba(59, 130, 246, 0.1)"
-                                        hoverColor="rgba(59, 130, 246, 0.2)"
-                                        borderColor="rgba(59, 130, 246, 0.3)"
-                                        textColor="#3B82F6"
-                                        label="IINA"
-                                    />
-                                </div>
-
-                                {/* Mobile App Promo */}
-                                <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(246,211,101,0.04) 100%)', border: '1px solid rgba(212, 175, 55, 0.2)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                                    <div>
-                                        <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.25rem' }}>Better on Mobile</p>
-                                        <p style={{ fontSize: '0.875rem', color: '#A7ABB4', lineHeight: '1.5' }}>H.265/4K & offline viewing</p>
-                                    </div>
-                                    <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
-                                        <img src="/google-play.svg" alt="Google Play" style={{ height: '40px', width: 'auto' }} />
-                                    </a>
-                                </div>
+                                <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
+                                    <img src="/google-play.svg" alt="Google Play" style={{ height: '40px', width: 'auto' }} />
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -311,51 +246,5 @@ export default function WatchPage() {
                 <div style={{ height: '96px', background: 'linear-gradient(to top, black, transparent)', pointerEvents: 'none' }} />
             </main>
         </>
-    );
-}
-
-// Separate component for external player links with hover effects
-function ExternalPlayerLink({
-    href,
-    title,
-    bgColor,
-    hoverColor,
-    borderColor,
-    textColor,
-    label
-}: {
-    href: string;
-    title: string;
-    bgColor: string;
-    hoverColor: string;
-    borderColor: string;
-    textColor: string;
-    label: string;
-}) {
-    const [isHovered, setIsHovered] = useState(false);
-
-    return (
-        <a
-            href={href}
-            title={title}
-            style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                padding: '10px 16px',
-                background: isHovered ? hoverColor : bgColor,
-                border: `1px solid ${borderColor}`,
-                borderRadius: '0.75rem',
-                textDecoration: 'none',
-                transition: 'all 0.3s',
-                cursor: 'pointer'
-            }}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
-            <Tv size={16} style={{ color: textColor }} />
-            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: textColor, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</span>
-        </a>
     );
 }
