@@ -93,9 +93,37 @@ export default function WatchPage() {
 
     return (
         <>
+            <style>{`
+                @media (max-width: 1024px) {
+                    .watch-grid {
+                        grid-template-columns: 1fr !important;
+                        gap: 2rem !important;
+                    }
+                    .watch-content {
+                        margin: -100px auto 0 !important;
+                        padding: 0 1rem 2rem !important;
+                    }
+                    .hero-section {
+                        height: 40vh !important;
+                    }
+                }
+                @media (max-width: 640px) {
+                    .watch-content {
+                        margin: -80px auto 0 !important;
+                        padding: 0 1rem 2rem !important;
+                    }
+                    .hero-section {
+                        height: 30vh !important;
+                    }
+                    .watch-title {
+                        font-size: 1.875rem !important;
+                    }
+                }
+            `}</style>
             <main style={{ minHeight: '100vh', background: '#0B0B0D', color: 'white', display: 'flex', flexDirection: 'column' }}>
                 {/* Hero Section with Backdrop */}
                 <div
+                    className="hero-section"
                     style={{
                         height: '60vh',
                         minHeight: '500px',
@@ -126,23 +154,26 @@ export default function WatchPage() {
 
                 {/* Content */}
                 <div
+                    className="watch-content"
                     style={{
                         maxWidth: '1200px',
                         margin: '-200px auto 0',
                         padding: '0 2rem 4rem',
                         position: 'relative',
                         zIndex: 1,
+                        width: '100%',
                     }}
                 >
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'start' }}>
+                    <div className="watch-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'start' }}
                         {/* Player Container */}
-                        <div style={{ width: '100%', maxWidth: '500px', margin: '0 auto' }}>
+                        <div style={{ width: '100%', maxWidth: '100%', margin: '0 auto' }}>
                             <div
                                 style={{
                                     borderRadius: '1.5rem',
                                     overflow: 'hidden',
                                     background: '#000',
                                     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+                                    aspectRatio: '16 / 9',
                                 }}
                             >
                                 <VideoPlayer
@@ -173,6 +204,7 @@ export default function WatchPage() {
                             </div>
 
                             <h1
+                                className="watch-title"
                                 style={{
                                     fontSize: 'clamp(2.5rem, 6vw, 4.5rem)',
                                     fontWeight: '700',
