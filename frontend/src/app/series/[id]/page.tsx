@@ -20,9 +20,14 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                 const response = await fetch('/api/library/tv');
                 if (response.ok) {
                     const data = await response.json();
-                    // Find exact series match (case-sensitive)
-                    const foundSeries = (data.series || []).find((s: any) => s.seriesTitle === seriesTitle);
+                    console.log('Available series:', data.series?.map((s: any) => s.seriesTitle));
+                    console.log('Looking for:', seriesTitle);
+                    // Find exact series match (case-insensitive)
+                    const foundSeries = (data.series || []).find((s: any) => 
+                        s.seriesTitle.toLowerCase() === seriesTitle.toLowerCase()
+                    );
                     
+                    console.log('Found series:', foundSeries?.seriesTitle);
                     if (foundSeries) {
                         setSeries(foundSeries);
                         setEpisodes(foundSeries.episodes || []);

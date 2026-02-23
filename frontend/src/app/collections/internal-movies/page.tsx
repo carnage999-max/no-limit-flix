@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { TitleTile, Skeleton } from '@/components';
-import type { MoviePick } from '@/types';
-import { ButtonSecondary } from '@/components';
+import { Navbar } from '@/components';
+
+interface MovieItem {
+    id: string;
+    title: string;
+    thumbnailUrl?: string;
+    genre?: string;
+    duration?: number;
+}
 
 export default function InternalMoviesPage() {
-    const [movies, setMovies] = useState<MoviePick[]>([]);
+    const [movies, setMovies] = useState<MovieItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,15 +25,9 @@ export default function InternalMoviesPage() {
                     const moviesData = (data.movies || []).map((video: any) => ({
                         id: video.id,
                         title: video.title,
-                        year: video.releaseYear || new Date().getFullYear(),
-                        runtime: Math.floor((video.duration || 0) / 60),
-                        poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
-                        genres: video.genre ? [video.genre] : [],
-                        explanation: video.description || '',
-                        watchProviders: [],
-                        playable: true,
-                        assetId: video.id,
-                        cloudfrontUrl: video.s3Url,
+                        thumbnailUrl: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+                        genre: video.genre,
+                        duration: Math.floor((video.duration || 0) / 60),
                     }));
                     setMovies(moviesData);
                 }
@@ -41,42 +41,120 @@ export default function InternalMoviesPage() {
     }, []);
 
     return (
-        <main className="min-h-screen bg-[#0B0B0D] text-white">
-            {/* Header */}
-            <header className="p-6 flex items-center justify-between z-10 border-b border-white/10">
-                <Link href="/" className="flex items-center gap-2">
-                    <span className="text-xl font-black tracking-tighter text-white">NO LIMIT<span className="text-gold">FLIX</span></span>
-                </Link>
-                <Link href="/">
-                    <ButtonSecondary>Back to Home</ButtonSecondary>
-                </Link>
-            </header>
+        <>
+            <Navbar />
+            <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
+                {/* Content */}
+                <div style={{ maxWidth: '1200px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '2rem' }}>
+                    <h1 style={{
+                        color: '#F3F4F6',
+                        fontSize: 'clamp(2rem, 8vw, 3.2rem)',
+                        fontWeight: '700',
+                        marginBottom: '0.5rem'
+                    }}>
+                        All Movies
+                    </h1>
+                    <p style={{
+                        color: '#A7ABB4',
+                        fontSize: '1rem',
+                        marginBottom: '2rem'
+                    }}>
+                        Watch all available movies from our library
+                    </p>
 
-            {/* Content */}
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-                <div className="mb-8">
-                    <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">All Movies</h1>
-                    <p className="text-silver/60">Watch all available movies from our library</p>
+                    {loading ? (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                            gap: '1.5rem'
+                        }}>
+                            {[...Array(8)].map((_, i) => (
+                                <div key={i} style={{
+                                    aspectRatio: '2/3',
+                                    background: 'rgba(167, 171, 180, 0.1)',
+                                    borderRadius: '0.5rem',
+                                    animation: 'pulse 2s ease-in-out infinite'
+                                }} />
+                            ))}
+                        </div>
+                    ) : movies.length > 0 ? (
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                            gap: '1.5rem'
+                        }}>
+                            {movies.map((movie) => (
+                                <Link
+                                    key={movie.id}
+                                    href={`/watch/${movie.id}`}
+                                    style={{
+                                        textDecoration: 'none',
+                                        display: 'block',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.3s ease',
+                                            borderRadius: '0.5rem',
+                                            overflow: 'hidden'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                aspectRatio: '2/3',
+                                                overflow: 'hidden',
+                                                borderRadius: '0.5rem'
+                                            }}
+                                        >
+                                            <img
+                                                src={movie.thumbnailUrl}
+                                                alt={movie.title}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    objectFit: 'cover'
+                                                }}
+                                            />
+                                        </div>
+                                        <div style={{ marginTop: '0.75rem' }}>
+                                            <h3
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: '600',
+                                                    color: '#F3F4F6',
+                                                    marginBottom: '0.25rem',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap'
+                                                }}
+                                            >
+                                                {movie.title}
+                                            </h3>
+                                            <p style={{
+                                                fontSize: '0.75rem',
+                                                color: '#A7ABB4'
+                                            }}>
+                                                {movie.duration ? `${movie.duration}m` : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    ) : (
+                        <div style={{ textAlign: 'center', paddingTop: '4rem', paddingBottom: '4rem' }}>
+                            <p style={{ color: '#A7ABB4' }}>No movies available</p>
+                        </div>
+                    )}
                 </div>
-
-                {loading ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {[...Array(8)].map((_, i) => (
-                            <Skeleton key={i} height="400px" borderRadius="0.75rem" />
-                        ))}
-                    </div>
-                ) : movies.length > 0 ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {movies.map((movie) => (
-                            <TitleTile key={movie.id} movie={movie} />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-16">
-                        <p className="text-silver/60">No movies available</p>
-                    </div>
-                )}
-            </div>
-        </main>
+            </main>
+        </>
     );
 }
