@@ -189,8 +189,7 @@ export default function SeriesDetailContent() {
                             }}>
                                 <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.5rem' }}>SERIES INFO</div>
                                 <div style={{ fontSize: '1rem', color: '#F3F4F6', lineHeight: '1.6' }}>
-                                    {episodes.length} episodes
-                                    {seasons.length > 1 && ` across ${seasons.length} seasons`}
+                                    {series.description || `${episodes.length} episodes${seasons.length > 1 ? ` across ${seasons.length} seasons` : ''}`}
                                 </div>
                             </div>
 
@@ -283,9 +282,6 @@ export default function SeriesDetailContent() {
                                             <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#F3F4F6', marginBottom: '0.5rem' }}>
                                                 {episode.title}
                                             </h3>
-                                            <p style={{ fontSize: '0.875rem', color: '#A7ABB4', lineHeight: '1.4' }}>
-                                                {episode.description || 'No description available'}
-                                            </p>
                                         </div>
                                         {episode.duration && (
                                             <div style={{ flexShrink: 0, textAlign: 'right', color: '#A7ABB4', fontSize: '0.875rem', fontWeight: '500' }}>
