@@ -78,7 +78,7 @@ export default function InternalTVPage() {
                             {series.map((show) => (
                                 <Link
                                     key={show.seriesTitle}
-                                    href={`/series/${encodeURIComponent(show.seriesTitle)}`}
+                                    href={`/series/detail?name=${encodeURIComponent(show.seriesTitle)}`}
                                     style={{
                                         textDecoration: 'none',
                                         display: 'block',
