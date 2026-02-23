@@ -70,6 +70,7 @@ export async function GET() {
                     genre: ep.genre,
                     rating: ep.rating,
                     tmdbId: ep.tmdbId,
+                    description: transformedEp.description,
                     episodeCount: 0,
                     episodes: [],
                 };
@@ -79,6 +80,11 @@ export async function GET() {
 
             if (!seriesMap[key].thumbnailUrl && transformedEp.thumbnailUrl) {
                 seriesMap[key].thumbnailUrl = transformedEp.thumbnailUrl;
+            }
+            
+            // Use the first episode's description as the series description if not already set
+            if (!seriesMap[key].description && transformedEp.description) {
+                seriesMap[key].description = transformedEp.description;
             }
         }
 
