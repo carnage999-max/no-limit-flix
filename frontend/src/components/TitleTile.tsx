@@ -9,10 +9,17 @@ interface TitleTileProps {
 }
 
 export default function TitleTile({ movie }: TitleTileProps) {
+    // Determine if this is a series based on the explanation field (contains "episodes")
+    const isSeries = movie.explanation?.toLowerCase().includes('episodes');
+
     // For playable content, navigate directly to watch page for immediate player
     const getHref = () => {
         if (movie.playable && movie.assetId) {
-            // Go directly to watch page, skipping the title detail page
+            // For series, use the series detail page with query params
+            if (isSeries) {
+                return `/series/detail?name=${encodeURIComponent(movie.title)}`;
+            }
+            // For movies, go directly to watch page
             return `/watch/${movie.assetId}`;
         }
         // For TMDB content, use the title detail page
