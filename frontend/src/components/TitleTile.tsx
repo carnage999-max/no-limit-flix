@@ -16,13 +16,14 @@ export default function TitleTile({ movie }: TitleTileProps) {
 
     // For playable content, navigate directly to watch page for immediate player
     const getHref = () => {
+        // For series, use the series detail page with query params (regardless of assetId)
+        if (isSeries) {
+            const href = `/series/detail?name=${encodeURIComponent(movie.title)}`;
+            console.log('Series href:', href);
+            return href;
+        }
+        
         if (movie.playable && movie.assetId) {
-            // For series, use the series detail page with query params
-            if (isSeries) {
-                const href = `/series/detail?name=${encodeURIComponent(movie.title)}`;
-                console.log('Series href:', href);
-                return href;
-            }
             // For movies, go directly to watch page
             return `/watch/${movie.assetId}`;
         }
