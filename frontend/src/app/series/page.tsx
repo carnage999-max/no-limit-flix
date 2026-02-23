@@ -2,12 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { TitleTile, Skeleton } from '@/components';
-import type { MoviePick } from '@/types';
+import { Skeleton } from '@/components';
 import { ButtonSecondary } from '@/components';
 
+interface SeriesItem {
+    seriesTitle: string;
+    thumbnailUrl?: string;
+    genre?: string;
+    episodeCount: number;
+}
+
 export default function SeriesPage() {
-    const [series, setSeries] = useState<MoviePick[]>([]);
+    const [series, setSeries] = useState<SeriesItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -16,20 +22,7 @@ export default function SeriesPage() {
                 const response = await fetch('/api/library/tv');
                 if (response.ok) {
                     const data = await response.json();
-                    const seriesData = (data.series || []).map((tv: any) => ({
-                        id: tv.seriesTitle || tv.id,
-                        title: tv.seriesTitle,
-                        year: tv.releaseYear || new Date().getFullYear(),
-                        runtime: 45,
-                        poster: tv.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400',
-                        genres: tv.genre ? [tv.genre] : [],
-                        explanation: `${tv.episodeCount || 0} episodes`,
-                        watchProviders: [],
-                        playable: true,
-                        assetId: tv.id,
-                        cloudfrontUrl: tv.thumbnailUrl,
-                    }));
-                    setSeries(seriesData);
+                    setSeries(data.series || []);
                 }
             } catch (error) {
                 console.error('Failed to fetch series:', error);
@@ -68,7 +61,89 @@ export default function SeriesPage() {
                 ) : series.length > 0 ? (
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                         {series.map((show) => (
-                            <TitleTile key={show.id} movie={show} />
+                            <Link
+                                key={show.seriesTitle}
+                                href={`/series/${encodeURIComponent(show.seriesTitle)}`}
+                                className="block transition-all duration-300"
+                                style={{
+                                    textDecoration: 'none',
+                                    transform: 'translateY(0)',
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(-8px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.transform = 'translateY(0)';
+                                }}
+                            >
+                                <div
+                                    className="relative overflow-hidden"
+                                    style={{
+                                        borderRadius: '0.75rem',
+                                        background: 'rgba(167, 171, 180, 0.05)',
+                                        minWidth: 0,
+                                    }}
+                                >
+                                    {/* Poster Image */}
+                                    <div
+                                        className="relative"
+                                        style={{
+                                            aspectRatio: '2/3',
+                                            overflow: 'hidden',
+                                        }}
+                                    >
+                                        <img
+                                            src={show.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400'}
+                                            alt={show.seriesTitle}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                objectFit: 'cover',
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Title Info */}
+                                    <div
+                                        style={{
+                                            padding: 'clamp(0.5rem, 2vw, 1rem)',
+                                        }}
+                                    >
+                                        {show.genre && (
+                                            <p style={{
+                                                fontSize: 'clamp(0.7rem, 1.5vw, 0.8rem)',
+                                                color: '#D4AF37',
+                                                fontStyle: 'italic',
+                                                marginBottom: '0.5rem',
+                                                lineHeight: 1.4
+                                            }}>
+                                                {show.genre}
+                                            </p>
+                                        )}
+                                        <h3
+                                            style={{
+                                                fontSize: 'clamp(0.875rem, 2vw, 1.125rem)',
+                                                fontWeight: '600',
+                                                color: '#F3F4F6',
+                                                marginBottom: '0.25rem',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {show.seriesTitle}
+                                        </h3>
+                                        <p
+                                            style={{
+                                                fontSize: 'clamp(0.75rem, 1.5vw, 0.875rem)',
+                                                color: '#A7ABB4',
+                                            }}
+                                        >
+                                            {show.episodeCount} episodes
+                                        </p>
+                                    </div>
+                                </div>
+                            </Link>
                         ))}
                     </div>
                 ) : (
