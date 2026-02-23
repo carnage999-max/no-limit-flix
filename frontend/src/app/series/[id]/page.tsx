@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { notFound } from 'next/navigation';
+import { Navbar, Skeleton } from '@/components';
 import Link from 'next/link';
-import { ButtonSecondary } from '@/components';
-import type { MoviePick } from '@/types';
 
 export default function SeriesDetailPage({ params }: { params: { id: string } }) {
     const [series, setSeries] = useState<any>(null);
@@ -11,7 +11,8 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
     const [loading, setLoading] = useState(true);
     const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
 
-    const decodedSeriesTitle = decodeURIComponent(params.id);
+    // params.id is already URL-decoded by Next.js
+    const seriesTitle = params.id;
 
     useEffect(() => {
         const fetchSeries = async () => {
@@ -19,7 +20,8 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                 const response = await fetch('/api/library/tv');
                 if (response.ok) {
                     const data = await response.json();
-                    const foundSeries = (data.series || []).find((s: any) => s.seriesTitle === decodedSeriesTitle);
+                    // Find exact series match (case-sensitive)
+                    const foundSeries = (data.series || []).find((s: any) => s.seriesTitle === seriesTitle);
                     
                     if (foundSeries) {
                         setSeries(foundSeries);
@@ -38,7 +40,7 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
             }
         };
         fetchSeries();
-    }, [decodedSeriesTitle]);
+    }, [seriesTitle]);
 
     const seasons = [...new Set(episodes.map((ep: any) => ep.seasonNumber))].sort((a, b) => a - b);
     const filteredEpisodes = selectedSeason !== null 
@@ -47,173 +49,255 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
 
     if (loading) {
         return (
-            <main className="min-h-screen bg-[#0B0B0D] text-white">
-                <header className="p-6 flex items-center justify-between z-10 border-b border-white/10">
-                    <Link href="/" className="flex items-center gap-2">
-                        <span className="text-xl font-black tracking-tighter text-white">NO LIMIT<span className="text-gold">FLIX</span></span>
-                    </Link>
-                    <Link href="/series">
-                        <ButtonSecondary>Back to Series</ButtonSecondary>
-                    </Link>
-                </header>
-                <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-                    <p className="text-silver/60">Loading...</p>
-                </div>
-            </main>
+            <>
+                <Navbar />
+                <main style={{ minHeight: '100vh', background: '#0B0B0D' }}>
+                    <div style={{ height: '60vh', background: '#111' }} />
+                    <div style={{ maxWidth: '1200px', margin: '-200px auto 0', padding: '0 2rem 4rem', position: 'relative', zIndex: 1 }}>
+                        <div className="detail-grid">
+                            <div style={{ width: '100%', maxWidth: '350px', margin: '0 auto' }}>
+                                <Skeleton height="500px" borderRadius="1rem" />
+                            </div>
+                            <div>
+                                <Skeleton width="150px" height="1.5rem" className="mb-4" />
+                                <Skeleton width="60%" height="3.5rem" className="mb-4" />
+                                <Skeleton width="200px" height="1.5rem" className="mb-8" />
+                                <div style={{ padding: '1.5rem', borderRadius: '0.75rem', background: 'rgba(167, 171, 180, 0.05)', marginBottom: '2rem' }}>
+                                    <Skeleton width="100px" height="0.875rem" className="mb-3" />
+                                    <Skeleton width="100%" height="1.125rem" className="mb-2" />
+                                    <Skeleton width="90%" height="1.125rem" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </>
         );
     }
 
     if (!series) {
-        return (
-            <main className="min-h-screen bg-[#0B0B0D] text-white">
-                <header className="p-6 flex items-center justify-between z-10 border-b border-white/10">
-                    <Link href="/" className="flex items-center gap-2">
-                        <span className="text-xl font-black tracking-tighter text-white">NO LIMIT<span className="text-gold">FLIX</span></span>
-                    </Link>
-                    <Link href="/series">
-                        <ButtonSecondary>Back to Series</ButtonSecondary>
-                    </Link>
-                </header>
-                <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-                    <p className="text-silver/60">Series not found</p>
-                </div>
-            </main>
-        );
+        notFound();
     }
 
     return (
-        <main className="min-h-screen bg-[#0B0B0D] text-white">
-            {/* Header */}
-            <header className="p-6 flex items-center justify-between z-10 border-b border-white/10">
-                <Link href="/" className="flex items-center gap-2">
-                    <span className="text-xl font-black tracking-tighter text-white">NO LIMIT<span className="text-gold">FLIX</span></span>
-                </Link>
-                <Link href="/series">
-                    <ButtonSecondary>Back to Series</ButtonSecondary>
-                </Link>
-            </header>
+        <>
+            <Navbar />
+            <main style={{ minHeight: '100vh' }}>
+                {/* Hero Section with Backdrop */}
+                <div
+                    className="relative"
+                    style={{
+                        height: '60vh',
+                        minHeight: '500px',
+                        overflow: 'hidden',
+                    }}
+                >
+                    <img
+                        src={series.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400'}
+                        alt={series.seriesTitle}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            opacity: 0.3,
+                        }}
+                    />
 
-            {/* Content */}
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-8">
-                {/* Series Header */}
-                <div className="mb-8 flex gap-6 flex-col md:flex-row">
-                    <div className="w-40 h-60 flex-shrink-0">
-                        <img
-                            src={series.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400'}
-                            alt={series.seriesTitle}
-                            className="w-full h-full object-cover rounded-lg"
-                        />
-                    </div>
-                    <div className="flex-1">
-                        <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-2">{series.seriesTitle}</h1>
-                        <div className="flex gap-4 mb-4">
-                            {series.genre && (
-                                <span className="text-gold">{series.genre}</span>
-                            )}
-                            {series.rating && (
-                                <span className="text-silver/60">{series.rating}</span>
-                            )}
-                            <span className="text-silver/60">{episodes.length} episodes</span>
-                        </div>
-                    </div>
+                    {/* Gradient Overlay */}
+                    <div
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            background: 'linear-gradient(to top, #0B0B0D 0%, transparent 100%)',
+                        }}
+                    />
                 </div>
 
-                {/* Season Selector */}
-                {seasons.length > 1 && (
-                    <div className="mb-8">
-                        <h2 className="text-lg font-semibold mb-3">Seasons</h2>
-                        <div className="flex gap-2 flex-wrap">
-                            {seasons.map((season) => (
-                                <button
-                                    key={season}
-                                    onClick={() => setSelectedSeason(season)}
-                                    style={{
-                                        padding: '0.5rem 1rem',
-                                        borderRadius: '0.5rem',
-                                        border: selectedSeason === season ? 'none' : '1px solid #A7ABB4',
-                                        background: selectedSeason === season ? 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)' : 'transparent',
-                                        color: selectedSeason === season ? '#0B0B0D' : '#F3F4F6',
+                {/* Content */}
+                <div
+                    style={{
+                        maxWidth: '1200px',
+                        margin: '-200px auto 0',
+                        padding: '0 2rem 4rem',
+                        position: 'relative',
+                        zIndex: 1,
+                    }}
+                >
+                    <div className="detail-grid">
+                        {/* Poster */}
+                        <div className="animate-slide-up" style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
+                            <img
+                                src={series.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400'}
+                                alt={series.seriesTitle}
+                                style={{
+                                    width: '100%',
+                                    borderRadius: '1rem',
+                                    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+                                }}
+                            />
+                        </div>
+
+                        {/* Details */}
+                        <div className="animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+                                {series.genre && (
+                                    <span style={{
+                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '9999px',
+                                        color: '#A7ABB4',
+                                        fontSize: '0.75rem',
                                         fontWeight: '600',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (selectedSeason !== season) {
-                                            e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                        }
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        if (selectedSeason !== season) {
-                                            e.currentTarget.style.background = 'transparent';
-                                        }
-                                    }}
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em'
+                                    }}>
+                                        {series.genre}
+                                    </span>
+                                )}
+                                {series.rating && (
+                                    <span style={{
+                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '9999px',
+                                        color: '#A7ABB4',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '600',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em'
+                                    }}>
+                                        {series.rating}
+                                    </span>
+                                )}
+                            </div>
+
+                            <h1 style={{
+                                fontSize: 'clamp(2.5rem, 8vw, 3.5rem)',
+                                fontWeight: '700',
+                                lineHeight: '1.1',
+                                letterSpacing: '-0.02em',
+                                marginBottom: '1.5rem',
+                                color: '#F3F4F6'
+                            }}>
+                                {series.seriesTitle}
+                            </h1>
+
+                            <div style={{
+                                padding: '1.5rem',
+                                borderRadius: '0.75rem',
+                                background: 'rgba(167, 171, 180, 0.05)',
+                                border: '1px solid rgba(167, 171, 180, 0.1)',
+                                marginBottom: '2rem'
+                            }}>
+                                <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.5rem' }}>SERIES INFO</div>
+                                <div style={{ fontSize: '1rem', color: '#F3F4F6', lineHeight: '1.6' }}>
+                                    {episodes.length} episodes
+                                    {seasons.length > 1 && ` across ${seasons.length} seasons`}
+                                </div>
+                            </div>
+
+                            {/* Season Selector */}
+                            {seasons.length > 1 && (
+                                <div style={{ marginBottom: '2rem' }}>
+                                    <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '1rem' }}>SELECT SEASON</div>
+                                    <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                                        {seasons.map((season) => (
+                                            <button
+                                                key={season}
+                                                onClick={() => setSelectedSeason(season)}
+                                                style={{
+                                                    padding: '0.75rem 1.5rem',
+                                                    borderRadius: '0.5rem',
+                                                    border: selectedSeason === season ? 'none' : '1px solid rgba(167, 171, 180, 0.3)',
+                                                    background: selectedSeason === season ? 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)' : 'transparent',
+                                                    color: selectedSeason === season ? '#0B0B0D' : '#F3F4F6',
+                                                    fontWeight: '600',
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s',
+                                                    fontSize: '0.9375rem'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                    if (selectedSeason !== season) {
+                                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
+                                                        e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.5)';
+                                                    }
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    if (selectedSeason !== season) {
+                                                        e.currentTarget.style.background = 'transparent';
+                                                        e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.3)';
+                                                    }
+                                                }}
+                                            >
+                                                Season {season}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Episodes Section */}
+                    <div style={{ marginTop: '3rem' }}>
+                        <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '1.5rem' }}>
+                            {selectedSeason !== null ? `SEASON ${selectedSeason}` : 'ALL EPISODES'} ({filteredEpisodes.length})
+                        </div>
+                        <div style={{ display: 'grid', gap: '1rem' }}>
+                            {filteredEpisodes.map((episode) => (
+                                <Link
+                                    key={episode.id}
+                                    href={`/watch/${episode.id}`}
+                                    className="block"
+                                    style={{ textDecoration: 'none' }}
                                 >
-                                    Season {season}
-                                </button>
+                                    <div
+                                        style={{
+                                            display: 'flex',
+                                            gap: '1rem',
+                                            padding: '1rem',
+                                            borderRadius: '0.75rem',
+                                            background: 'rgba(167, 171, 180, 0.05)',
+                                            border: '1px solid rgba(167, 171, 180, 0.1)',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            (e.currentTarget as HTMLElement).style.background = 'rgba(167, 171, 180, 0.1)';
+                                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(167, 171, 180, 0.3)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            (e.currentTarget as HTMLElement).style.background = 'rgba(167, 171, 180, 0.05)';
+                                            (e.currentTarget as HTMLElement).style.borderColor = 'rgba(167, 171, 180, 0.1)';
+                                        }}
+                                    >
+                                        <div style={{ flexShrink: 0, width: '140px', height: '79px', overflow: 'hidden', borderRadius: '0.5rem' }}>
+                                            <img
+                                                src={episode.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=300'}
+                                                alt={episode.title}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ fontSize: '0.8125rem', color: '#D4AF37', fontWeight: '600', marginBottom: '0.25rem' }}>
+                                                S{String(episode.seasonNumber).padStart(2, '0')}E{String(episode.episodeNumber).padStart(2, '0')}
+                                            </div>
+                                            <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#F3F4F6', marginBottom: '0.5rem' }}>
+                                                {episode.title}
+                                            </h3>
+                                            <p style={{ fontSize: '0.875rem', color: '#A7ABB4', lineHeight: '1.4' }}>
+                                                {episode.description || 'No description available'}
+                                            </p>
+                                        </div>
+                                        {episode.duration && (
+                                            <div style={{ flexShrink: 0, textAlign: 'right', color: '#A7ABB4', fontSize: '0.875rem', fontWeight: '500' }}>
+                                                {Math.floor(episode.duration / 60)}m
+                                            </div>
+                                        )}
+                                    </div>
+                                </Link>
                             ))}
                         </div>
                     </div>
-                )}
-
-                {/* Episodes List */}
-                <div>
-                    <h2 className="text-lg font-semibold mb-4">
-                        {selectedSeason !== null ? `Season ${selectedSeason}` : 'Episodes'} ({filteredEpisodes.length})
-                    </h2>
-                    <div className="space-y-3">
-                        {filteredEpisodes.map((episode, index) => (
-                            <Link
-                                key={episode.id}
-                                href={`/watch/${episode.id}`}
-                                className="block"
-                            >
-                                <div
-                                    style={{
-                                        display: 'flex',
-                                        gap: '1rem',
-                                        padding: '1rem',
-                                        borderRadius: '0.5rem',
-                                        background: 'rgba(167, 171, 180, 0.05)',
-                                        border: '1px solid rgba(167, 171, 180, 0.1)',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        (e.currentTarget as HTMLElement).style.background = 'rgba(167, 171, 180, 0.1)';
-                                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(167, 171, 180, 0.3)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        (e.currentTarget as HTMLElement).style.background = 'rgba(167, 171, 180, 0.05)';
-                                        (e.currentTarget as HTMLElement).style.borderColor = 'rgba(167, 171, 180, 0.1)';
-                                    }}
-                                >
-                                    <div style={{ flexShrink: 0, width: '120px', height: '68px', overflow: 'hidden', borderRadius: '0.375rem' }}>
-                                        <img
-                                            src={episode.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=200'}
-                                            alt={episode.title}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <div style={{ fontSize: '0.875rem', color: '#D4AF37', marginBottom: '0.25rem' }}>
-                                            S{String(episode.seasonNumber).padStart(2, '0')}E{String(episode.episodeNumber).padStart(2, '0')}
-                                        </div>
-                                        <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#F3F4F6', marginBottom: '0.25rem' }}>
-                                            {episode.title}
-                                        </h3>
-                                        <p style={{ fontSize: '0.875rem', color: '#A7ABB4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {episode.description || 'No description available'}
-                                        </p>
-                                    </div>
-                                    <div style={{ flexShrink: 0, textAlign: 'right', fontSize: '0.875rem', color: '#A7ABB4' }}>
-                                        {episode.duration ? `${Math.floor(episode.duration / 60)}m` : ''}
-                                    </div>
-                                </div>
-                            </Link>
-                        ))}
-                    </div>
                 </div>
-            </div>
-        </main>
+            </main>
+        </>
     );
 }
