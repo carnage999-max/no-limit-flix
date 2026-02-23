@@ -14,6 +14,9 @@ interface HeroCardProps {
 
 export default function HeroCard({ movie }: HeroCardProps) {
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
+    
+    // Determine if this is a series based on the explanation field (contains "episodes")
+    const isSeries = movie.explanation?.toLowerCase().includes('episodes');
 
     if (!movie) return null;
 
@@ -172,7 +175,7 @@ export default function HeroCard({ movie }: HeroCardProps) {
                     >
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                             {movie.playable ? (
-                                <Link href={`/watch/${movie.assetId}`}>
+                                <Link href={isSeries ? `/series/detail?name=${encodeURIComponent(movie.title)}` : `/watch/${movie.assetId}`}>
                                     <ButtonPrimary>
                                         <div className="flex items-center gap-2">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -190,7 +193,7 @@ export default function HeroCard({ movie }: HeroCardProps) {
                                 </ButtonPrimary>
                             )}
 
-                            <Link href={`/title/${movie.id}`}>
+                            <Link href={isSeries ? `/series/detail?name=${encodeURIComponent(movie.title)}` : `/title/${movie.id}`}>
                                 <ButtonSecondary>
                                     Full Details
                                 </ButtonSecondary>
