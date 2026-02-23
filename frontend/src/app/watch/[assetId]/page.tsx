@@ -164,7 +164,7 @@ export default function WatchPage() {
                         width: '100%',
                     }}
                 >
-                    <div className="watch-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'start' }}
+                    <div className="watch-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'start' }}>
                         {/* Player Container */}
                         <div style={{ width: '100%', maxWidth: '100%', margin: '0 auto' }}>
                             <div
