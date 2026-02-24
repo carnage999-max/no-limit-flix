@@ -33,7 +33,8 @@ export async function POST(request: NextRequest) {
                     email: email.toLowerCase(),
                     username,
                     password: hashedPassword,
-                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`
+                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+                    role: 'user' // Default new users to 'user' role
                 }
             });
 
@@ -47,7 +48,8 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    avatar: user.avatar
+                    avatar: user.avatar,
+                    role: user.role
                 }
             });
 
@@ -81,7 +83,8 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    avatar: user.avatar
+                    avatar: user.avatar,
+                    role: user.role
                 }
             });
 

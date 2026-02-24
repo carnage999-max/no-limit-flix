@@ -63,6 +63,7 @@ model User {
   username          String   @unique
   password          String
   avatar            String?
+  role              String   @default("user") // "user" or "admin"
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -73,6 +74,7 @@ model User {
 
   @@index([email])
   @@index([username])
+  @@index([role])
 }
 
 model WatchHistory {

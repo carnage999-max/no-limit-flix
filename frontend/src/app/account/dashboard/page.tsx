@@ -27,6 +27,7 @@ interface GenreStats {
 export default function AnalyticsDashboard() {
     const router = useRouter();
     const [userId, setUserId] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [stats, setStats] = useState<any>(null);
     const [topMovies, setTopMovies] = useState<TopMovie[]>([]);
     const [loading, setLoading] = useState(true);
@@ -34,12 +35,34 @@ export default function AnalyticsDashboard() {
     const [page, setPage] = useState(1);
 
     useEffect(() => {
-        // Get userId from localStorage or auth check
+        // Get userId and role from localStorage or auth check
         const storedUserId = localStorage.getItem('userId');
+        const storedUser = localStorage.getItem('user');
+        
         if (!storedUserId) {
             router.push('/account');
             return;
         }
+
+        // Parse user to get role
+        let role = 'user';
+        if (storedUser) {
+            try {
+                const userData = JSON.parse(storedUser);
+                role = userData.role || 'user';
+            } catch (err) {
+                console.error('Failed to parse user:', err);
+            }
+        }
+
+        setUserRole(role);
+
+        // Only admins can see analytics
+        if (role !== 'admin') {
+            router.push('/account/favorites');
+            return;
+        }
+
         setUserId(storedUserId);
         fetchAnalytics(storedUserId);
     }, [router]);

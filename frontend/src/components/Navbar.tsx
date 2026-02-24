@@ -2,10 +2,25 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export default function Navbar() {
     const pathname = usePathname();
     const isHome = pathname === '/';
+    const [userRole, setUserRole] = useState<string | null>(null);
+
+    useEffect(() => {
+        // Get user role from localStorage
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            try {
+                const userData = JSON.parse(storedUser);
+                setUserRole(userData.role || 'user');
+            } catch (err) {
+                console.error('Failed to parse user:', err);
+            }
+        }
+    }, []);
 
     return (
         <header
@@ -86,8 +101,37 @@ export default function Navbar() {
             )}
 
             <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                {userRole === 'admin' && (
+                    <Link
+                        href="/account/dashboard"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '0.5rem',
+                            background: 'rgba(212, 175, 55, 0.1)',
+                            border: '1px solid rgba(212, 175, 55, 0.2)',
+                            color: '#D4AF37',
+                            textDecoration: 'none',
+                            fontSize: '0.875rem',
+                            fontWeight: '600',
+                            transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
+                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                        }}
+                    >
+                        📊 Analytics
+                    </Link>
+                )}
                 <Link
-                    href="/account/dashboard"
+                    href="/account/favorites"
                     style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -111,7 +155,7 @@ export default function Navbar() {
                         e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
                     }}
                 >
-                    👤 Account
+                    ❤️ Favorites
                 </Link>
             </div>
         </header>
