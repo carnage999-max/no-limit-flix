@@ -79,6 +79,37 @@ export async function getMovieDetails(id: string) {
     };
 }
 
+export async function getTVSeriesDetails(id: string) {
+    const data = await fetchFromTMDB(`/tv/${id}`, {
+        append_to_response: 'videos,watch/providers'
+    });
+
+    const trailer = data.videos?.results?.find((v: any) => v.type === 'Trailer' && v.site === 'YouTube');
+    const usProviders = data['watch/providers']?.results?.US?.flatrate || data['watch/providers']?.results?.US?.buy || [];
+
+    return {
+        id: data.id.toString(),
+        tmdb_id: data.id.toString(),
+        title: data.name,
+        year: data.first_air_date ? new Date(data.first_air_date).getFullYear() : 0,
+        rating: data.vote_average || 0,
+        ratingCount: data.vote_count || 0,
+        poster: getImageUrl(data.poster_path),
+        backdrop: getImageUrl(data.backdrop_path, 'original'),
+        overview: data.overview,
+        numberOfSeasons: data.number_of_seasons || 0,
+        numberOfEpisodes: data.number_of_episodes || 0,
+        trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : '',
+        watchProviders: usProviders.map((p: any) => ({
+            name: p.provider_name,
+            logoUrl: getImageUrl(p.logo_path),
+            link: `https://www.themoviedb.org/tv/${id}/watch`,
+        })),
+        genres: data.genres?.map((g: any) => g.name) || [],
+        status: data.status,
+    };
+}
+
 
 export async function searchKeywords(query: string) {
     const data = await fetchFromTMDB('/search/keyword', { query });

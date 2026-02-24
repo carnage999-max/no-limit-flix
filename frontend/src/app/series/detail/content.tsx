@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import { Skeleton } from '@/components';
 import Link from 'next/link';
+import { getTVSeriesDetails } from '@/lib/tmdb';
 
 export default function SeriesDetailContent() {
     const searchParams = useSearchParams();
     const seriesTitle = searchParams.get('name');
 
     const [series, setSeries] = useState<any>(null);
+    const [tmdbData, setTmdbData] = useState<any>(null);
     const [episodes, setEpisodes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
@@ -36,6 +38,17 @@ export default function SeriesDetailContent() {
                         const seasons = [...new Set((foundSeries.episodes || []).map((ep: any) => ep.seasonNumber))];
                         if (seasons.length > 0) {
                             setSelectedSeason(Math.min(...seasons));
+                        }
+
+                        // Fetch TMDB data if tmdbId is available
+                        if (foundSeries.tmdbId) {
+                            try {
+                                const tmdbDetails = await getTVSeriesDetails(foundSeries.tmdbId);
+                                setTmdbData(tmdbDetails);
+                            } catch (error) {
+                                console.warn('Failed to fetch TMDB data:', error);
+                                // Continue without TMDB data
+                            }
                         }
                     }
                 }
@@ -191,6 +204,34 @@ export default function SeriesDetailContent() {
                                 <div style={{ fontSize: '1rem', color: '#F3F4F6', lineHeight: '1.6' }}>
                                     {series.description || `${episodes.length} episodes${seasons.length > 1 ? ` across ${seasons.length} seasons` : ''}`}
                                 </div>
+                                {tmdbData && (
+                                    <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(167, 171, 180, 0.1)' }}>
+                                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                            <div>
+                                                <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
+                                                <div style={{ fontSize: '1.25rem', color: '#D4AF37', fontWeight: '700' }}>
+                                                    ⭐ {tmdbData.rating.toFixed(1)}/10
+                                                </div>
+                                            </div>
+                                            {tmdbData.status && (
+                                                <div>
+                                                    <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>STATUS</div>
+                                                    <div style={{ fontSize: '1rem', color: '#F3F4F6' }}>
+                                                        {tmdbData.status}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {tmdbData.genres && tmdbData.genres.length > 0 && (
+                                            <div style={{ marginTop: '0.75rem' }}>
+                                                <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>GENRES</div>
+                                                <div style={{ fontSize: '0.95rem', color: '#F3F4F6' }}>
+                                                    {tmdbData.genres.join(', ')}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Season Selector */}
