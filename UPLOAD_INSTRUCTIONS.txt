@@ -1,0 +1,47 @@
+NO LIMIT FLIX - VIDEO UPLOAD INSTRUCTIONS FOR TEAM MEMBERS
+==========================================================
+
+QUICK START:
+1. Go to: https://no-limit-flix.com/admin
+2. Enter the admin password: securepassword
+3. Click "Initialize Access"
+
+UPLOADING A VIDEO:
+1. After login, you'll see "Library Ingestion" page
+2. Click the upload zone or drag & drop your video file
+3. Supported formats: MP4, WebM, MOV, MKV, AVI
+
+FILLING IN VIDEO DETAILS:
+1. Title: Name of the movie/show
+2. Type: Select "movie" or "series"
+3. Release Year: Year it was released
+4. Genre: Primary genre (Action, Drama, Comedy, etc.)
+5. Description: Brief plot summary (1-2 sentences)
+6. Explanation: Why viewers might like it (e.g., "Perfect for action lovers")
+
+FOR TV SERIES:
+1. Add the series name as the Title
+2. Select "series" as Type
+3. Upload each episode separately
+4. In the description, mention episode details (S01E01, etc.)
+
+AFTER UPLOADING:
+1. Check the "completed" status
+2. Video will appear in the library within minutes
+3. Search for it in the app to verify
+
+IF SOMETHING GOES WRONG:
+1. Check file size (should be under 5GB)
+2. Make sure format is MP4 or similar video format
+3. Try uploading again
+4. Contact me if it keeps failing
+
+TIPS:
+- Always fill in all fields completely
+- Use clear, descriptive titles
+- Write engaging descriptions to attract viewers
+- Test uploads with smaller files first
+- The system automatically creates thumbnails
+
+QUESTIONS?
+Contact your Abdul or Ezekiel
