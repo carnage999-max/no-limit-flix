@@ -147,17 +147,18 @@ export default function Navbar() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.5rem',
-                            padding: '0.5rem 1rem',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
                             borderRadius: '0.5rem',
                             background: 'rgba(212, 175, 55, 0.1)',
                             border: '1px solid rgba(212, 175, 55, 0.2)',
                             color: '#D4AF37',
                             textDecoration: 'none',
-                            fontSize: '0.875rem',
                             fontWeight: '600',
                             transition: 'all 0.2s',
                         }}
+                        title="Favorites"
                         onMouseEnter={(e) => {
                             e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
                             e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)';
@@ -168,7 +169,6 @@ export default function Navbar() {
                         }}
                     >
                         <Heart size={18} />
-                        Favorites
                     </Link>
                 )}
                 {!userId && (

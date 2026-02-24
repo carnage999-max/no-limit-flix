@@ -63,8 +63,9 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
             });
 
             if (response.ok) {
-                const data = await response.json();
                 setFavorites([...favorites, movie]);
+            } else {
+                console.error('Failed to add favorite:', await response.text());
             }
         } catch (error) {
             console.error('Failed to add favorite:', error);

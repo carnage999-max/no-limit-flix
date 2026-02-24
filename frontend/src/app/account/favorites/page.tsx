@@ -118,29 +118,6 @@ export default function FavoritesPage() {
                             {favorites.length} {favorites.length === 1 ? 'title' : 'titles'} saved
                         </p>
                     </div>
-                    <Link
-                        href="/account/dashboard"
-                        style={{
-                            padding: '0.875rem 1.75rem',
-                            background: 'rgba(212, 175, 55, 0.1)',
-                            border: '1px solid rgba(212, 175, 55, 0.3)',
-                            borderRadius: '0.75rem',
-                            color: '#D4AF37',
-                            textDecoration: 'none',
-                            fontWeight: '600',
-                            fontSize: '0.875rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'rgba(212, 175, 55, 0.2)';
-                        }}
-                        onMouseLeave={(e) => {
-                            (e.currentTarget as HTMLElement).style.background = 'rgba(212, 175, 55, 0.1)';
-                        }}
-                    >
-                        📊 Analytics
-                    </Link>
                 </div>
             </div>
 
