@@ -353,10 +353,18 @@ export default function AdminEditPage() {
             <main style={{ background: '#0B0B0D', color: 'white', minHeight: '100vh' }}>
                 <div style={styles.container}>
                     <div style={styles.header}>
-                        <Link href="/admin/upload" style={styles.backLink}>
-                            <ArrowLeft size={16} />
-                            Back to Upload
-                        </Link>
+                        <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                            <Link href="/admin/upload" style={styles.backLink}>
+                                <ArrowLeft size={16} />
+                                Back to Upload
+                            </Link>
+                            <Link href="/admin/settings" style={{
+                                ...styles.backLink,
+                                color: 'rgba(212, 175, 55, 0.6)'
+                            }}>
+                                ⚙️ Admin Settings
+                            </Link>
+                        </div>
                         <h1 style={styles.title}>Edit Metadata</h1>
                         <p style={styles.subtitle}>Search for a video to update its information</p>
                     </div>

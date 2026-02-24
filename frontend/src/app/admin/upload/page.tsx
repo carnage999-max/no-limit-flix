@@ -497,9 +497,17 @@ export default function AdminUploadPage() {
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <Link href="/admin" style={styles.backLink}>
-                    <ArrowLeft size={12} /> Mission Control
-                </Link>
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '1rem' }}>
+                    <Link href="/admin" style={styles.backLink}>
+                        <ArrowLeft size={12} /> Mission Control
+                    </Link>
+                    <Link href="/admin/settings" style={{
+                        ...styles.backLink,
+                        color: 'rgba(212, 175, 55, 0.6)'
+                    }}>
+                        <Sparkles size={12} /> Admin Settings
+                    </Link>
+                </div>
                 <h1 style={styles.title}>Library Ingestion</h1>
                 <p style={styles.subtitle}>Securing cinematic assets into the vault. Automatic archival enabled.</p>
             </div>
