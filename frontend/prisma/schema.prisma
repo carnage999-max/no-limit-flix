@@ -51,4 +51,79 @@ model Video {
   @@index([type])
   @@index([tmdbId])
   @@index([playbackType])
+
+  // Relations
+  watchHistory WatchHistory[]
+  favorites    Favorite[]
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String   @unique
+  password          String
+  avatar            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  watchHistory      WatchHistory[]
+  favorites         Favorite[]
+  analyticsEvents   AnalyticsEvent[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model WatchHistory {
+  id                String   @id @default(cuid())
+  userId            String
+  videoId           String
+  videoTitle        String
+  videoPoster       String?
+  watchedAt         DateTime @default(now())
+  duration          Float?   // Duration watched in seconds
+  totalDuration     Float?   // Total video duration in seconds
+  completionPercent Float?   // 0-100
+  isCompleted       Boolean  @default(false)
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video             Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([videoId])
+  @@index([watchedAt])
+  @@unique([userId, videoId], name: "userVideoUnique")
+}
+
+model Favorite {
+  id                String   @id @default(cuid())
+  userId            String
+  videoId           String
+  videoTitle        String
+  videoPoster       String?
+  addedAt           DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video             Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([videoId])
+  @@unique([userId, videoId], name: "userFavoriteUnique")
+}
+
+model AnalyticsEvent {
+  id                String   @id @default(cuid())
+  userId            String
+  eventType         String   // "watch_started", "watch_completed", "favorite_added", "favorite_removed", "search"
+  videoId           String?
+  videoTitle        String?
+  metadata          String?  // JSON string for additional data
+  createdAt         DateTime @default(now())
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
 }
