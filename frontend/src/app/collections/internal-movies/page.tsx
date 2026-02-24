@@ -9,11 +9,30 @@ interface MovieItem {
     thumbnailUrl?: string;
     genre?: string;
     duration?: number;
+    tmdbId?: string;
 }
 
 export default function InternalMoviesPage() {
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const getMovieLink = (movie: MovieItem) => {
+        // Encode movie data to pass to title page
+        const encodedData = btoa(JSON.stringify({
+            id: movie.id,
+            title: movie.title,
+            poster: movie.thumbnailUrl,
+            year: new Date().getFullYear(),
+            runtime: movie.duration,
+            genres: [movie.genre || 'Movie'],
+            explanation: '',
+            playable: true,
+            assetId: movie.id,
+            tmdbId: movie.tmdbId,
+            tmdb_id: movie.tmdbId,
+        }));
+        return `/title/${movie.id}?data=${encodedData}`;
+    };
 
     useEffect(() => {
         const fetchMovies = async () => {
@@ -27,6 +46,7 @@ export default function InternalMoviesPage() {
                         thumbnailUrl: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
                         genre: video.genre,
                         duration: Math.floor((video.duration || 0) / 60),
+                        tmdbId: video.tmdbId || video.tmdb_id,
                     }));
                     setMovies(moviesData);
                 }
@@ -60,11 +80,7 @@ export default function InternalMoviesPage() {
                     </p>
 
                     {loading ? (
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                            gap: '1.5rem'
-                        }}>
+                        <div className="watch-grid">
                             {[...Array(8)].map((_, i) => (
                                 <div key={i} style={{
                                     aspectRatio: '2/3',
@@ -75,15 +91,11 @@ export default function InternalMoviesPage() {
                             ))}
                         </div>
                     ) : movies.length > 0 ? (
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                            gap: '1.5rem'
-                        }}>
+                        <div className="watch-grid">
                             {movies.map((movie) => (
                                 <Link
                                     key={movie.id}
-                                    href={`/watch/${movie.id}`}
+                                    href={getMovieLink(movie)}
                                     style={{
                                         textDecoration: 'none',
                                         display: 'block',
