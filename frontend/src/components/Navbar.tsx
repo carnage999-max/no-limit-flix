@@ -84,6 +84,36 @@ export default function Navbar() {
                     ← Back to Discovery
                 </Link>
             )}
+
+            <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                <Link
+                    href="/account/dashboard"
+                    style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.5rem',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '0.5rem',
+                        background: 'rgba(212, 175, 55, 0.1)',
+                        border: '1px solid rgba(212, 175, 55, 0.2)',
+                        color: '#D4AF37',
+                        textDecoration: 'none',
+                        fontSize: '0.875rem',
+                        fontWeight: '600',
+                        transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                    }}
+                >
+                    👤 Account
+                </Link>
+            </div>
         </header>
     );
 }
