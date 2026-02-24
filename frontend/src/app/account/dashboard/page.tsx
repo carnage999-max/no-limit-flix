@@ -40,7 +40,7 @@ export default function AnalyticsDashboard() {
         const storedUser = localStorage.getItem('user');
         
         if (!storedUserId) {
-            router.push('/account');
+            router.push('/auth');
             return;
         }
 
@@ -52,6 +52,8 @@ export default function AnalyticsDashboard() {
                 role = userData.role || 'user';
             } catch (err) {
                 console.error('Failed to parse user:', err);
+                router.push('/auth');
+                return;
             }
         }
 

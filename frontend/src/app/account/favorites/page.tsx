@@ -28,7 +28,7 @@ export default function FavoritesPage() {
     useEffect(() => {
         const storedUserId = localStorage.getItem('userId');
         if (!storedUserId) {
-            router.push('/account');
+            router.push('/auth');
             return;
         }
         setUserId(storedUserId);
