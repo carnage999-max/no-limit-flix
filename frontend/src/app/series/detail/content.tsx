@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
-import { Skeleton } from '@/components';
+import { Skeleton, TrailerModal } from '@/components';
 import Link from 'next/link';
 import { getTVSeriesDetails } from '@/lib/tmdb';
 
@@ -15,6 +15,7 @@ export default function SeriesDetailContent() {
     const [episodes, setEpisodes] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+    const [isTrailerOpen, setIsTrailerOpen] = useState(false);
 
     useEffect(() => {
         if (!seriesTitle) {
@@ -96,7 +97,13 @@ export default function SeriesDetailContent() {
     }
 
     return (
-        <main style={{ minHeight: '100vh' }}>
+        <>
+            <TrailerModal
+                videoUrl={tmdbData?.trailerUrl || ''}
+                isOpen={isTrailerOpen}
+                onClose={() => setIsTrailerOpen(false)}
+            />
+            <main style={{ minHeight: '100vh' }}>
                 {/* Hero Section with Backdrop */}
                 <div
                     className="relative"
@@ -206,13 +213,39 @@ export default function SeriesDetailContent() {
                                 </div>
                                 {tmdbData && (
                                     <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(167, 171, 180, 0.1)' }}>
-                                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+                                        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
                                             <div>
                                                 <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
                                                 <div style={{ fontSize: '1.25rem', color: '#D4AF37', fontWeight: '700' }}>
                                                     ⭐ {tmdbData.rating.toFixed(1)}/10
                                                 </div>
                                             </div>
+                                            {tmdbData.trailerUrl && (
+                                                <button
+                                                    onClick={() => setIsTrailerOpen(true)}
+                                                    style={{
+                                                        padding: '0.75rem 1.5rem',
+                                                        borderRadius: '0.5rem',
+                                                        background: 'rgba(212, 175, 55, 0.1)',
+                                                        border: '1px solid rgba(212, 175, 55, 0.3)',
+                                                        color: '#D4AF37',
+                                                        fontWeight: '600',
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        fontSize: '0.875rem'
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(212, 175, 55, 0.2)';
+                                                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
+                                                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+                                                    }}
+                                                >
+                                                    🎬 Watch Trailer
+                                                </button>
+                                            )}
                                             {tmdbData.status && (
                                                 <div>
                                                     <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>STATUS</div>
@@ -336,5 +369,6 @@ export default function SeriesDetailContent() {
                     </div>
                 </div>
             </main>
+        </>
     );
 }

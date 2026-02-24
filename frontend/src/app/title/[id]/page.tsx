@@ -13,6 +13,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
     const { id } = use(params);
     const searchParams = useSearchParams();
     const [movie, setMovie] = useState<MoviePick | null>(null);
+    const [tmdbData, setTmdbData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
 
@@ -25,6 +26,16 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                     try {
                         const decodedData = JSON.parse(atob(movieData));
                         setMovie(decodedData as MoviePick);
+                        
+                        // Fetch TMDB data if tmdb_id is available
+                        if (decodedData.tmdb_id) {
+                            try {
+                                const details = await getMovieDetails(decodedData.tmdb_id);
+                                setTmdbData(details);
+                            } catch (error) {
+                                console.warn('Failed to fetch TMDB data:', error);
+                            }
+                        }
                         setLoading(false);
                         return;
                     } catch (e) {
@@ -35,6 +46,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                 // Otherwise, fetch from TMDB (TMDB content)
                 const details = await getMovieDetails(id);
                 setMovie(details);
+                setTmdbData(details);
             } catch (e) {
                 console.warn('Failed to fetch from TMDB:', e);
                 setMovie(null);
@@ -76,6 +88,11 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
 
     return (
         <>
+            <TrailerModal
+                videoUrl={tmdbData?.trailerUrl || ''}
+                isOpen={isTrailerOpen}
+                onClose={() => setIsTrailerOpen(false)}
+            />
             <main style={{ minHeight: '100vh' }}>
                 {/* Hero Section with Backdrop */}
                 <div
@@ -172,6 +189,49 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                             >
                                 {movie.year} <span style={{ color: 'rgba(255,255,255,0.1)', margin: '0 10px' }}>•</span> {movie.runtime} min
                             </p>
+
+                            {/* TMDB Rating and Info */}
+                            {tmdbData && (
+                                <div style={{
+                                    display: 'flex',
+                                    gap: '1.5rem',
+                                    alignItems: 'center',
+                                    marginBottom: '2rem',
+                                    paddingBottom: '1.5rem',
+                                    borderBottom: '1px solid rgba(167, 171, 180, 0.1)'
+                                }}>
+                                    <div>
+                                        <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
+                                        <div style={{ fontSize: '1.5rem', color: '#D4AF37', fontWeight: '700' }}>⭐ {tmdbData.rating?.toFixed(1)}/10</div>
+                                    </div>
+                                    {tmdbData.trailerUrl && (
+                                        <button
+                                            onClick={() => setIsTrailerOpen(true)}
+                                            style={{
+                                                padding: '0.75rem 1.5rem',
+                                                borderRadius: '0.5rem',
+                                                background: 'rgba(212, 175, 55, 0.1)',
+                                                border: '1px solid rgba(212, 175, 55, 0.3)',
+                                                color: '#D4AF37',
+                                                fontWeight: '600',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                fontSize: '0.875rem'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.background = 'rgba(212, 175, 55, 0.2)';
+                                                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
+                                                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
+                                            }}
+                                        >
+                                            📺 Watch Trailer
+                                        </button>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Why You Might Like This */}
                             <div
