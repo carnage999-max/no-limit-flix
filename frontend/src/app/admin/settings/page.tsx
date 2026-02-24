@@ -11,6 +11,14 @@ interface User {
     role: string;
 }
 
+interface UsersResponse {
+    users: User[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+}
+
 export default function AdminSettingsPage() {
     const router = useRouter();
     const [users, setUsers] = useState<User[]>([]);
@@ -19,6 +27,10 @@ export default function AdminSettingsPage() {
     const [selectedUserId, setSelectedUserId] = useState('');
     const [promoting, setPromoting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [searchQuery, setSearchQuery] = useState('');
+    const pageSize = 10;
 
     // Check if admin session exists
     useEffect(() => {
@@ -27,18 +39,25 @@ export default function AdminSettingsPage() {
             router.push('/admin');
             return;
         }
-        fetchUsers();
+        fetchUsers(1);
     }, [router]);
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (page: number = 1) => {
         try {
             setLoading(true);
-            const response = await fetch('/api/admin/users');
+            const queryParams = new URLSearchParams({
+                page: page.toString(),
+                pageSize: pageSize.toString(),
+                search: searchQuery
+            });
+            const response = await fetch(`/api/admin/users?${queryParams}`);
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }
             const data = await response.json();
             setUsers(data.users || []);
+            setTotalPages(data.totalPages || 1);
+            setCurrentPage(page);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to fetch users');
         } finally {
@@ -71,12 +90,37 @@ export default function AdminSettingsPage() {
 
             setSuccessMessage(`User promoted to admin successfully!`);
             setSelectedUserId('');
-            fetchUsers(); // Refresh users list
+            fetchUsers(currentPage); // Refresh users list
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to promote user');
         } finally {
             setPromoting(false);
         }
+    };
+
+    const handleSearch = (query: string) => {
+        setSearchQuery(query);
+        setCurrentPage(1);
+        // Fetch with new search
+        setTimeout(() => {
+            (async () => {
+                const queryParams = new URLSearchParams({
+                    page: '1',
+                    pageSize: pageSize.toString(),
+                    search: query
+                });
+                try {
+                    const response = await fetch(`/api/admin/users?${queryParams}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        setUsers(data.users || []);
+                        setTotalPages(data.totalPages || 1);
+                    }
+                } catch (err) {
+                    console.error('Search error:', err);
+                }
+            })();
+        }, 300);
     };
 
     return (
@@ -174,7 +218,33 @@ export default function AdminSettingsPage() {
                         Promote User to Admin
                     </h2>
 
-                    {loading ? (
+                    {/* Search Bar */}
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <input
+                            type="text"
+                            placeholder="Search by username or email..."
+                            value={searchQuery}
+                            onChange={(e) => handleSearch(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '0.5rem',
+                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                background: 'rgba(167, 171, 180, 0.05)',
+                                color: '#F3F4F6',
+                                fontSize: '1rem',
+                                transition: 'all 0.2s'
+                            }}
+                            onFocus={(e) => {
+                                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.08)';
+                            }}
+                            onBlur={(e) => {
+                                e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
+                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
+                            }}
+                        />
+                    </div>                    {loading ? (
                         <div style={{
                             padding: '2rem',
                             textAlign: 'center',
@@ -351,6 +421,79 @@ export default function AdminSettingsPage() {
                             >
                                 {promoting ? 'Promoting...' : users.find(u => u.id === selectedUserId)?.role === 'admin' ? 'Already Admin' : 'Promote to Admin'}
                             </button>
+
+                            {/* Pagination Controls */}
+                            {totalPages > 1 && (
+                                <div style={{
+                                    marginTop: '2rem',
+                                    paddingTop: '1.5rem',
+                                    borderTop: '1px solid rgba(167, 171, 180, 0.1)',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    gap: '0.5rem',
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap'
+                                }}>
+                                    <button
+                                        onClick={() => fetchUsers(Math.max(1, currentPage - 1))}
+                                        disabled={currentPage === 1}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '0.5rem',
+                                            border: '1px solid rgba(212, 175, 55, 0.3)',
+                                            background: currentPage === 1 ? 'rgba(212, 175, 55, 0.1)' : 'rgba(212, 175, 55, 0.15)',
+                                            color: '#D4AF37',
+                                            fontWeight: '600',
+                                            cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                                            opacity: currentPage === 1 ? 0.5 : 1
+                                        }}
+                                    >
+                                        ← Previous
+                                    </button>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        gap: '0.25rem',
+                                        alignItems: 'center'
+                                    }}>
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                                            <button
+                                                key={page}
+                                                onClick={() => fetchUsers(page)}
+                                                style={{
+                                                    padding: '0.5rem 0.75rem',
+                                                    borderRadius: '0.375rem',
+                                                    border: '1px solid rgba(212, 175, 55, 0.3)',
+                                                    background: page === currentPage ? 'rgba(212, 175, 55, 0.3)' : 'rgba(212, 175, 55, 0.1)',
+                                                    color: '#D4AF37',
+                                                    fontWeight: page === currentPage ? '700' : '600',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.875rem'
+                                                }}
+                                            >
+                                                {page}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        onClick={() => fetchUsers(Math.min(totalPages, currentPage + 1))}
+                                        disabled={currentPage === totalPages}
+                                        style={{
+                                            padding: '0.5rem 1rem',
+                                            borderRadius: '0.5rem',
+                                            border: '1px solid rgba(212, 175, 55, 0.3)',
+                                            background: currentPage === totalPages ? 'rgba(212, 175, 55, 0.1)' : 'rgba(212, 175, 55, 0.15)',
+                                            color: '#D4AF37',
+                                            fontWeight: '600',
+                                            cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                                            opacity: currentPage === totalPages ? 0.5 : 1
+                                        }}
+                                    >
+                                        Next →
+                                    </button>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
