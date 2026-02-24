@@ -1,14 +1,30 @@
 'use client';
 
 import Link from 'next/link';
-
+import { useState, useEffect } from 'react';
+import { Heart } from 'lucide-react';
 import type { MoviePick } from '@/types';
+import { useFavorites } from '@/context/FavoritesContext';
 
 interface TitleTileProps {
     movie: MoviePick;
 }
 
 export default function TitleTile({ movie }: TitleTileProps) {
+    const { isFavorite, toggleFavorite } = useFavorites();
+    const [isFav, setIsFav] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [userId, setUserId] = useState<string | null>(null);
+
+    useEffect(() => {
+        const id = localStorage.getItem('userId');
+        setUserId(id);
+    }, []);
+
+    useEffect(() => {
+        setIsFav(isFavorite(movie.id || movie.tmdb_id));
+    }, [movie, isFavorite]);
+
     // Determine if this is a series based on the explanation field (contains "episodes")
     const isSeries = movie.explanation?.toLowerCase().includes('episodes');
     
@@ -29,6 +45,23 @@ export default function TitleTile({ movie }: TitleTileProps) {
         }
         // For TMDB content, use the title detail page
         return `/title/${movie.tmdb_id || movie.id}`;
+    };
+
+    const handleFavoriteClick = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (!userId) return;
+        
+        setIsLoading(true);
+        try {
+            await toggleFavorite(movie);
+            setIsFav(!isFav);
+        } catch (error) {
+            console.error('Failed to toggle favorite:', error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -60,6 +93,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
                     style={{
                         aspectRatio: '2/3',
                         overflow: 'hidden',
+                        position: 'relative',
                     }}
                 >
                     <img
@@ -72,6 +106,46 @@ export default function TitleTile({ movie }: TitleTileProps) {
                         }}
                     />
 
+                    {/* Favorite Button - visible if user is authenticated */}
+                    {userId && (
+                        <button
+                            onClick={handleFavoriteClick}
+                            disabled={isLoading}
+                            style={{
+                                position: 'absolute',
+                                top: '0.5rem',
+                                right: '0.5rem',
+                                width: '2.5rem',
+                                height: '2.5rem',
+                                borderRadius: '50%',
+                                background: 'rgba(11, 11, 13, 0.7)',
+                                border: '1px solid rgba(212, 175, 55, 0.2)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: isLoading ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s',
+                                opacity: isFav ? 1 : 0.6,
+                            }}
+                            onMouseEnter={(e) => {
+                                e.currentTarget.style.opacity = '1';
+                                e.currentTarget.style.background = 'rgba(11, 11, 13, 0.9)';
+                                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.currentTarget.style.opacity = isFav ? '1' : '0.6';
+                                e.currentTarget.style.background = 'rgba(11, 11, 13, 0.7)';
+                                e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                            }}
+                        >
+                            <Heart
+                                size={18}
+                                fill={isFav ? '#EF4444' : 'none'}
+                                color={isFav ? '#EF4444' : '#D4AF37'}
+                                style={{ transition: 'all 0.2s' }}
+                            />
+                        </button>
+                    )}
                 </div>
 
                 {/* Title Info */}

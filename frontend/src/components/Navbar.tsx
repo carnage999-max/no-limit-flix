@@ -1,27 +1,36 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { BarChart3, Heart, LogIn } from 'lucide-react';
 
 export default function Navbar() {
     const pathname = usePathname();
+    const router = useRouter();
     const isHome = pathname === '/';
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [userId, setUserId] = useState<string | null>(null);
 
     useEffect(() => {
-        // Get user role from localStorage
+        // Get user role and ID from localStorage
         const storedUser = localStorage.getItem('user');
-        if (storedUser) {
+        const storedUserId = localStorage.getItem('userId');
+        if (storedUser && storedUserId) {
             try {
                 const userData = JSON.parse(storedUser);
                 setUserRole(userData.role || 'user');
+                setUserId(storedUserId);
             } catch (err) {
                 console.error('Failed to parse user:', err);
+                setUserRole(null);
+                setUserId(null);
             }
+        } else {
+            setUserRole(null);
+            setUserId(null);
         }
-    }, []);
+    }, [pathname, router]);
 
     return (
         <header
@@ -162,7 +171,7 @@ export default function Navbar() {
                         Favorites
                     </Link>
                 )}
-                {!userRole && (
+                {!userId && (
                     <Link
                         href="/auth"
                         style={{

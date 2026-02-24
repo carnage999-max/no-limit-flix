@@ -32,6 +32,7 @@ export const viewport = {
 
 import { SearchProvider } from "@/context/SearchContext";
 import { AuthProvider } from "@/context/AuthContext";
+import { FavoritesProvider } from "@/context/FavoritesContext";
 
 // ... (keep metadata exports)
 
@@ -45,9 +46,11 @@ export default function RootLayout({
       <body className="antialiased">
         <AuthProvider>
           <SearchProvider>
-            <Navbar />
-            <AppBanner />
-            {children}
+            <FavoritesProvider>
+              <Navbar />
+              <AppBanner />
+              {children}
+            </FavoritesProvider>
           </SearchProvider>
         </AuthProvider>
       </body>

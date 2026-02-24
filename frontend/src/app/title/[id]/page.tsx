@@ -203,7 +203,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                             </p>
 
                             {/* TMDB Rating and Info */}
-                            {tmdbData && (
+                            {tmdbData && tmdbData.rating && (
                                 <div style={{
                                     display: 'flex',
                                     gap: '1.5rem',
