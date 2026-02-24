@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar, AppBanner } from "@/components";
+import ToastContainer from "@/components/ToastContainer";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -50,6 +51,7 @@ export default function RootLayout({
               <Navbar />
               <AppBanner />
               {children}
+              <ToastContainer />
             </FavoritesProvider>
           </SearchProvider>
         </AuthProvider>

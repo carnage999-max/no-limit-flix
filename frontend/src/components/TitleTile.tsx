@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Heart } from 'lucide-react';
 import type { MoviePick } from '@/types';
 import { useFavorites } from '@/context/FavoritesContext';
+import { useToast } from './Toast';
 
 interface TitleTileProps {
     movie: MoviePick;
@@ -12,6 +13,7 @@ interface TitleTileProps {
 
 export default function TitleTile({ movie }: TitleTileProps) {
     const { isFavorite, toggleFavorite } = useFavorites();
+    const { showToast } = useToast();
     const [isFav, setIsFav] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
@@ -22,7 +24,8 @@ export default function TitleTile({ movie }: TitleTileProps) {
     }, []);
 
     useEffect(() => {
-        setIsFav(isFavorite(movie.id || movie.tmdb_id));
+        const movieId = movie.assetId || movie.id || movie.tmdb_id;
+        setIsFav(isFavorite(movieId));
     }, [movie, isFavorite]);
 
     // Determine if this is a series based on the explanation field (contains "episodes")
@@ -51,14 +54,30 @@ export default function TitleTile({ movie }: TitleTileProps) {
         e.preventDefault();
         e.stopPropagation();
         
-        if (!userId) return;
+        if (!userId) {
+            showToast('Please log in to add favorites', 'info');
+            return;
+        }
         
         setIsLoading(true);
+        const wasFavorited = isFav;
+        
         try {
-            await toggleFavorite(movie);
+            // Optimistic UI - update immediately
             setIsFav(!isFav);
+            
+            await toggleFavorite(movie);
+            
+            // Show success toast
+            showToast(
+                wasFavorited ? 'Removed from favorites' : 'Added to favorites',
+                'success'
+            );
         } catch (error) {
             console.error('Failed to toggle favorite:', error);
+            // Rollback UI on error
+            setIsFav(wasFavorited);
+            showToast('Failed to update favorites', 'error');
         } finally {
             setIsLoading(false);
         }

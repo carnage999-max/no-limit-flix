@@ -10,3 +10,5 @@ export { default as Navbar } from './Navbar';
 export { default as TrailerModal } from './TrailerModal';
 export { default as PermanenceBadge } from './PermanenceBadge';export { default as TabSwitch } from './TabSwitch';export { default as VideoPlayer } from './VideoPlayer';
 export { AppBanner } from './AppBanner';
+export { Toast, useToast } from './Toast';
+export type { ToastType } from './Toast';
