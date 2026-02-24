@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useState, useEffect } from 'react';
-import { notFound, useSearchParams } from 'next/navigation';
+import { notFound, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal } from '@/components';
 import VideoPlayer from '@/components/VideoPlayer';
@@ -11,11 +11,23 @@ import type { MoviePick } from '@/types';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
+    const router = useRouter();
     const searchParams = useSearchParams();
     const [movie, setMovie] = useState<MoviePick | null>(null);
     const [tmdbData, setTmdbData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
+
+    // Check authentication on mount
+    useEffect(() => {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            // Store the current URL to redirect back after login
+            const currentUrl = `/title/${id}${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+            localStorage.setItem('redirectAfterLogin', currentUrl);
+            router.push('/auth');
+        }
+    }, [id, router, searchParams]);
 
     useEffect(() => {
         async function loadMovie() {
@@ -202,7 +214,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 }}>
                                     <div>
                                         <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
-                                        <div style={{ fontSize: '1.5rem', color: '#D4AF37', fontWeight: '700' }}>⭐ {tmdbData.rating?.toFixed(1)}/10</div>
+                                        <div style={{ fontSize: '1.5rem', color: '#D4AF37', fontWeight: '700' }}>{tmdbData.rating?.toFixed(1)}/10</div>
                                     </div>
                                     {tmdbData.trailerUrl && (
                                         <button

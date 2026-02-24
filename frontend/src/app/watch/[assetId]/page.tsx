@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
@@ -25,11 +25,22 @@ interface MovieDetails {
 
 export default function WatchPage() {
     const params = useParams();
+    const router = useRouter();
     const assetId = params.assetId as string;
     const [video, setVideo] = useState<Video | null>(null);
     const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Check authentication on mount
+    useEffect(() => {
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            // Store the current URL to redirect back after login
+            localStorage.setItem('redirectAfterLogin', `/watch/${assetId}`);
+            router.push('/auth');
+        }
+    }, [assetId, router]);
 
     useEffect(() => {
         if (!assetId) {

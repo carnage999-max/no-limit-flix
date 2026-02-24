@@ -48,7 +48,14 @@ export default function AuthPage() {
                 localStorage.setItem('userId', data.user.id);
                 setSuccessMessage(isLogin ? 'Login successful! Redirecting...' : 'Account created! Redirecting...');
                 setTimeout(() => {
-                    router.push('/');
+                    // Check if there's a redirect URL stored
+                    const redirectUrl = localStorage.getItem('redirectAfterLogin');
+                    if (redirectUrl) {
+                        localStorage.removeItem('redirectAfterLogin');
+                        router.push(redirectUrl);
+                    } else {
+                        router.push('/');
+                    }
                     router.refresh();
                 }, 1500);
             } else {
