@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const cuid = require('cuid');
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -17,6 +18,7 @@ async function upsertVideo(payload) {
     const now = new Date();
     const query = `
         INSERT INTO "Video" (
+            "id",
             "title",
             "description",
             "type",
@@ -50,7 +52,7 @@ async function upsertVideo(payload) {
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-            $21, $22, $23, $24, $25, $26, $27, $28::jsonb, $29, $30
+            $21, $22, $23, $24, $25, $26, $27, $28, $29::jsonb, $30, $31
         )
         ON CONFLICT ("archiveIdentifier") DO UPDATE SET
             "title" = EXCLUDED."title",
@@ -85,6 +87,7 @@ async function upsertVideo(payload) {
     `;
 
     const values = [
+        cuid(),
         payload.title,
         payload.description,
         payload.type,

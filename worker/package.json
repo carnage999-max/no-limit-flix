@@ -10,6 +10,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.699.0",
     "@aws-sdk/lib-storage": "^3.699.0",
+    "cuid": "^3.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "pg": "^8.13.1"
