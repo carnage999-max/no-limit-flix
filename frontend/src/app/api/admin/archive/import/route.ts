@@ -9,7 +9,7 @@ import {
     searchArchiveIdentifiers
 } from '@/lib/internet-archive';
 
-type ImportResultStatus = 'imported' | 'updated' | 'skipped' | 'failed';
+type ImportResultStatus = 'imported' | 'updated' | 'skipped' | 'failed' | 'ready';
 
 interface ImportResult {
     identifier: string;
@@ -87,44 +87,7 @@ const normalizeMimeType = (file: any) => {
     return null;
 };
 
-const normalizeSeriesTitle = (metadata: any, fallbackTitle: string) => {
-    const raw = pickFirstString(metadata?.series)
-        || pickFirstString(metadata?.show)
-        || pickFirstString(metadata?.collection)
-        || pickFirstString(metadata?.program)
-        || null;
-
-    if (!raw) return fallbackTitle;
-    const cleaned = raw.replace(/[_-]+/g, ' ').trim();
-    return cleaned || fallbackTitle;
-};
-
-const parseSeasonNumber = (metadata: any) => {
-    const raw = pickFirstString(metadata?.season)
-        || pickFirstString(metadata?.season_number)
-        || pickFirstString(metadata?.series_season);
-
-    if (!raw) return null;
-    const match = raw.match(/\d+/);
-    if (!match) return null;
-    const parsed = Number(match[0]);
-    return Number.isFinite(parsed) ? parsed : null;
-};
-
-const parseEpisodeNumber = (metadata: any) => {
-    const raw = pickFirstString(metadata?.episode)
-        || pickFirstString(metadata?.episode_number)
-        || pickFirstString(metadata?.episodeNumber)
-        || pickFirstString(metadata?.track)
-        || pickFirstString(metadata?.part)
-        || pickFirstString(metadata?.number);
-
-    if (!raw) return null;
-    const match = raw.match(/\d+/);
-    if (!match) return null;
-    const parsed = Number(match[0]);
-    return Number.isFinite(parsed) ? parsed : null;
-};
+// Series helpers removed; only movie imports are supported.
 
 export async function POST(request: NextRequest) {
     try {
@@ -140,30 +103,72 @@ export async function POST(request: NextRequest) {
         const presetId = body?.preset || DEFAULT_ARCHIVE_PRESET_ID;
         const limit = Math.min(Math.max(Number(body?.limit) || 1, 1), 50);
         const allowMkv = Boolean(body?.allowMkv);
-        const requestedType = body?.contentType || body?.importType;
-        const contentType = requestedType === 'series' ? 'series' : 'movie';
-        const seriesTitleInput = contentType === 'series' ? String(body?.seriesTitle || '').trim() : '';
-        const seasonNumberInput = contentType === 'series' ? Number(body?.seasonNumber) || 1 : null;
-        const startEpisodeInput = contentType === 'series' ? Number(body?.startEpisodeNumber) || 1 : null;
-
-        if (contentType === 'series' && !seriesTitleInput) {
-            return NextResponse.json(
-                { error: 'Series title is required for series imports' },
-                { status: 400 }
-            );
-        }
+        const contentType = 'movie';
 
         const preset = ARCHIVE_PRESETS.find((p) => p.id === presetId) || ARCHIVE_PRESETS[0];
-        const safeSeriesTitle = seriesTitleInput.replace(/"/g, '\\"');
-        const seriesQuery = seriesTitleInput
-            ? `${preset.query} AND (title:("${safeSeriesTitle}") OR subject:("${safeSeriesTitle}") OR collection:("${safeSeriesTitle}") OR creator:("${safeSeriesTitle}"))`
-            : preset.query;
+        const seriesQuery = preset.query;
 
-        const identifiers = await searchArchiveIdentifiers(seriesQuery, limit);
+        const providedIdentifiers = Array.isArray(body?.identifiers) ? body.identifiers.filter(Boolean) : [];
+        const providedItems = Array.isArray(body?.items)
+            ? body.items
+                .map((item: any) => ({
+                    identifier: String(item?.identifier || '').trim(),
+                    fileName: item?.fileName ? String(item.fileName) : null
+                }))
+                .filter((item: any) => item.identifier)
+            : [];
+
+        const identifiers = providedItems.length > 0
+            ? providedItems.map((item: any) => item.identifier)
+            : (providedIdentifiers.length > 0
+                ? providedIdentifiers
+                : await searchArchiveIdentifiers(seriesQuery, limit));
+
+        const preferredFiles = new Map<string, string | null>();
+        providedItems.forEach((item: any) => {
+            preferredFiles.set(item.identifier, item.fileName);
+        });
+        const dryRun = Boolean(body?.dryRun);
+
+        const workerUrl = process.env.INGEST_WORKER_URL;
+        if (workerUrl && !dryRun) {
+            const workerSecret = process.env.INGEST_WORKER_SECRET;
+            if (!workerSecret) {
+                return NextResponse.json({ error: 'Ingest worker secret not configured' }, { status: 500 });
+            }
+
+            const endpoint = workerUrl.replace(/\/$/, '');
+            const workerRes = await fetch(`${endpoint}/import`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${workerSecret}`
+                },
+                body: JSON.stringify({
+                    presetQuery: preset.query,
+                    limit,
+                    allowMkv,
+                    items: identifiers.map((identifier) => ({
+                        identifier,
+                        fileName: preferredFiles.get(identifier) || null
+                    }))
+                })
+            });
+
+            const data = await workerRes.json();
+            if (!workerRes.ok) {
+                return NextResponse.json(
+                    { error: data?.error || 'Worker import failed', details: data?.details },
+                    { status: 502 }
+                );
+            }
+
+            return NextResponse.json(data);
+        }
 
         const results: ImportResult[] = [];
 
-        for (const [index, identifier] of identifiers.entries()) {
+        for (const identifier of identifiers) {
             const result: ImportResult = {
                 identifier,
                 title: identifier,
@@ -172,7 +177,18 @@ export async function POST(request: NextRequest) {
 
             try {
                 const { metadata, files } = await fetchArchiveMetadata(identifier);
-                const bestFile = pickBestPlayableFile(files, allowMkv);
+                const preferredName = preferredFiles.get(identifier);
+                let bestFile = preferredName
+                    ? files.find((file) => file?.name === preferredName) || null
+                    : null;
+
+                if (bestFile && !pickBestPlayableFile([bestFile], allowMkv)) {
+                    bestFile = null;
+                }
+
+                if (!bestFile) {
+                    bestFile = pickBestPlayableFile(files, allowMkv);
+                }
 
                 if (!bestFile) {
                     result.status = 'skipped';
@@ -194,90 +210,95 @@ export async function POST(request: NextRequest) {
                 const height = bestFile.height ? Number(bestFile.height) : null;
                 const resolution = height ? `${height}p` : null;
                 const mimeType = normalizeMimeType(bestFile);
-                const episodeNumber = contentType === 'series'
-                    ? (parseEpisodeNumber(metadata) || (startEpisodeInput !== null ? startEpisodeInput + index : null))
-                    : null;
-                const seriesTitle = contentType === 'series'
-                    ? (seriesTitleInput || normalizeSeriesTitle(metadata, title))
-                    : null;
-                const seasonNumber = contentType === 'series'
-                    ? (parseSeasonNumber(metadata) || seasonNumberInput)
-                    : null;
+                const episodeNumber = null;
+                const seriesTitle = null;
+                const seasonNumber = null;
 
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
-                const existing = await prisma.video.findUnique({
-                    where: { archiveIdentifier: identifier }
-                });
+                if (!dryRun) {
+                    const existing = await prisma.video.findUnique({
+                        where: { archiveIdentifier: identifier }
+                    });
 
-                const upserted = await prisma.video.upsert({
-                    where: { archiveIdentifier: identifier },
-                    create: {
-                        title,
-                        description,
-                        type: contentType,
-                        playbackType: 'mp4',
-                        s3KeyPlayback,
-                        cloudfrontPath: playbackUrl,
-                        s3KeySource: null,
-                        s3Url: playbackUrl,
-                        thumbnailUrl: `https://archive.org/services/img/${identifier}`,
-                        status: 'completed',
-                        releaseYear,
-                        duration,
-                        resolution,
-                        genre,
-                        rating,
-                        seriesTitle,
-                        seasonNumber,
-                        episodeNumber,
-                        fileSize,
-                        mimeType,
-                        format: bestFile.format || null,
-                        sourceType: 'external_legal',
-                        sourceProvider: 'internet_archive',
-                        sourcePageUrl,
-                        archiveIdentifier: identifier,
-                        sourceRights: stringifyMetadata(metadata?.rights),
-                        sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
-                        sourceMetadata: metadata,
-                    },
-                    update: {
-                        title,
-                        description,
-                        playbackType: 'mp4',
-                        s3KeyPlayback,
-                        cloudfrontPath: playbackUrl,
-                        s3Url: playbackUrl,
-                        thumbnailUrl: `https://archive.org/services/img/${identifier}`,
-                        status: 'completed',
-                        releaseYear,
-                        duration,
-                        resolution,
-                        genre,
-                        rating,
-                        seriesTitle,
-                        seasonNumber,
-                        episodeNumber,
-                        fileSize,
-                        mimeType,
-                        format: bestFile.format || null,
-                        sourceType: 'external_legal',
-                        sourceProvider: 'internet_archive',
-                        sourcePageUrl,
-                        sourceRights: stringifyMetadata(metadata?.rights),
-                        sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
-                        sourceMetadata: metadata,
-                    }
-                });
+                    const upserted = await prisma.video.upsert({
+                        where: { archiveIdentifier: identifier },
+                        create: {
+                            title,
+                            description,
+                            type: contentType,
+                            playbackType: 'mp4',
+                            s3KeyPlayback,
+                            cloudfrontPath: playbackUrl,
+                            s3KeySource: null,
+                            s3Url: playbackUrl,
+                            thumbnailUrl: `https://archive.org/services/img/${identifier}`,
+                            status: 'completed',
+                            releaseYear,
+                            duration,
+                            resolution,
+                            genre,
+                            rating,
+                            seriesTitle,
+                            seasonNumber,
+                            episodeNumber,
+                            fileSize,
+                            mimeType,
+                            format: bestFile.format || null,
+                            sourceType: 'external_legal',
+                            sourceProvider: 'internet_archive',
+                            sourcePageUrl,
+                            archiveIdentifier: identifier,
+                            sourceRights: stringifyMetadata(metadata?.rights),
+                            sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                            sourceMetadata: metadata,
+                        },
+                        update: {
+                            title,
+                            description,
+                            playbackType: 'mp4',
+                            s3KeyPlayback,
+                            cloudfrontPath: playbackUrl,
+                            s3Url: playbackUrl,
+                            thumbnailUrl: `https://archive.org/services/img/${identifier}`,
+                            status: 'completed',
+                            releaseYear,
+                            duration,
+                            resolution,
+                            genre,
+                            rating,
+                            seriesTitle,
+                            seasonNumber,
+                            episodeNumber,
+                            fileSize,
+                            mimeType,
+                            format: bestFile.format || null,
+                            sourceType: 'external_legal',
+                            sourceProvider: 'internet_archive',
+                            sourcePageUrl,
+                            sourceRights: stringifyMetadata(metadata?.rights),
+                            sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                            sourceMetadata: metadata,
+                        }
+                    });
 
-                result.title = upserted.title;
-                result.fileName = bestFile.name;
-                result.playbackUrl = playbackUrl;
-                result.fileSize = fileSize ? fileSize.toString() : null;
-                result.duration = duration;
-                result.sourcePageUrl = sourcePageUrl;
-                result.status = existing ? 'updated' : 'imported';
+                    result.title = upserted.title;
+                    result.fileName = bestFile.name;
+                    result.playbackUrl = playbackUrl;
+                    result.fileSize = fileSize ? fileSize.toString() : null;
+                    result.duration = duration;
+                    result.sourcePageUrl = sourcePageUrl;
+                    result.status = existing ? 'updated' : 'imported';
+                } else {
+                    result.title = title;
+                    result.fileName = bestFile.name;
+                    result.playbackUrl = playbackUrl;
+                    result.fileSize = fileSize ? fileSize.toString() : null;
+                    result.duration = duration;
+                    result.sourcePageUrl = sourcePageUrl;
+                    result.status = 'ready';
+                }
+
             } catch (error: any) {
                 result.status = 'failed';
                 result.reason = error?.message || 'Failed to import item';
@@ -287,11 +308,12 @@ export async function POST(request: NextRequest) {
         }
 
         const summary = {
-            requested: limit,
+            requested: identifiers.length,
             imported: results.filter((r) => r.status === 'imported').length,
             updated: results.filter((r) => r.status === 'updated').length,
             skipped: results.filter((r) => r.status === 'skipped').length,
             failed: results.filter((r) => r.status === 'failed').length,
+            ready: results.filter((r) => r.status === 'ready').length,
         };
 
         return NextResponse.json({
