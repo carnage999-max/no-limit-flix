@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ButtonPrimary } from '@/components';
 import { ARCHIVE_PRESETS, DEFAULT_ARCHIVE_PRESET_ID } from '@/lib/internet-archive';
@@ -14,7 +14,7 @@ interface ImportResult {
     fileSize?: string | null;
     duration?: number | null;
     sourcePageUrl?: string;
-    status: 'imported' | 'updated' | 'skipped' | 'failed' | 'ready';
+    status: 'imported' | 'updated' | 'skipped' | 'failed' | 'ready' | 'queued';
     reason?: string;
 }
 
@@ -31,6 +31,8 @@ export default function AdminImportPage() {
     const [results, setResults] = useState<ImportResult[]>([]);
     const [summary, setSummary] = useState<any>(null);
     const [selectedIdentifiers, setSelectedIdentifiers] = useState<Record<string, boolean>>({});
+    const [jobId, setJobId] = useState<string | null>(null);
+    const [jobStatus, setJobStatus] = useState<any>(null);
 
     const presetOptions = useMemo(() => ARCHIVE_PRESETS, []);
 
@@ -58,6 +60,8 @@ export default function AdminImportPage() {
         setSummary(null);
         setResults([]);
         setSelectedIdentifiers({});
+        setJobId(null);
+        setJobStatus(null);
 
         try {
             const res = await fetch('/api/admin/archive/import', {
@@ -82,6 +86,8 @@ export default function AdminImportPage() {
 
             setSummary(data.summary);
             setResults(data.results || []);
+            setJobId(null);
+            setJobStatus(null);
         } catch (err: any) {
             setError(err.message || 'Import failed');
         } finally {
@@ -127,12 +133,37 @@ export default function AdminImportPage() {
             setSummary(data.summary);
             setResults(data.results || []);
             setSelectedIdentifiers({});
+            setJobId(data.jobId || null);
+            setJobStatus(null);
         } catch (err: any) {
             setError(err.message || 'Import failed');
         } finally {
             setLoading(false);
         }
     };
+
+    const progressPercent = jobStatus?.total
+        ? Math.min(100, Math.round((jobStatus.processed / jobStatus.total) * 100))
+        : 0;
+
+    const pollJobStatus = async (id: string) => {
+        const res = await fetch(`/api/admin/archive/jobs?jobId=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data?.error || 'Failed to fetch job status');
+        }
+        if (data?.job) {
+            setJobStatus(data.job);
+        }
+    };
+
+    useEffect(() => {
+        if (!jobId) return;
+        const timer = setInterval(() => {
+            pollJobStatus(jobId).catch(() => null);
+        }, 3000);
+        return () => clearInterval(timer);
+    }, [jobId]);
 
     const readyIdentifiers = useMemo(
         () => results.filter((item) => item.status === 'ready').map((item) => getRowKey(item)),
@@ -408,6 +439,45 @@ export default function AdminImportPage() {
                             Query: {summary.searchQuery}
                         </div>
                     )}
+                    {jobId && (
+                        <div style={{
+                            padding: '1rem',
+                            borderRadius: '1rem',
+                            border: '1px solid rgba(167, 171, 180, 0.15)',
+                            background: 'rgba(11, 11, 13, 0.6)'
+                        }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <span style={{ color: '#F3F4F6', fontSize: '0.9rem', fontWeight: 600 }}>
+                                    Import Job {jobId}
+                                </span>
+                                <span style={{ color: '#A7ABB4', fontSize: '0.8rem' }}>
+                                    {jobStatus?.status || 'queued'}
+                                </span>
+                            </div>
+                            <div style={{
+                                width: '100%',
+                                height: '8px',
+                                borderRadius: '999px',
+                                background: 'rgba(167, 171, 180, 0.2)',
+                                overflow: 'hidden',
+                                marginBottom: '0.5rem'
+                            }}>
+                                <div style={{
+                                    width: `${progressPercent}%`,
+                                    height: '100%',
+                                    background: 'linear-gradient(90deg, #D4AF37, #FACC15)',
+                                    transition: 'width 0.4s ease'
+                                }} />
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', color: '#A7ABB4', fontSize: '0.75rem' }}>
+                                <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? summary.requested}</span>
+                                <span>Imported: {jobStatus?.imported ?? 0}</span>
+                                <span>Updated: {jobStatus?.updated ?? 0}</span>
+                                <span>Skipped: {jobStatus?.skipped ?? 0}</span>
+                                <span>Failed: {jobStatus?.failed ?? 0}</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -489,7 +559,9 @@ export default function AdminImportPage() {
                                             fontSize: '0.75rem',
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.08em',
-                                            background: result.status === 'ready'
+                                            background: result.status === 'queued'
+                                                ? 'rgba(59, 130, 246, 0.15)'
+                                                : result.status === 'ready'
                                                 ? 'rgba(212, 175, 55, 0.15)'
                                                 : result.status === 'imported'
                                                 ? 'rgba(34, 197, 94, 0.15)'
@@ -498,7 +570,9 @@ export default function AdminImportPage() {
                                                     : result.status === 'skipped'
                                                         ? 'rgba(250, 204, 21, 0.15)'
                                                         : 'rgba(248, 113, 113, 0.15)',
-                                            color: result.status === 'ready'
+                                            color: result.status === 'queued'
+                                                ? '#60A5FA'
+                                                : result.status === 'ready'
                                                 ? '#D4AF37'
                                                 : result.status === 'imported'
                                                 ? '#22C55E'

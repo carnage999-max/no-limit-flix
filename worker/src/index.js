@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const cuid = require('cuid');
 const {
     searchArchiveIdentifiers,
     fetchArchiveMetadata,
@@ -20,6 +21,8 @@ if (!ADMIN_SECRET) {
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
+
+const jobs = new Map();
 
 const parseYear = (value) => {
     if (!value) return null;
@@ -164,6 +167,29 @@ app.get('/health', (_req, res) => {
     res.json({ ok: true });
 });
 
+app.get('/jobs', (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const list = Array.from(jobs.values())
+        .sort((a, b) => b.startedAt - a.startedAt)
+        .slice(0, 50);
+    res.json({ success: true, jobs: list });
+});
+
+app.get('/jobs/:id', (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const job = jobs.get(req.params.id);
+    if (!job) {
+        return res.status(404).json({ error: 'Job not found' });
+    }
+    return res.json({ success: true, job });
+});
+
 app.post('/import', async (req, res) => {
     try {
         const authHeader = req.headers.authorization || '';
@@ -206,15 +232,16 @@ app.post('/import', async (req, res) => {
                 : (await searchArchiveIdentifiers(presetQuery, limit))
                     .map((identifier) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null })));
 
-        const results = [];
+        const runImport = async (job) => {
+            const results = [];
 
-        for (const [index, item] of itemsToProcess.entries()) {
-            const identifier = item.identifier;
-            const result = {
-                identifier,
-                title: identifier,
-                status: 'failed'
-            };
+            for (const [index, item] of itemsToProcess.entries()) {
+                const identifier = item.identifier;
+                const result = {
+                    identifier,
+                    title: identifier,
+                    status: 'failed'
+                };
 
             try {
                 const { metadata, files } = await fetchArchiveMetadata(identifier);
@@ -338,18 +365,78 @@ app.post('/import', async (req, res) => {
                 result.reason = error?.message || 'Failed to ingest item';
             }
 
-            results.push(result);
-        }
+                results.push(result);
+                if (job) {
+                    job.processed += 1;
+                    if (result.status === 'imported') job.imported += 1;
+                    if (result.status === 'updated') job.updated += 1;
+                    if (result.status === 'skipped') job.skipped += 1;
+                    if (result.status === 'failed') job.failed += 1;
+                    job.lastUpdatedAt = Date.now();
+                }
+            }
 
-        const summary = {
-            requested: itemsToProcess.length,
-            imported: results.filter((r) => r.status === 'imported').length,
-            updated: results.filter((r) => r.status === 'updated').length,
-            skipped: results.filter((r) => r.status === 'skipped').length,
-            failed: results.filter((r) => r.status === 'failed').length
+            const summary = {
+                requested: itemsToProcess.length,
+                imported: results.filter((r) => r.status === 'imported').length,
+                updated: results.filter((r) => r.status === 'updated').length,
+                skipped: results.filter((r) => r.status === 'skipped').length,
+                failed: results.filter((r) => r.status === 'failed').length
+            };
+
+            return { summary, results };
         };
 
-        return res.json({ success: true, summary, results });
+        const asyncMode = Boolean(req.body?.async);
+        if (asyncMode) {
+            const jobId = cuid();
+            const job = {
+                id: jobId,
+                status: 'running',
+                total: itemsToProcess.length,
+                processed: 0,
+                imported: 0,
+                updated: 0,
+                skipped: 0,
+                failed: 0,
+                startedAt: Date.now(),
+                lastUpdatedAt: Date.now(),
+                finishedAt: null
+            };
+            jobs.set(jobId, job);
+            setImmediate(async () => {
+                try {
+                    const data = await runImport(job);
+                    job.status = 'completed';
+                    job.finishedAt = Date.now();
+                    job.summary = data.summary;
+                    console.log(`Import job ${jobId} completed`, data.summary);
+                } catch (error) {
+                    job.status = 'failed';
+                    job.finishedAt = Date.now();
+                    console.error(`Import job ${jobId} failed`, error);
+                }
+            });
+
+            return res.status(202).json({
+                success: true,
+                message: 'Import queued',
+                jobId,
+                summary: {
+                    requested: itemsToProcess.length,
+                    queued: itemsToProcess.length
+                },
+                results: itemsToProcess.map((item) => ({
+                    identifier: item.identifier,
+                    title: item.identifier,
+                    fileName: item.fileName || null,
+                    status: 'queued'
+                }))
+            });
+        }
+
+        const data = await runImport();
+        return res.json({ success: true, ...data });
     } catch (error) {
         console.error('Worker import error:', error);
         return res.status(500).json({ error: 'Worker import failed', details: error.message });

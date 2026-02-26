@@ -280,6 +280,7 @@ export async function POST(request: NextRequest) {
                     seriesTitle: seriesTitleInput || null,
                     seasonNumber: seasonNumberInput,
                     startEpisodeNumber: startEpisodeInput,
+                    async: true,
                     items: itemsToProcess.map((item: any) => ({
                         identifier: item.identifier,
                         fileName: item.fileName || null,
