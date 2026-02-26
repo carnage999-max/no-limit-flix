@@ -105,6 +105,19 @@ const normalizeMimeType = (file) => {
     return null;
 };
 
+const deriveTitleFromFileName = (fileName) => {
+    const base = fileName.replace(/\.[a-z0-9]+$/i, '');
+    return base.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const isGenericBundleTitle = (value) => {
+    if (!value) return true;
+    const normalized = value.toLowerCase().trim();
+    return normalized === 'public domain movies'
+        || normalized === 'publicdomainmovies'
+        || normalized === 'publicmovies212';
+};
+
 const normalizeText = (value) => {
     if (!value) return '';
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -244,7 +257,12 @@ app.post('/import', async (req, res) => {
                 const { s3Url, contentType } = await uploadToS3(playbackUrl, s3KeyPlayback, bestFile);
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
-                const title = stringifyMetadata(metadata?.title) || identifier;
+                let title = stringifyMetadata(metadata?.title) || identifier;
+                if (identifier === 'publicmovies212' && bestFile?.name) {
+                    if (isGenericBundleTitle(title)) {
+                        title = deriveTitleFromFileName(bestFile.name);
+                    }
+                }
                 if (isExcludedTitle(title) || isExcludedTitle(bestFile.name)) {
                     result.status = 'skipped';
                     result.reason = 'Excluded by title keywords';

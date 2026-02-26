@@ -108,6 +108,19 @@ const normalizeMimeType = (file: any) => {
     return null;
 };
 
+const deriveTitleFromFileName = (fileName: string) => {
+    const base = fileName.replace(/\.[a-z0-9]+$/i, '');
+    return base.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const isGenericBundleTitle = (value?: string) => {
+    if (!value) return true;
+    const normalized = value.toLowerCase().trim();
+    return normalized === 'public domain movies'
+        || normalized === 'publicdomainmovies'
+        || normalized === 'publicmovies212';
+};
+
 const normalizeText = (value?: string) => {
     if (!value) return '';
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -333,7 +346,12 @@ export async function POST(request: NextRequest) {
                 const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
-                const title = stringifyMetadata(metadata?.title) || identifier;
+                let title = stringifyMetadata(metadata?.title) || identifier;
+                if (preset.bundleIdentifier && identifier === preset.bundleIdentifier && bestFile?.name) {
+                    if (isGenericBundleTitle(title)) {
+                        title = deriveTitleFromFileName(bestFile.name);
+                    }
+                }
                 if (isExcludedTitle(title) || isExcludedTitle(bestFile.name)) {
                     result.status = 'skipped';
                     result.reason = 'Excluded by title keywords';
