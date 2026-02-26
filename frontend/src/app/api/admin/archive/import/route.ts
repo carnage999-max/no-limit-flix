@@ -6,6 +6,7 @@ import {
     buildArchiveDownloadUrl,
     fetchArchiveMetadata,
     pickBestPlayableFile,
+    rankPlayableFiles,
     searchArchiveIdentifiers
 } from '@/lib/internet-archive';
 
@@ -42,6 +43,7 @@ const parseDurationSeconds = (value?: string) => {
 };
 
 const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
+const MIN_SERIES_DURATION_SECONDS = 5 * 60;
 const EXCLUDED_TITLE_KEYWORDS = [
     'trailer',
     'preview',
@@ -106,7 +108,47 @@ const normalizeMimeType = (file: any) => {
     return null;
 };
 
-// Series helpers removed; only movie imports are supported.
+const normalizeText = (value?: string) => {
+    if (!value) return '';
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+};
+
+const extractTokens = (value: string) => normalizeText(value)
+    .split(' ')
+    .filter((token) => token.length > 2);
+
+const matchesSeriesTitle = (fileName: string, seriesTitle: string) => {
+    const normalizedTitle = normalizeText(seriesTitle);
+    if (!normalizedTitle) return false;
+    const haystack = normalizeText(fileName);
+    if (!haystack) return false;
+    if (haystack.includes(normalizedTitle)) return true;
+    const tokens = extractTokens(seriesTitle);
+    if (tokens.length === 0) return false;
+    return tokens.every((token) => haystack.includes(token));
+};
+
+const parseSeasonEpisode = (value?: string) => {
+    if (!value) return { season: null, episode: null };
+    const text = value.toLowerCase();
+    let match = text.match(/s(\d{1,2})\s*e(\d{1,3})/);
+    if (match) {
+        return { season: Number(match[1]), episode: Number(match[2]) };
+    }
+    match = text.match(/(\d{1,2})x(\d{1,3})/);
+    if (match) {
+        return { season: Number(match[1]), episode: Number(match[2]) };
+    }
+    match = text.match(/season\s*(\d{1,2}).*episode\s*(\d{1,3})/);
+    if (match) {
+        return { season: Number(match[1]), episode: Number(match[2]) };
+    }
+    match = text.match(/episode\s*(\d{1,3})/);
+    if (match) {
+        return { season: null, episode: Number(match[1]) };
+    }
+    return { season: null, episode: null };
+};
 
 export async function POST(request: NextRequest) {
     try {
@@ -122,7 +164,18 @@ export async function POST(request: NextRequest) {
         const presetId = body?.preset || DEFAULT_ARCHIVE_PRESET_ID;
         const limit = Math.min(Math.max(Number(body?.limit) || 1, 1), 50);
         const allowMkv = Boolean(body?.allowMkv);
-        const contentType = 'movie';
+        const requestedType = body?.contentType || body?.importType;
+        const contentType = requestedType === 'series' ? 'series' : 'movie';
+        const seriesTitleInput = contentType === 'series' ? String(body?.seriesTitle || '').trim() : '';
+        const seasonNumberInput = contentType === 'series' ? Number(body?.seasonNumber) || 1 : null;
+        const startEpisodeInput = contentType === 'series' ? Number(body?.startEpisodeNumber) || 1 : null;
+
+        if (contentType === 'series' && !seriesTitleInput) {
+            return NextResponse.json(
+                { error: 'Series title is required for series imports' },
+                { status: 400 }
+            );
+        }
 
         const preset = ARCHIVE_PRESETS.find((p) => p.id === presetId) || ARCHIVE_PRESETS[0];
         const seriesQuery = preset.query;
@@ -132,21 +185,64 @@ export async function POST(request: NextRequest) {
             ? body.items
                 .map((item: any) => ({
                     identifier: String(item?.identifier || '').trim(),
-                    fileName: item?.fileName ? String(item.fileName) : null
+                    fileName: item?.fileName ? String(item.fileName) : null,
+                    seasonNumber: Number.isFinite(Number(item?.seasonNumber)) ? Number(item.seasonNumber) : null,
+                    episodeNumber: Number.isFinite(Number(item?.episodeNumber)) ? Number(item.episodeNumber) : null
                 }))
                 .filter((item: any) => item.identifier)
             : [];
 
-        const identifiers = providedItems.length > 0
-            ? providedItems.map((item: any) => item.identifier)
-            : (providedIdentifiers.length > 0
-                ? providedIdentifiers
-                : await searchArchiveIdentifiers(seriesQuery, limit));
+        const metadataCache = new Map<string, { metadata: any; files: any[] }>();
 
-        const preferredFiles = new Map<string, string | null>();
-        providedItems.forEach((item: any) => {
-            preferredFiles.set(item.identifier, item.fileName);
-        });
+        const hydrateBundleItems = async () => {
+            if (!preset.bundleIdentifier) return null;
+            const bundleId = preset.bundleIdentifier;
+            const bundle = await fetchArchiveMetadata(bundleId);
+            metadataCache.set(bundleId, bundle);
+            let rankedFiles = rankPlayableFiles(bundle.files, allowMkv);
+            if (contentType === 'series') {
+                rankedFiles = rankedFiles
+                    .filter((file) => matchesSeriesTitle(file.name, seriesTitleInput))
+                    .filter((file) => !isExcludedTitle(file.name));
+                rankedFiles.sort((a, b) => {
+                    const aParts = parseSeasonEpisode(a.name);
+                    const bParts = parseSeasonEpisode(b.name);
+                    if (aParts.episode !== null && bParts.episode !== null) {
+                        return aParts.episode - bParts.episode;
+                    }
+                    return a.name.localeCompare(b.name);
+                });
+            }
+            return rankedFiles.slice(0, limit).map((file) => {
+                const parsed = parseSeasonEpisode(file.name);
+                return {
+                    identifier: bundleId,
+                    fileName: file.name,
+                    seasonNumber: parsed.season,
+                    episodeNumber: parsed.episode
+                };
+            });
+        };
+
+        const bundleItems = providedItems.length === 0 && preset.bundleIdentifier
+            ? await hydrateBundleItems()
+            : null;
+
+        if (contentType === 'series' && (!bundleItems || bundleItems.length === 0) && providedItems.length === 0) {
+            return NextResponse.json(
+                { error: 'No matching series items found in the bundle for that title.' },
+                { status: 404 }
+            );
+        }
+
+        const itemsToProcess = providedItems.length > 0
+            ? providedItems
+            : (bundleItems && bundleItems.length > 0
+                ? bundleItems
+                : (providedIdentifiers.length > 0
+                    ? providedIdentifiers.map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))
+                    : (await searchArchiveIdentifiers(seriesQuery, limit))
+                        .map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))));
         const dryRun = Boolean(body?.dryRun);
 
         const workerUrl = process.env.INGEST_WORKER_URL;
@@ -167,9 +263,15 @@ export async function POST(request: NextRequest) {
                     presetQuery: preset.query,
                     limit,
                     allowMkv,
-                    items: identifiers.map((identifier) => ({
-                        identifier,
-                        fileName: preferredFiles.get(identifier) || null
+                    importType: contentType,
+                    seriesTitle: seriesTitleInput || null,
+                    seasonNumber: seasonNumberInput,
+                    startEpisodeNumber: startEpisodeInput,
+                    items: itemsToProcess.map((item: any) => ({
+                        identifier: item.identifier,
+                        fileName: item.fileName || null,
+                        seasonNumber: item.seasonNumber ?? null,
+                        episodeNumber: item.episodeNumber ?? null
                     }))
                 })
             });
@@ -187,7 +289,8 @@ export async function POST(request: NextRequest) {
 
         const results: ImportResult[] = [];
 
-        for (const identifier of identifiers) {
+        for (const [index, item] of itemsToProcess.entries()) {
+            const identifier = item.identifier;
             const result: ImportResult = {
                 identifier,
                 title: identifier,
@@ -195,8 +298,19 @@ export async function POST(request: NextRequest) {
             };
 
             try {
-                const { metadata, files } = await fetchArchiveMetadata(identifier);
-                const preferredName = preferredFiles.get(identifier);
+                let cached = metadataCache.get(identifier);
+                if (!cached) {
+                    cached = await fetchArchiveMetadata(identifier);
+                    metadataCache.set(identifier, cached);
+                }
+                const { metadata, files } = cached;
+                if (!item.fileName && metadata?.mediatype && String(metadata.mediatype).toLowerCase() !== 'movies') {
+                    result.status = 'skipped';
+                    result.reason = `Mediatype ${metadata.mediatype} not movies`;
+                    results.push(result);
+                    continue;
+                }
+                const preferredName = item.fileName;
                 let bestFile = preferredName
                     ? files.find((file) => file?.name === preferredName) || null
                     : null;
@@ -231,8 +345,9 @@ export async function POST(request: NextRequest) {
                 const genre = normalizeGenre(metadata);
                 const rating = normalizeRating(metadata);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
+                const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
 
-                if (duration && duration < MIN_FEATURE_DURATION_SECONDS) {
+                if (duration && duration < minDuration) {
                     result.status = 'skipped';
                     result.reason = `Duration ${Math.round(duration / 60)}m below minimum`;
                     results.push(result);
@@ -243,9 +358,16 @@ export async function POST(request: NextRequest) {
                 const height = bestFile.height ? Number(bestFile.height) : null;
                 const resolution = height ? `${height}p` : null;
                 const mimeType = normalizeMimeType(bestFile);
-                const episodeNumber = null;
-                const seriesTitle = null;
-                const seasonNumber = null;
+                const parsed = parseSeasonEpisode(bestFile.name);
+                const episodeNumber = contentType === 'series'
+                    ? (item.episodeNumber ?? parsed.episode ?? (startEpisodeInput !== null ? startEpisodeInput + index : null))
+                    : null;
+                const seriesTitle = contentType === 'series'
+                    ? seriesTitleInput
+                    : null;
+                const seasonNumber = contentType === 'series'
+                    ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
+                    : null;
 
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
@@ -341,12 +463,13 @@ export async function POST(request: NextRequest) {
         }
 
         const summary = {
-            requested: identifiers.length,
+            requested: itemsToProcess.length,
             imported: results.filter((r) => r.status === 'imported').length,
             updated: results.filter((r) => r.status === 'updated').length,
             skipped: results.filter((r) => r.status === 'skipped').length,
             failed: results.filter((r) => r.status === 'failed').length,
             ready: results.filter((r) => r.status === 'ready').length,
+            searchQuery: seriesQuery,
         };
 
         return NextResponse.json({

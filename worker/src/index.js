@@ -40,6 +40,7 @@ const parseDurationSeconds = (value) => {
 };
 
 const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
+const MIN_SERIES_DURATION_SECONDS = 5 * 60;
 const EXCLUDED_TITLE_KEYWORDS = [
     'trailer',
     'preview',
@@ -104,6 +105,48 @@ const normalizeMimeType = (file) => {
     return null;
 };
 
+const normalizeText = (value) => {
+    if (!value) return '';
+    return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+};
+
+const extractTokens = (value) => normalizeText(value)
+    .split(' ')
+    .filter((token) => token.length > 2);
+
+const matchesSeriesTitle = (fileName, seriesTitle) => {
+    const normalizedTitle = normalizeText(seriesTitle);
+    if (!normalizedTitle) return false;
+    const haystack = normalizeText(fileName);
+    if (!haystack) return false;
+    if (haystack.includes(normalizedTitle)) return true;
+    const tokens = extractTokens(seriesTitle);
+    if (tokens.length === 0) return false;
+    return tokens.every((token) => haystack.includes(token));
+};
+
+const parseSeasonEpisode = (value) => {
+    if (!value) return { season: null, episode: null };
+    const text = value.toLowerCase();
+    let match = text.match(/s(\d{1,2})\s*e(\d{1,3})/);
+    if (match) {
+        return { season: Number(match[1]), episode: Number(match[2]) };
+    }
+    match = text.match(/(\d{1,2})x(\d{1,3})/);
+    if (match) {
+        return { season: Number(match[1]), episode: Number(match[2]) };
+    }
+    match = text.match(/season\s*(\d{1,2}).*episode\s*(\d{1,3})/);
+    if (match) {
+        return { season: Number(match[1]), episode: Number(match[2]) };
+    }
+    match = text.match(/episode\s*(\d{1,3})/);
+    if (match) {
+        return { season: null, episode: Number(match[1]) };
+    }
+    return { season: null, episode: null };
+};
+
 app.get('/health', (_req, res) => {
     res.json({ ok: true });
 });
@@ -118,12 +161,23 @@ app.post('/import', async (req, res) => {
         const allowMkv = Boolean(req.body?.allowMkv);
         const presetQuery = req.body?.presetQuery || '(collection:(feature_films) OR collection:(publicdomainmovies)) AND mediatype:(movies)';
         const limit = Math.min(Math.max(Number(req.body?.limit) || 1, 1), 50);
+        const requestedType = req.body?.contentType || req.body?.importType;
+        const contentType = requestedType === 'series' ? 'series' : 'movie';
+        const seriesTitleInput = contentType === 'series' ? String(req.body?.seriesTitle || '').trim() : '';
+        const seasonNumberInput = contentType === 'series' ? Number(req.body?.seasonNumber) || 1 : null;
+        const startEpisodeInput = contentType === 'series' ? Number(req.body?.startEpisodeNumber) || 1 : null;
+
+        if (contentType === 'series' && !seriesTitleInput) {
+            return res.status(400).json({ error: 'Series title is required for series imports' });
+        }
 
         const requestedItems = Array.isArray(req.body?.items)
             ? req.body.items
                 .map((item) => ({
                     identifier: String(item?.identifier || '').trim(),
-                    fileName: item?.fileName ? String(item.fileName) : null
+                    fileName: item?.fileName ? String(item.fileName) : null,
+                    seasonNumber: Number.isFinite(Number(item?.seasonNumber)) ? Number(item.seasonNumber) : null,
+                    episodeNumber: Number.isFinite(Number(item?.episodeNumber)) ? Number(item.episodeNumber) : null
                 }))
                 .filter((item) => item.identifier)
             : [];
@@ -132,20 +186,17 @@ app.post('/import', async (req, res) => {
             ? req.body.identifiers.filter(Boolean)
             : [];
 
-        const identifiers = requestedItems.length > 0
-            ? requestedItems.map((item) => item.identifier)
+        const itemsToProcess = requestedItems.length > 0
+            ? requestedItems
             : (providedIdentifiers.length > 0
-                ? providedIdentifiers
-                : await searchArchiveIdentifiers(presetQuery, limit));
-
-        const preferredFiles = new Map();
-        requestedItems.forEach((item) => {
-            preferredFiles.set(item.identifier, item.fileName);
-        });
+                ? providedIdentifiers.map((identifier) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))
+                : (await searchArchiveIdentifiers(presetQuery, limit))
+                    .map((identifier) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null })));
 
         const results = [];
 
-        for (const identifier of identifiers) {
+        for (const [index, item] of itemsToProcess.entries()) {
+            const identifier = item.identifier;
             const result = {
                 identifier,
                 title: identifier,
@@ -154,7 +205,13 @@ app.post('/import', async (req, res) => {
 
             try {
                 const { metadata, files } = await fetchArchiveMetadata(identifier);
-                const preferredName = preferredFiles.get(identifier);
+                if (!item.fileName && metadata?.mediatype && String(metadata.mediatype).toLowerCase() !== 'movies') {
+                    result.status = 'skipped';
+                    result.reason = `Mediatype ${metadata.mediatype} not movies`;
+                    results.push(result);
+                    continue;
+                }
+                const preferredName = item.fileName;
                 let bestFile = preferredName
                     ? files.find((file) => file?.name === preferredName) || null
                     : null;
@@ -170,6 +227,13 @@ app.post('/import', async (req, res) => {
                 if (!bestFile) {
                     result.status = 'skipped';
                     result.reason = 'No playable MP4/MKV file found';
+                    results.push(result);
+                    continue;
+                }
+
+                if (contentType === 'series' && !matchesSeriesTitle(bestFile.name, seriesTitleInput)) {
+                    result.status = 'skipped';
+                    result.reason = 'Series title mismatch';
                     results.push(result);
                     continue;
                 }
@@ -192,8 +256,9 @@ app.post('/import', async (req, res) => {
                 const genre = normalizeGenre(metadata);
                 const rating = normalizeRating(metadata);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
+                const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
 
-                if (duration && duration < MIN_FEATURE_DURATION_SECONDS) {
+                if (duration && duration < minDuration) {
                     result.status = 'skipped';
                     result.reason = `Duration ${Math.round(duration / 60)}m below minimum`;
                     results.push(result);
@@ -203,11 +268,19 @@ app.post('/import', async (req, res) => {
                 const height = bestFile.height ? Number(bestFile.height) : null;
                 const resolution = height ? `${height}p` : null;
                 const mimeType = normalizeMimeType(bestFile) || contentType || inferMimeType(bestFile);
+                const parsed = parseSeasonEpisode(bestFile.name);
+                const episodeNumber = contentType === 'series'
+                    ? (item.episodeNumber ?? parsed.episode ?? (startEpisodeInput !== null ? startEpisodeInput + index : null))
+                    : null;
+                const seriesTitle = contentType === 'series' ? seriesTitleInput : null;
+                const seasonNumber = contentType === 'series'
+                    ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
+                    : null;
 
                 const dbRow = await upsertVideo({
                     title,
                     description,
-                    type: 'movie',
+                    type: contentType,
                     playbackType: 'mp4',
                     s3KeyPlayback,
                     cloudfrontPath: `/${s3KeyPlayback}`,
@@ -220,9 +293,9 @@ app.post('/import', async (req, res) => {
                     resolution,
                     genre,
                     rating,
-                    seriesTitle: null,
-                    seasonNumber: null,
-                    episodeNumber: null,
+                    seriesTitle,
+                    seasonNumber,
+                    episodeNumber,
                     fileSize,
                     mimeType,
                     format: bestFile.format || null,
@@ -251,7 +324,7 @@ app.post('/import', async (req, res) => {
         }
 
         const summary = {
-            requested: identifiers.length,
+            requested: itemsToProcess.length,
             imported: results.filter((r) => r.status === 'imported').length,
             updated: results.filter((r) => r.status === 'updated').length,
             skipped: results.filter((r) => r.status === 'skipped').length,

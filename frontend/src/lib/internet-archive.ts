@@ -3,13 +3,15 @@ export interface ArchivePreset {
     label: string;
     query: string;
     description?: string;
+    bundleIdentifier?: string;
 }
 
 export const ARCHIVE_PRESETS: ArchivePreset[] = [
     {
         id: 'public-domain-feature-films',
         label: 'Public Domain Feature Films',
-        query: 'collection:(publicmovies212) AND mediatype:(movies) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR clip OR newsreel)',
+        query: 'identifier:(publicmovies212)',
+        bundleIdentifier: 'publicmovies212',
         description: 'Feature-length public domain films from IA collections.'
     },
     {
@@ -168,7 +170,7 @@ export async function fetchArchiveMetadata(identifier: string): Promise<ArchiveM
     };
 }
 
-export function pickBestPlayableFile(files: ArchiveFile[], allowMkv: boolean) {
+export function rankPlayableFiles(files: ArchiveFile[], allowMkv: boolean) {
     const filtered = files.filter((file) => {
         if (!isVideoCandidate(file)) return false;
         if (isMp4(file)) return true;
@@ -176,7 +178,7 @@ export function pickBestPlayableFile(files: ArchiveFile[], allowMkv: boolean) {
         return false;
     });
 
-    if (filtered.length === 0) return null;
+    if (filtered.length === 0) return [];
 
     const candidates = filtered.map((file) => {
         const width = normalizeNumber(file.width) || 0;
@@ -210,5 +212,10 @@ export function pickBestPlayableFile(files: ArchiveFile[], allowMkv: boolean) {
     });
 
     candidates.sort((a, b) => b.score - a.score);
-    return candidates[0].file;
+    return candidates.map((candidate) => candidate.file);
+}
+
+export function pickBestPlayableFile(files: ArchiveFile[], allowMkv: boolean) {
+    const ranked = rankPlayableFiles(files, allowMkv);
+    return ranked[0] ?? null;
 }
