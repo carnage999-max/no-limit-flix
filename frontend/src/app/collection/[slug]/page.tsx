@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { TitleTile, TileSkeleton } from '@/components';
 import { getMoviesByCollection } from '@/lib/tmdb';
 import type { Movie, MoviePick, FilterLength, FilterIntensity, FilterTone } from '@/types';
+import { ArrowLeft } from 'lucide-react';
 
 const COLLECTIONS_META: Record<string, { title: string; promiseStatement: string; accentColor: string }> = {
     'mind-benders': {
@@ -180,8 +181,9 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
                 }}
             >
                 <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
-                    <Link href="/collections" style={{ color: meta.accentColor, fontSize: '0.875rem', fontWeight: '600', textDecoration: 'none', marginBottom: '2rem', display: 'inline-block' }}>
-                        ← Back to Collections
+                    <Link href="/collections" style={{ color: meta.accentColor, fontSize: '0.875rem', fontWeight: '600', textDecoration: 'none', marginBottom: '2rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to Collections
                     </Link>
                     <h1 style={{ fontSize: 'clamp(3rem, 10vw, 5rem)', fontWeight: '700', marginBottom: '1.5rem', color: '#F3F4F6', letterSpacing: '-0.02em' }}>
                         {meta.title}

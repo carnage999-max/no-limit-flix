@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Film, BarChart3 } from 'lucide-react';
 
 interface WatchStat {
     title: string;
@@ -342,7 +343,10 @@ export default function AnalyticsDashboard() {
                                 alignItems: 'center',
                                 gap: '0.75rem'
                             }}>
-                                🎬 Most Watched Titles
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Film className="w-5 h-5" />
+                                    Most Watched Titles
+                                </span>
                             </h2>
 
                             {topMovies.length > 0 ? (
@@ -466,7 +470,10 @@ export default function AnalyticsDashboard() {
                                     alignItems: 'center',
                                     gap: '0.75rem'
                                 }}>
-                                    📊 Genre Breakdown
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <BarChart3 className="w-5 h-5" />
+                                        Genre Breakdown
+                                    </span>
                                 </h2>
 
                                 <div style={{

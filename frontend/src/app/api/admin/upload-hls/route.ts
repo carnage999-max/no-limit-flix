@@ -52,40 +52,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`\n📹 Starting HLS conversion for "${title}"`);
+    console.log(`\nStarting HLS conversion for "${title}"`);
 
     // Step 1: Create temp directory
-    console.log('📂 Creating temp HLS directory...');
+    console.log('Creating temp HLS directory...');
     const tempHLSDir = await createTempHLSDir();
     const inputPath = path.join(tempHLSDir, 'input');
 
     // Step 2: Save uploaded file
-    console.log('💾 Saving uploaded file...');
+    console.log('Saving uploaded file...');
     const buffer = await file.arrayBuffer();
     await writeFile(inputPath, Buffer.from(buffer));
 
     // Step 3: Convert to HLS
-    console.log('⚙️  Converting to HLS (this may take a minute)...');
+    console.log('Converting to HLS (this may take a minute)...');
     const conversionResult = await convertToHLS(inputPath, tempHLSDir);
     console.log(
-      `✓ Conversion complete: ${conversionResult.totalSegments} segments generated`
+      `Conversion complete: ${conversionResult.totalSegments} segments generated`
     );
 
     // Step 4: Upload to S3
-    console.log('☁️  Uploading HLS files to S3...');
+    console.log('Uploading HLS files to S3...');
     const uploadResult = await uploadHLSToS3(tempHLSDir, title.replace(/[^a-z0-9-]/gi, '_'));
-    console.log(`✓ Uploaded ${uploadResult.uploadedFiles} files to S3`);
+    console.log(`Uploaded ${uploadResult.uploadedFiles} files to S3`);
 
     // Step 5: Verify S3 upload
-    console.log('🔍 Verifying S3 upload...');
+    console.log('Verifying S3 upload...');
     const verified = await verifyHLSUpload(uploadResult.s3KeyBase);
     if (!verified) {
       throw new Error('Failed to verify HLS upload to S3');
     }
-    console.log('✓ S3 upload verified');
+    console.log('S3 upload verified');
 
     // Step 6: Create database record
-    console.log('💾 Creating database record...');
+    console.log('Creating database record...');
     const manifestKey = `${uploadResult.s3KeyBase}/master.m3u8`;
     const video = await prisma.video.create({
       data: {
@@ -102,12 +102,12 @@ export async function POST(request: NextRequest) {
         thumbnailUrl: null, // Can be added later
       },
     });
-    console.log(`✓ Database record created: ${video.id}`);
+    console.log(`Database record created: ${video.id}`);
 
     // Step 7: Cleanup temp directory
-    console.log('🧹 Cleaning up temporary files...');
+    console.log('Cleaning up temporary files...');
     await cleanupTempDir(tempHLSDir);
-    console.log('✓ Cleanup complete\n');
+    console.log('Cleanup complete\n');
 
     return NextResponse.json(
       {
@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('❌ HLS upload error:', error);
+    console.error('HLS upload error:', error);
 
     // Attempt cleanup on error
     try {

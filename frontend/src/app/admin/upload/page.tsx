@@ -228,7 +228,7 @@ export default function AdminUploadPage() {
                     if (data.metadata.genre && !genre) setGenre(data.metadata.genre);
                     if (data.metadata.rating && !rating) setRating(data.metadata.rating);
                     
-                    setSeriesLookupMessage({ type: 'success', text: '✓ Series metadata auto-populated from existing episodes' });
+                    setSeriesLookupMessage({ type: 'success', text: 'Series metadata auto-populated from existing episodes' });
                 } else {
                     setSeriesLookupMessage({ type: 'info', text: 'ℹ️ New series - you\'ll need to fill in the metadata' });
                 }
@@ -350,7 +350,7 @@ export default function AdminUploadPage() {
         try {
             // HLS Upload Method (FFmpeg conversion)
             if (uploadMethod === 'hls') {
-                console.log('🎬 [Upload] Using HLS conversion endpoint');
+                console.log('[Upload] Using HLS conversion endpoint');
                 const formData = new FormData();
                 formData.append('file', file);
                 formData.append('title', title);
@@ -812,4 +812,3 @@ export default function AdminUploadPage() {
         </div>
     );
 }
-

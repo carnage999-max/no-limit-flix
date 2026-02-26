@@ -3,16 +3,28 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ArrowLeft, ArrowRight, Trash2, Heart } from 'lucide-react';
 
 interface Favorite {
     id: string;
-    videoId: string;
-    video: {
+    videoId?: string | null;
+    tmdbId?: string | null;
+    videoTitle?: string;
+    videoPoster?: string;
+    video?: {
         id: string;
         title: string;
         thumbnailUrl?: string;
         genre?: string;
-    };
+        description?: string;
+        duration?: number;
+        releaseYear?: number;
+        tmdbId?: string;
+        sourceProvider?: string;
+        sourcePageUrl?: string;
+        sourceRights?: string;
+        sourceLicenseUrl?: string;
+    } | null;
     addedAt: string;
 }
 
@@ -56,7 +68,40 @@ export default function FavoritesPage() {
         }
     };
 
-    const removeFavorite = async (videoId: string) => {
+    const buildFavoriteLink = (favorite: Favorite) => {
+        const video = favorite.video;
+        const hasInternalAsset = Boolean(video?.id || favorite.videoId);
+        const tmdbId = favorite.tmdbId || video?.tmdbId;
+
+        if (hasInternalAsset) {
+            const encodedData = btoa(JSON.stringify({
+                id: video?.id || favorite.videoId,
+                title: video?.title || favorite.videoTitle || 'Untitled',
+                poster: video?.thumbnailUrl || favorite.videoPoster,
+                year: video?.releaseYear || new Date().getFullYear(),
+                runtime: video?.duration ? Math.floor(video.duration / 60) : 0,
+                genres: video?.genre ? [video.genre] : [],
+                explanation: video?.description || '',
+                playable: true,
+                assetId: video?.id || favorite.videoId,
+                tmdbId: video?.tmdbId || favorite.tmdbId,
+                tmdb_id: video?.tmdbId || favorite.tmdbId,
+                sourceProvider: video?.sourceProvider,
+                sourcePageUrl: video?.sourcePageUrl,
+                sourceRights: video?.sourceRights,
+                sourceLicenseUrl: video?.sourceLicenseUrl,
+            }));
+            return `/title/${video?.id || favorite.videoId}?data=${encodedData}`;
+        }
+
+        if (tmdbId) {
+            return `/title/${tmdbId}`;
+        }
+
+        return '/';
+    };
+
+    const removeFavorite = async (videoId?: string | null, tmdbId?: string | null) => {
         try {
             const res = await fetch('/api/favorites', {
                 method: 'POST',
@@ -64,12 +109,13 @@ export default function FavoritesPage() {
                 body: JSON.stringify({
                     userId,
                     videoId,
+                    tmdbId,
                     action: 'remove'
                 })
             });
 
             if (res.ok) {
-                setFavorites(favorites.filter(f => f.videoId !== videoId));
+                setFavorites(favorites.filter(f => f.videoId !== videoId && f.tmdbId !== tmdbId));
             }
         } catch (error) {
             console.error('Failed to remove favorite:', error);
@@ -109,7 +155,10 @@ export default function FavoritesPage() {
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent'
                         }}>
-                            ❤️ Your Favorites
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem' }}>
+                                <Heart className="w-6 h-6" />
+                                Your Favorites
+                            </span>
                         </h1>
                         <p style={{
                             color: '#A7ABB4',
@@ -153,33 +202,45 @@ export default function FavoritesPage() {
                             gap: '1.5rem',
                             marginTop: '2rem'
                         }}>
-                            {favorites.map((favorite) => (
-                                <div
+                            {favorites.map((favorite) => {
+                                const displayTitle = favorite.video?.title || favorite.videoTitle || 'Untitled';
+                                const displayPoster = favorite.video?.thumbnailUrl || favorite.videoPoster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+                                const displayGenre = favorite.video?.genre;
+                                const href = buildFavoriteLink(favorite);
+                                return (
+                                <Link
                                     key={favorite.id}
-                                    style={{
-                                        position: 'relative',
-                                        borderRadius: '1rem',
-                                        overflow: 'hidden',
-                                        cursor: 'pointer',
-                                        transition: 'transform 0.3s',
-                                        aspectRatio: '2/3',
-                                        group: 'relative'
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                                    }}
+                                    href={href}
+                                    style={{ textDecoration: 'none' }}
                                 >
+                                    <div
+                                        style={{
+                                            position: 'relative',
+                                            borderRadius: '1rem',
+                                            overflow: 'hidden',
+                                            cursor: 'pointer',
+                                            transition: 'transform 0.3s',
+                                            aspectRatio: '2/3',
+                                            group: 'relative'
+                                        }}
+                                        onMouseEnter={(e) => {
+                                            (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                            (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                                        }}
+                                    >
                                     {/* Image */}
                                     <img
-                                        src={favorite.video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400'}
-                                        alt={favorite.video.title}
+                                        src={displayPoster}
+                                        alt={displayTitle}
                                         style={{
                                             width: '100%',
                                             height: '100%',
-                                            objectFit: 'cover'
+                                            objectFit: 'cover',
+                                            maxWidth: '100%',
+                                            maxHeight: '100%',
+                                            display: 'block',
                                         }}
                                     />
 
@@ -203,15 +264,15 @@ export default function FavoritesPage() {
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap'
                                         }}>
-                                            {favorite.video.title}
+                                            {displayTitle}
                                         </h3>
-                                        {favorite.video.genre && (
+                                        {displayGenre && (
                                             <p style={{
                                                 fontSize: '0.75rem',
                                                 color: '#A7ABB4',
                                                 marginBottom: '0.75rem'
                                             }}>
-                                                {favorite.video.genre}
+                                                {displayGenre}
                                             </p>
                                         )}
                                     </div>
@@ -219,8 +280,9 @@ export default function FavoritesPage() {
                                     {/* Remove Button */}
                                     <button
                                         onClick={(e) => {
+                                            e.preventDefault();
                                             e.stopPropagation();
-                                            removeFavorite(favorite.videoId);
+                                            removeFavorite(favorite.videoId, favorite.tmdbId);
                                         }}
                                         style={{
                                             position: 'absolute',
@@ -247,10 +309,12 @@ export default function FavoritesPage() {
                                             e.currentTarget.style.background = 'rgba(244, 63, 94, 0.2)';
                                         }}
                                     >
-                                        ✕
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
-                                </div>
-                            ))}
+                                    </div>
+                                </Link>
+                            );
+                            })}
                         </div>
 
                         {/* Pagination */}
@@ -276,7 +340,10 @@ export default function FavoritesPage() {
                                         transition: 'all 0.2s'
                                     }}
                                 >
-                                    ← Previous
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        <ArrowLeft className="w-4 h-4" />
+                                        Previous
+                                    </span>
                                 </button>
 
                                 {[...Array(totalPages)].map((_, i) => (
@@ -315,7 +382,10 @@ export default function FavoritesPage() {
                                         transition: 'all 0.2s'
                                     }}
                                 >
-                                    Next →
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                        Next
+                                        <ArrowRight className="w-4 h-4" />
+                                    </span>
                                 </button>
                             </div>
                         )}
@@ -351,7 +421,10 @@ export default function FavoritesPage() {
                                 (e.currentTarget as HTMLElement).style.color = '#D4AF37';
                             }}
                         >
-                            Explore Movies →
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                Explore Movies
+                                <ArrowRight className="w-4 h-4" />
+                            </span>
                         </Link>
                     </div>
                 )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { X } from 'lucide-react';
 
 interface TrailerModalProps {
     videoUrl: string;
@@ -67,7 +68,10 @@ export default function TrailerModal({ videoUrl, isOpen, onClose }: TrailerModal
                         padding: '1rem',
                     }}
                 >
-                    ✕ Close
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <X className="w-4 h-4" />
+                        Close
+                    </span>
                 </button>
                 <iframe
                     width="100%"

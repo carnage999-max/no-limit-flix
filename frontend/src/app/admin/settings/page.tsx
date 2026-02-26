@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ArrowLeft, ArrowRight, CheckCircle2, User as UserIcon } from 'lucide-react';
 
 interface User {
     id: string;
@@ -151,7 +152,10 @@ export default function AdminSettingsPage() {
                                 fontWeight: '600'
                             }}
                         >
-                            ← Back
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <ArrowLeft className="w-4 h-4" />
+                                Back
+                            </span>
                         </Link>
                     </div>
                     <h1 style={{
@@ -195,7 +199,10 @@ export default function AdminSettingsPage() {
                         marginBottom: '1.5rem',
                         fontSize: '0.875rem'
                     }}>
-                        ✓ {successMessage}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <CheckCircle2 className="w-4 h-4" />
+                            {successMessage}
+                        </span>
                     </div>
                 )}
 
@@ -448,7 +455,10 @@ export default function AdminSettingsPage() {
                                             opacity: currentPage === 1 ? 0.5 : 1
                                         }}
                                     >
-                                        ← Previous
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            <ArrowLeft className="w-4 h-4" />
+                                            Previous
+                                        </span>
                                     </button>
 
                                     <div style={{
@@ -490,7 +500,10 @@ export default function AdminSettingsPage() {
                                             opacity: currentPage === totalPages ? 0.5 : 1
                                         }}
                                     >
-                                        Next →
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                            Next
+                                            <ArrowRight className="w-4 h-4" />
+                                        </span>
                                     </button>
                                 </div>
                             )}
@@ -554,7 +567,7 @@ export default function AdminSettingsPage() {
                                         fontWeight: '700',
                                         fontSize: '0.875rem'
                                     }}>
-                                        👤
+                                        <UserIcon className="w-5 h-5" />
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <div style={{

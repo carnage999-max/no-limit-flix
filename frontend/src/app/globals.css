@@ -354,9 +354,33 @@ a:focus-visible {
   width: 100%;
 }
 
+.watch-grid-compact {
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+
+.watch-tile-compact {
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto;
+}
+
+@media (max-width: 640px) {
+  .watch-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .watch-tile-compact {
+    max-width: 100%;
+  }
+}
+
 @media (min-width: 640px) {
   .watch-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .watch-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
 }
 
@@ -365,17 +389,29 @@ a:focus-visible {
     grid-template-columns: repeat(4, 1fr);
     gap: 1.5rem;
   }
+
+  .watch-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
 }
 
 @media (min-width: 1024px) {
   .watch-grid {
     grid-template-columns: repeat(5, 1fr);
   }
+
+  .watch-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
 }
 
 @media (min-width: 1280px) {
   .watch-grid {
     grid-template-columns: repeat(6, 1fr);
+  }
+
+  .watch-grid-compact {
+    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   }
 }
 

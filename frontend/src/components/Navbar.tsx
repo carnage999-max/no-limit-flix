@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { BarChart3, Heart, LogIn } from 'lucide-react';
+import { BarChart3, Heart, LogIn, ArrowLeft } from 'lucide-react';
 
 export default function Navbar() {
     const pathname = usePathname();
@@ -106,7 +106,8 @@ export default function Navbar() {
                         e.currentTarget.style.color = '#A7ABB4';
                     }}
                 >
-                    ← Back to Discovery
+                    <ArrowLeft className="w-4 h-4" />
+                    Back to Discovery
                 </Link>
             )}
 

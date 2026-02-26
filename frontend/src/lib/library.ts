@@ -13,27 +13,42 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
         .map((m) => m.tmdb_id || m.id) // Use tmdb_id if available, fallback to id (which is usually tmdbId for discovery)
         .filter(Boolean) as string[];
 
+    const titles = movies
+        .map((m) => m.title)
+        .filter(Boolean) as string[];
+
     if (tmdbIds.length === 0) return movies;
 
     try {
         // 2. Look up which of these titles we actually host
+        const titleFilters = titles.map((title) => ({
+            title: { equals: title, mode: 'insensitive' as const },
+            sourceProvider: 'internet_archive'
+        }));
+
         const hostedVideos = await (prisma.video as any).findMany({
             where: {
-                tmdbId: { in: tmdbIds },
                 status: 'completed',
+                OR: [
+                    ...(tmdbIds.length > 0 ? [{ tmdbId: { in: tmdbIds } }] : []),
+                    ...titleFilters
+                ]
             },
             select: {
                 id: true,
                 tmdbId: true,
+                title: true,
                 s3Url: true,
                 duration: true,
-                releaseYear: true
+                releaseYear: true,
+                sourceProvider: true
             },
         });
 
         const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
 
-        const hostedMap: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null }> = {};
+        const hostedMap: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null; sourceProvider?: string; title?: string }> = {};
+        const hostedByTitle: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null; sourceProvider?: string; title?: string }> = {};
         for (const v of hostedVideos) {
             if (v.tmdbId) {
                 let publicUrl = v.s3Url;
@@ -54,7 +69,18 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
                     id: v.id,
                     s3Url: publicUrl,
                     duration: v.duration,
-                    releaseYear: v.releaseYear
+                    releaseYear: v.releaseYear,
+                    sourceProvider: v.sourceProvider,
+                    title: v.title
+                };
+            } else if (v.sourceProvider === 'internet_archive' && v.title) {
+                hostedByTitle[v.title.toLowerCase()] = {
+                    id: v.id,
+                    s3Url: v.s3Url,
+                    duration: v.duration,
+                    releaseYear: v.releaseYear,
+                    sourceProvider: v.sourceProvider,
+                    title: v.title
                 };
             }
         }
@@ -62,8 +88,10 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
         // 3. Enrich each pick
         return movies.map((movie) => {
             const tmdbId = movie.tmdb_id?.toString() || movie.id?.toString();
-            if (tmdbId && hostedMap[tmdbId]) {
-                const asset = hostedMap[tmdbId];
+            const internalAsset = tmdbId ? hostedMap[tmdbId] : null;
+            const iaAsset = !internalAsset && movie.title ? hostedByTitle[movie.title.toLowerCase()] : null;
+            const asset = internalAsset || iaAsset;
+            if (asset) {
                 return {
                     ...movie,
                     playable: true,
@@ -71,7 +99,8 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
                     cloudfrontUrl: asset.s3Url,
                     runtime: asset.duration ? Math.floor(asset.duration / 60) : movie.runtime,
                     year: asset.releaseYear || movie.year,
-                    permanence: 'Permanent Core'
+                    permanence: internalAsset ? 'Permanent Core' : 'Licensed',
+                    sourceProvider: asset.sourceProvider
                 };
             }
             return { ...movie, playable: false };

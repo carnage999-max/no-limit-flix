@@ -10,6 +10,10 @@ interface MovieItem {
     genre?: string;
     duration?: number;
     tmdbId?: string;
+    sourceProvider?: string;
+    sourcePageUrl?: string;
+    sourceRights?: string;
+    sourceLicenseUrl?: string;
 }
 
 export default function InternalMoviesPage() {
@@ -30,6 +34,10 @@ export default function InternalMoviesPage() {
             assetId: movie.id,
             tmdbId: movie.tmdbId,
             tmdb_id: movie.tmdbId,
+            sourceProvider: movie.sourceProvider,
+            sourcePageUrl: movie.sourcePageUrl,
+            sourceRights: movie.sourceRights,
+            sourceLicenseUrl: movie.sourceLicenseUrl,
         }));
         return `/title/${movie.id}?data=${encodedData}`;
     };
@@ -47,6 +55,10 @@ export default function InternalMoviesPage() {
                         genre: video.genre,
                         duration: Math.floor((video.duration || 0) / 60),
                         tmdbId: video.tmdbId || video.tmdb_id,
+                        sourceProvider: video.sourceProvider,
+                        sourcePageUrl: video.sourcePageUrl,
+                        sourceRights: video.sourceRights,
+                        sourceLicenseUrl: video.sourceLicenseUrl,
                     }));
                     setMovies(moviesData);
                 }
@@ -128,7 +140,10 @@ export default function InternalMoviesPage() {
                                                 style={{
                                                     width: '100%',
                                                     height: '100%',
-                                                    objectFit: 'cover'
+                                                    objectFit: 'cover',
+                                                    maxWidth: '100%',
+                                                    maxHeight: '100%',
+                                                    display: 'block',
                                                 }}
                                             />
                                         </div>

@@ -336,7 +336,7 @@ export default function AdminEditPage() {
 
             if (!updateRes.ok) throw new Error('Failed to update metadata');
 
-            setSuccess('✓ Video metadata updated successfully!');
+            setSuccess('Video metadata updated successfully!');
             setThumbnailFile(null);
             // Reload videos to reflect changes
             await loadVideos();

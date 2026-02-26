@@ -4,26 +4,48 @@ import { useRef, useState, useEffect } from 'react';
 import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
+import {
+    Rocket,
+    Heart,
+    Brain,
+    Laugh,
+    Moon,
+    Sparkles,
+    Flame,
+    Leaf,
+    HeartHandshake,
+    Swords,
+    Wand2,
+    ShieldAlert,
+    Bot,
+    Film,
+    Palette,
+    Ghost,
+    Search,
+    Clapperboard,
+    User,
+    ArrowRight
+} from 'lucide-react';
 
 const MOOD_OPTIONS = [
-    { label: 'Thrilling', emoji: '🚀' },
-    { label: 'Heartwarming', emoji: '❤️' },
-    { label: 'Mind-bending', emoji: '🌀' },
-    { label: 'Funny', emoji: '😂' },
-    { label: 'Dark', emoji: '🌑' },
-    { label: 'Uplifting', emoji: '✨' },
-    { label: 'Intense', emoji: '🔥' },
-    { label: 'Relaxing', emoji: '🌿' },
-    { label: 'Romantic', emoji: '💖' },
-    { label: 'Epic', emoji: '⚔️' },
-    { label: 'Magical', emoji: '✨' },
-    { label: 'Gritty', emoji: '🚬' },
-    { label: 'Futuristic', emoji: '🤖' },
-    { label: 'Nostalgic', emoji: '🎞️' },
-    { label: 'Artistic', emoji: '🎨' },
-    { label: 'Spooky', emoji: '👻' },
-    { label: 'Mysterious', emoji: '🕵️' },
-    { label: 'Action-packed', emoji: '🎦' },
+    { label: 'Thrilling', icon: <Rocket className="w-4 h-4" /> },
+    { label: 'Heartwarming', icon: <Heart className="w-4 h-4" /> },
+    { label: 'Mind-bending', icon: <Brain className="w-4 h-4" /> },
+    { label: 'Funny', icon: <Laugh className="w-4 h-4" /> },
+    { label: 'Dark', icon: <Moon className="w-4 h-4" /> },
+    { label: 'Uplifting', icon: <Sparkles className="w-4 h-4" /> },
+    { label: 'Intense', icon: <Flame className="w-4 h-4" /> },
+    { label: 'Relaxing', icon: <Leaf className="w-4 h-4" /> },
+    { label: 'Romantic', icon: <HeartHandshake className="w-4 h-4" /> },
+    { label: 'Epic', icon: <Swords className="w-4 h-4" /> },
+    { label: 'Magical', icon: <Wand2 className="w-4 h-4" /> },
+    { label: 'Gritty', icon: <ShieldAlert className="w-4 h-4" /> },
+    { label: 'Futuristic', icon: <Bot className="w-4 h-4" /> },
+    { label: 'Nostalgic', icon: <Film className="w-4 h-4" /> },
+    { label: 'Artistic', icon: <Palette className="w-4 h-4" /> },
+    { label: 'Spooky', icon: <Ghost className="w-4 h-4" /> },
+    { label: 'Mysterious', icon: <Search className="w-4 h-4" /> },
+    { label: 'Action-packed', icon: <Clapperboard className="w-4 h-4" /> },
 ];
 
 const FEEDBACK_OPTIONS = [
@@ -56,6 +78,15 @@ export default function HomePage() {
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
 
+    const pickRandomItems = <T,>(items: T[], count: number) => {
+        const copy = [...items];
+        for (let i = copy.length - 1; i > 0; i -= 1) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy.slice(0, count);
+    };
+
     // Auto-scroll on mount if results exist (for "Back to Results" behavior)
     useEffect(() => {
         if (results && resultsRef.current) {
@@ -84,27 +115,31 @@ export default function HomePage() {
             if (moviesRes.ok) {
                 const moviesData = await moviesRes.json();
                 console.log('Movies data:', moviesData);
-                const movies = (moviesData.movies || []).slice(0, 8).map((video: any) => ({
+                const movies = pickRandomItems(moviesData.movies || [], 10).map((video: any) => ({
                     id: video.id,
                     title: video.title,
                     year: video.releaseYear || new Date().getFullYear(),
                     runtime: Math.floor((video.duration || 0) / 60),
                     poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
-                    genres: video.genre ? [video.genre] : [],
-                    explanation: video.description || '',
-                    watchProviders: [],
-                    permanence: 'Permanent Core' as const,
-                    playable: true,
-                    assetId: video.id,
-                    cloudfrontUrl: video.s3Url,
-                }));
+                        genres: video.genre ? [video.genre] : [],
+                        explanation: video.description || '',
+                        watchProviders: [],
+                        permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
+                        playable: true,
+                        assetId: video.id,
+                        cloudfrontUrl: video.s3Url,
+                        sourceProvider: video.sourceProvider,
+                        sourcePageUrl: video.sourcePageUrl,
+                        sourceRights: video.sourceRights,
+                        sourceLicenseUrl: video.sourceLicenseUrl,
+                    }));
                 setHostedMovies(movies);
             }
 
             if (tvRes.ok) {
                 const tvData = await tvRes.json();
                 console.log('TV data:', tvData);
-                const series = (tvData.series || []).slice(0, 8).map((tv: any) => ({
+                const series = pickRandomItems(tvData.series || [], 10).map((tv: any) => ({
                     id: tv.seriesTitle || tv.id,
                     title: tv.seriesTitle,
                     year: tv.releaseYear || new Date().getFullYear(),
@@ -532,11 +567,14 @@ export default function HomePage() {
                                                 onMouseEnter={(e) => (e.currentTarget.style.color = '#F6D365')}
                                                 onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
                                             >
-                                                See all movies →
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    See all movies
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </span>
                                             </a>
                                         </div>
                                         <div
-                                            className="watch-grid"
+                                            className="watch-grid watch-grid-compact"
                                             style={{
                                                 width: '100%',
                                             } as React.CSSProperties}
@@ -548,6 +586,7 @@ export default function HomePage() {
                                                         cursor: 'pointer',
                                                         transition: 'transform 0.2s',
                                                     }}
+                                                    className="watch-tile-compact"
                                                     onMouseEnter={(e) => {
                                                         (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
                                                     }}
@@ -599,11 +638,14 @@ export default function HomePage() {
                                                 onMouseEnter={(e) => (e.currentTarget.style.color = '#F6D365')}
                                                 onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
                                             >
-                                                See all tv →
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    See all tv
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </span>
                                             </a>
                                         </div>
                                         <div
-                                            className="watch-grid"
+                                            className="watch-grid watch-grid-compact"
                                             style={{
                                                 marginBottom: '3rem',
                                                 width: '100%',
@@ -616,6 +658,7 @@ export default function HomePage() {
                                                         cursor: 'pointer',
                                                         transition: 'transform 0.2s',
                                                     }}
+                                                    className="watch-tile-compact"
                                                     onMouseEnter={(e) => {
                                                         (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
                                                     }}
@@ -681,7 +724,7 @@ export default function HomePage() {
                                             Use AI Discovery to find matches from our global catalog
                                         </p>
                                     </div>
-                                    <span style={{ fontSize: '1.25rem', color: '#A7ABB4' }}>→</span>
+                                    <ArrowRight className="w-5 h-5" style={{ color: '#A7ABB4' }} />
                                 </div>
 
                                 {hostedMovies.length === 0 && hostedSeries.length === 0 && (
@@ -819,7 +862,10 @@ export default function HomePage() {
                                 whiteSpace: 'nowrap'
                             }}
                         >
-                            ✨ Match My Vibe
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <Sparkles className="w-4 h-4" />
+                                Match My Vibe
+                            </span>
                         </button>
                         <button
                             onClick={() => { setSearchMode('title'); setSearchError(null); }}
@@ -835,7 +881,10 @@ export default function HomePage() {
                                 whiteSpace: 'nowrap'
                             }}
                         >
-                            🎬 Similar Movies
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <Film className="w-4 h-4" />
+                                Similar Movies
+                            </span>
                         </button>
                         <button
                             onClick={() => { setSearchMode('actor'); setSearchError(null); }}
@@ -851,7 +900,10 @@ export default function HomePage() {
                                 whiteSpace: 'nowrap'
                             }}
                         >
-                            👤 Actor Search
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <User className="w-4 h-4" />
+                                Actor Search
+                            </span>
                         </button>
                     </div>
 
@@ -985,7 +1037,7 @@ export default function HomePage() {
                             <MoodChip
                                 key={mood.label}
                                 label={mood.label}
-                                emoji={mood.emoji}
+                                icon={mood.icon}
                                 selected={selectedMoods.includes(mood.label)}
                                 onToggle={(selected) => handleMoodToggle(mood.label, selected)}
                             />

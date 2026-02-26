@@ -41,7 +41,7 @@ export async function uploadHLSToS3(
       throw new Error('No HLS files found in output directory');
     }
 
-    console.log(`📤 [S3] Uploading ${hlsFiles.length} HLS files in parallel batches...`);
+    console.log(`[S3] Uploading ${hlsFiles.length} HLS files in parallel batches...`);
 
     // Upload in parallel batches of 5 to avoid timeout while keeping reasonable concurrency
     const batchSize = 5;
@@ -66,12 +66,12 @@ export async function uploadHLSToS3(
 
           await s3Client.send(command);
           uploadedCount++;
-          console.log(`✓ [${uploadedCount}/${hlsFiles.length}] Uploaded ${file}`);
+          console.log(`[${uploadedCount}/${hlsFiles.length}] Uploaded ${file}`);
         })
       );
     }
 
-    console.log(`✅ [S3] Uploaded all ${uploadedCount} HLS files successfully`);
+    console.log(`[S3] Uploaded all ${uploadedCount} HLS files successfully`);
     return {
       uploadedFiles: uploadedCount,
       s3KeyBase,

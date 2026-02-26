@@ -34,6 +34,11 @@ export async function GET() {
                 rating: true,
                 resolution: true,
                 tmdbId: true,
+                sourceType: true,
+                sourceProvider: true,
+                sourcePageUrl: true,
+                sourceRights: true,
+                sourceLicenseUrl: true,
                 createdAt: true,
             },
         });
@@ -49,7 +54,9 @@ export async function GET() {
             let publicUrl = ep.s3Url;
             let publicThumb = ep.thumbnailUrl;
 
-            if (cfPrefix) {
+            const isExternal = ep.sourceProvider === 'internet_archive' || ep.sourceType === 'external_legal';
+
+            if (cfPrefix && !isExternal) {
                 publicUrl = ep.s3Url.replace(s3Pattern, cfPrefix);
                 if (ep.thumbnailUrl) {
                     publicThumb = ep.thumbnailUrl.replace(s3Pattern, cfPrefix);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function AuthPage() {
     const [isLogin, setIsLogin] = useState(true);
@@ -15,11 +15,19 @@ export default function AuthPage() {
     const [successMessage, setSuccessMessage] = useState('');
     const router = useRouter();
 
-    // Redirect if already authenticated
+    // Redirect if already authenticated (require both user + userId)
     useEffect(() => {
-        const user = localStorage.getItem('user');
-        if (user) {
-            router.push('/');
+        const storedUser = localStorage.getItem('user');
+        const storedUserId = localStorage.getItem('userId');
+        const redirectUrl = localStorage.getItem('redirectAfterLogin');
+
+        if (storedUser && storedUserId) {
+            if (redirectUrl) {
+                localStorage.removeItem('redirectAfterLogin');
+                router.push(redirectUrl);
+            } else {
+                router.push('/');
+            }
         }
     }, [router]);
 
@@ -184,7 +192,10 @@ export default function AuthPage() {
                         marginBottom: '1rem',
                         fontSize: '0.875rem'
                     }}>
-                        ✓ {successMessage}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <CheckCircle2 className="w-4 h-4" />
+                            {successMessage}
+                        </span>
                     </div>
                 )}
 

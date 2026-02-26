@@ -28,6 +28,11 @@ export async function GET(
                 duration: true,
                 tmdbId: true,
                 status: true,
+                sourceType: true,
+                sourceProvider: true,
+                sourcePageUrl: true,
+                sourceRights: true,
+                sourceLicenseUrl: true,
             },
         });
 
@@ -38,11 +43,11 @@ export async function GET(
             );
         }
 
-        // Transform URLs to CloudFront for proper codec compatibility
+        const isExternal = video.sourceType === 'external_legal' || video.sourceProvider === 'internet_archive';
         const transformedVideo = {
             ...video,
-            s3Url: transformToCloudFront(video.s3Url),
-            thumbnailUrl: transformToCloudFront(video.thumbnailUrl),
+            s3Url: isExternal ? video.s3Url : transformToCloudFront(video.s3Url),
+            thumbnailUrl: isExternal ? video.thumbnailUrl : transformToCloudFront(video.thumbnailUrl),
         };
 
         return NextResponse.json({ video: transformedVideo });

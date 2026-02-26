@@ -20,6 +20,14 @@ export interface MoviePick extends Movie {
     playable?: boolean;        // true if title exists in our hosted library
     assetId?: string;          // DB Video.id when playable=true
     cloudfrontUrl?: string;    // CloudFront URL when playable=true (used by WatchScreen)
+    sourceType?: string;
+    sourceProvider?: string;
+    sourcePageUrl?: string;
+    sourceRights?: string;
+    sourceLicenseUrl?: string;
+    archiveIdentifier?: string;
+    format?: string;
+    fileSize?: string | number;
 }
 
 export interface WatchProvider {

@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface MoodChipProps {
     label: string;
-    emoji?: string;
+    icon?: ReactNode;
     selected?: boolean;
     onToggle?: (selected: boolean) => void;
 }
 
-export default function MoodChip({ label, emoji, selected = false, onToggle }: MoodChipProps) {
+export default function MoodChip({ label, icon, selected = false, onToggle }: MoodChipProps) {
     const handleClick = () => {
         onToggle?.(!selected);
     };
@@ -47,7 +47,7 @@ export default function MoodChip({ label, emoji, selected = false, onToggle }: M
             }}
         >
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {emoji && <span>{emoji}</span>}
+                {icon && <span style={{ display: 'inline-flex', alignItems: 'center' }}>{icon}</span>}
                 {label}
             </span>
         </button>

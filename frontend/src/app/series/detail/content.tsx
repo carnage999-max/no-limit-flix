@@ -5,6 +5,7 @@ import { notFound, useSearchParams } from 'next/navigation';
 import { Skeleton, TrailerModal } from '@/components';
 import Link from 'next/link';
 import { getTVSeriesDetails } from '@/lib/tmdb';
+import { Play, Star } from 'lucide-react';
 
 export default function SeriesDetailContent() {
     const searchParams = useSearchParams();
@@ -216,8 +217,9 @@ export default function SeriesDetailContent() {
                                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
                                             <div>
                                                 <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
-                                                <div style={{ fontSize: '1.25rem', color: '#D4AF37', fontWeight: '700' }}>
-                                                    ⭐ {tmdbData.rating.toFixed(1)}/10
+                                                <div style={{ fontSize: '1.25rem', color: '#D4AF37', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    <Star className="w-4 h-4" />
+                                                    {tmdbData.rating.toFixed(1)}/10
                                                 </div>
                                             </div>
                                             {tmdbData.trailerUrl && (
@@ -243,7 +245,10 @@ export default function SeriesDetailContent() {
                                                         e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
                                                     }}
                                                 >
-                                                    🎬 Watch Trailer
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                        <Play className="w-4 h-4" />
+                                                        Watch Trailer
+                                                    </span>
                                                 </button>
                                             )}
                                             {tmdbData.status && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { PLAY_STORE_URL } from '@/lib/constants';
+import { X } from 'lucide-react';
 
 export function AppBanner() {
   const [isDismissed, setIsDismissed] = useState(false);
@@ -130,7 +131,7 @@ export function AppBanner() {
           }}
           aria-label="Dismiss banner"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
     </div>

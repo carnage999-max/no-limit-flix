@@ -30,6 +30,16 @@ model Video {
   s3Key           String?  // Deprecated: will be removed
   s3Url           String?  // Deprecated: will be removed, compute at runtime instead
   
+  // External sources (e.g., Internet Archive)
+  sourceType        String? // internal | external_legal
+  sourceProvider    String? // internet_archive
+  sourcePageUrl     String?
+  archiveIdentifier String? @unique
+  sourceRights      String?
+  sourceLicenseUrl  String?
+  sourceMetadata    Json?
+  format            String?
+
   thumbnailUrl    String?
   status          String   @default("pending") // pending, uploading, completed, failed
   releaseYear     Int?
@@ -101,7 +111,8 @@ model WatchHistory {
 model Favorite {
   id                String   @id @default(cuid())
   userId            String
-  videoId           String
+  videoId           String?
+  tmdbId            String?
   videoTitle        String
   videoPoster       String?
   addedAt           DateTime @default(now())
@@ -111,7 +122,9 @@ model Favorite {
 
   @@index([userId])
   @@index([videoId])
+  @@index([tmdbId])
   @@unique([userId, videoId], name: "userFavoriteUnique")
+  @@unique([userId, tmdbId], name: "userFavoriteTmdbUnique")
 }
 
 model AnalyticsEvent {

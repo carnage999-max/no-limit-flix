@@ -27,6 +27,14 @@ export async function GET() {
                 rating: true,
                 resolution: true,
                 tmdbId: true,         // optional link to global catalog
+                sourceType: true,
+                sourceProvider: true,
+                sourcePageUrl: true,
+                sourceRights: true,
+                sourceLicenseUrl: true,
+                archiveIdentifier: true,
+                format: true,
+                fileSize: true,
                 createdAt: true,
             },
         });
@@ -38,8 +46,9 @@ export async function GET() {
         const transformedVideos = videos.map((video: any) => {
             let publicUrl = video.s3Url;
             let publicThumb = video.thumbnailUrl;
+            const isExternal = video.sourceProvider === 'internet_archive' || video.sourceType === 'external_legal';
 
-            if (cfBase) {
+            if (cfBase && !isExternal) {
                 const cfPrefix = cfBase.startsWith('http') ? cfBase : `https://${cfBase}`;
                 const s3Pattern = /https?:\/\/[^.]+\.s3[.-][^.]+\.amazonaws\.com\//i;
                 const s3PatternLegacy = /https?:\/\/[^.]+\.s3\.amazonaws\.com\//i;
@@ -62,7 +71,8 @@ export async function GET() {
             return {
                 ...video,
                 s3Url: publicUrl,
-                thumbnailUrl: publicThumb
+                thumbnailUrl: publicThumb,
+                fileSize: video.fileSize ? video.fileSize.toString() : null
             };
         });
 

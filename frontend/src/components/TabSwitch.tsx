@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Play, Sparkles } from 'lucide-react';
 
 interface TabSwitchProps {
   activeTab: 'watch' | 'discovery';
@@ -85,7 +86,7 @@ export default function TabSwitch({ activeTab, onTabChange }: TabSwitchProps) {
             }
           }}
         >
-          <span style={{ fontSize: '16px' }}>▶</span>
+          <Play className="w-4 h-4" />
           Watch
         </button>
 
@@ -121,7 +122,7 @@ export default function TabSwitch({ activeTab, onTabChange }: TabSwitchProps) {
             }
           }}
         >
-          <span style={{ fontSize: '16px' }}>✨</span>
+          <Sparkles className="w-4 h-4" />
           Discovery
         </button>
       </div>

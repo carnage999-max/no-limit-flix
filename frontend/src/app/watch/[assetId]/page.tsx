@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
-import { transformToCloudFront } from '@/lib/utils';
+import { ExternalLink, Loader2, ArrowLeft } from 'lucide-react';
 
 interface Video {
     id: string;
@@ -16,6 +16,11 @@ interface Video {
     resolution?: string;
     duration?: number;
     tmdbId?: string;
+    sourceType?: string;
+    sourceProvider?: string;
+    sourcePageUrl?: string;
+    sourceRights?: string;
+    sourceLicenseUrl?: string;
 }
 
 interface MovieDetails {
@@ -81,7 +86,7 @@ export default function WatchPage() {
         return (
             <main style={{ minHeight: '100vh', background: '#0B0B0D', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '32px', marginBottom: '1rem' }}>⏳</div>
+                    <Loader2 className="w-8 h-8 animate-spin" style={{ marginBottom: '1rem', display: 'inline-block' }} />
                     <p>Loading...</p>
                 </div>
             </main>
@@ -93,7 +98,10 @@ export default function WatchPage() {
             <main style={{ minHeight: '100vh', background: '#0B0B0D', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div style={{ textAlign: 'center' }}>
                     <p style={{ color: '#F87171' }}>Error: {error || 'Video not found'}</p>
-                    <Link href="/" style={{ color: '#D4AF37', marginTop: '1rem', display: 'inline-block' }}>← Back to home</Link>
+                    <Link href="/" style={{ color: '#D4AF37', marginTop: '1rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <ArrowLeft className="w-4 h-4" />
+                        Back to home
+                    </Link>
                 </div>
             </main>
         );
@@ -196,7 +204,7 @@ export default function WatchPage() {
 
                         {/* Meta Info */}
                         <div>
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                                 <span style={{
                                     padding: '0.4rem 0.75rem',
                                     borderRadius: '0.5rem',
@@ -205,8 +213,10 @@ export default function WatchPage() {
                                     fontWeight: '700',
                                     textTransform: 'uppercase',
                                     letterSpacing: '0.05em',
-                                    background: '#D4AF37'
-                                }}>Internal Library</span>
+                                    background: video.sourceProvider === 'internet_archive' ? '#38BDF8' : '#D4AF37'
+                                }}>
+                                    {video.sourceProvider === 'internet_archive' ? 'Internet Archive' : 'Internal Library'}
+                                </span>
                                 <span style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '500' }}>{video.resolution || 'HD'}</span>
                                 <span style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '500' }}>
                                     {video.duration ? `${Math.floor(video.duration / 60)}m` : ''}
@@ -238,6 +248,51 @@ export default function WatchPage() {
                             >
                                 {video.description || movieDetails?.explanation}
                             </p>
+
+                            {video.sourceProvider === 'internet_archive' && (
+                                <div style={{
+                                    marginBottom: '2rem',
+                                    padding: '1rem 1.25rem',
+                                    borderRadius: '0.75rem',
+                                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                                    background: 'rgba(56, 189, 248, 0.08)',
+                                    color: '#E2E8F0'
+                                }}>
+                                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.2em', color: '#93C5FD', marginBottom: '0.5rem' }}>
+                                        Source
+                                    </div>
+                                    <div style={{ fontSize: '0.95rem', fontWeight: 600 }}>
+                                        Internet Archive
+                                    </div>
+                                    {video.sourceRights && (
+                                        <div style={{ fontSize: '0.85rem', color: '#A7ABB4', marginTop: '0.5rem' }}>
+                                            Rights: {video.sourceRights}
+                                        </div>
+                                    )}
+                                    {video.sourceLicenseUrl && (
+                                        <a
+                                            href={video.sourceLicenseUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.75rem', color: '#93C5FD', textDecoration: 'none', fontSize: '0.85rem' }}
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            License details
+                                        </a>
+                                    )}
+                                    {video.sourcePageUrl && (
+                                        <a
+                                            href={video.sourcePageUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.5rem', color: '#93C5FD', textDecoration: 'none', fontSize: '0.85rem' }}
+                                        >
+                                            <ExternalLink className="w-4 h-4" />
+                                            View on Internet Archive
+                                        </a>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Mobile App Promo */}
                             <div style={{ padding: '1.5rem', borderRadius: '1rem', background: 'linear-gradient(135deg, rgba(212,175,55,0.08) 0%, rgba(246,211,101,0.04) 100%)', border: '1px solid rgba(212, 175, 55, 0.2)', display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '2.5rem' }}>

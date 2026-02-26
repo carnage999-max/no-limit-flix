@@ -66,6 +66,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (video.sourceType === 'external_legal' || video.sourceProvider === 'internet_archive') {
+      const playbackUrl = video.s3Url || video.cloudfrontPath;
+      if (!playbackUrl) {
+        return NextResponse.json(
+          { error: 'Playback URL missing for external asset' },
+          { status: 500 }
+        );
+      }
+
+      const response: WatchStartResponse = {
+        success: true,
+        playbackUrl,
+        playbackType: 'mp4',
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      };
+
+      return NextResponse.json(response, { status: 200 });
+    }
+
     const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
     if (!cloudfrontUrl) {
       console.error('Missing NEXT_PUBLIC_CLOUDFRONT_URL env var');

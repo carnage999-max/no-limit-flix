@@ -1,4 +1,4 @@
-# No Limit Flix — Step 1 Complete ✓
+# No Limit Flix — Step 1 Complete
 
 ## Project Structure
 
@@ -139,3 +139,29 @@ npm start
 ```
 
 Server runs at: http://localhost:3000
+
+## Internet Archive Import
+
+Admin-only import tool for direct playback URLs (no downloads, no S3).
+
+Route:
+- `GET /admin/import` — UI to import items
+- `POST /api/admin/archive/import` — server import endpoint
+
+Request body:
+```json
+{
+  "preset": "public-domain-feature-films",
+  "limit": 10,
+  "allowMkv": false
+}
+```
+
+Presets (queries are IA Advanced Search):
+- `public-domain-feature-films`: `(collection:(feature_films) OR collection:(publicdomainmovies)) AND mediatype:(movies)`
+- `public-domain-cartoons`: `(collection:(classic_cartoons) OR subject:(cartoons)) AND mediatype:(movies)`
+- `film-noir`: `(collection:(film_noir) OR subject:("film noir")) AND mediatype:(movies)`
+
+Notes:
+- Rights/license metadata is stored as provided by Internet Archive.
+- Playback uses direct IA download URLs (`external_legal` source).

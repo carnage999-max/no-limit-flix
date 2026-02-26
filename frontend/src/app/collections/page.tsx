@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 
 interface Collection {
     slug: string;
@@ -229,7 +230,7 @@ export default function CollectionsPage() {
                                         color: collection.accentColor,
                                     }}
                                 >
-                                    →
+                                    <ArrowRight className="w-5 h-5" />
                                 </span>
                             </div>
                         </Link>

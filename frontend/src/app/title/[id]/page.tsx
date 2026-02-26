@@ -8,6 +8,7 @@ import VideoPlayer from '@/components/VideoPlayer';
 import { getMovieDetails } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import type { MoviePick } from '@/types';
+import { CheckCircle2, ExternalLink, Play, Smartphone } from 'lucide-react';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -239,7 +240,10 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                                 e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.3)';
                                             }}
                                         >
-                                            📺 Watch Trailer
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                                <Play className="w-4 h-4" />
+                                                Watch Trailer
+                                            </span>
                                         </button>
                                     )}
                                 </div>
@@ -290,7 +294,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 </p>
                                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.6 }}>
                                     <span style={{ fontSize: '12px', color: '#A7ABB4', fontWeight: '500' }}>Stability Verified</span>
-                                    <span style={{ fontSize: '12px', color: '#4ADE80' }}>✓</span>
+                                    <CheckCircle2 className="w-4 h-4" style={{ color: '#4ADE80' }} />
                                 </div>
                             </div>
 
@@ -333,8 +337,9 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                     pointerEvents: 'none'
                                 }} />
 
-                                <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.5rem' }}>
-                                    📱 Stream Full Content
+                                <p style={{ fontSize: '0.75rem', fontWeight: '800', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    <Smartphone className="w-4 h-4" />
+                                    Stream Full Content
                                 </p>
                                 <h3 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#F3F4F6', marginBottom: '0.5rem', lineHeight: '1.2' }}>
                                     Watch on the No Limit Flix App
@@ -392,7 +397,10 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '3rem' }}>
                                 {movie.trailerUrl && (
                                     <ButtonPrimary onClick={() => setIsTrailerOpen(true)}>
-                                        ▶ Watch Trailer
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                            <Play className="w-4 h-4" />
+                                            Watch Trailer
+                                        </span>
                                     </ButtonPrimary>
                                 )}
                                 <ButtonSecondary onClick={() => window.history.back()}>

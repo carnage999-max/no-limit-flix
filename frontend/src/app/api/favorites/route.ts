@@ -6,59 +6,76 @@ const prisma = new PrismaClient();
 export async function POST(request: NextRequest) {
     try {
         const { userId, videoId, action, title, poster, tmdbId } = await request.json();
+        const videoIdValue = videoId ? String(videoId) : undefined;
+        const tmdbIdValue = tmdbId ? String(tmdbId) : undefined;
 
-        if (!userId || !videoId) {
+        if (!userId || (!videoIdValue && !tmdbIdValue)) {
             return NextResponse.json(
-                { error: 'Missing required fields: userId and videoId' },
+                { error: 'Missing required fields: userId and videoId or tmdbId' },
                 { status: 400 }
             );
         }
 
-        console.log('Processing favorite action:', { userId, videoId, action, title, tmdbId });
+        console.log('Processing favorite action:', { userId, videoId: videoIdValue, action, title, tmdbId: tmdbIdValue });
 
         if (action === 'add') {
             try {
-                // Try to create/upsert the favorite
-                const favorite = await prisma.favorite.upsert({
-                    where: {
-                        userFavoriteUnique: {
+                let favorite;
+                if (videoIdValue) {
+                    favorite = await prisma.favorite.upsert({
+                        where: {
+                            userFavoriteUnique: {
+                                userId,
+                                videoId: videoIdValue
+                            }
+                        },
+                        create: {
                             userId,
-                            videoId
+                            videoId: videoIdValue,
+                            tmdbId: tmdbIdValue || null,
+                            videoTitle: title || 'Unknown',
+                            videoPoster: poster
+                        },
+                        update: {
+                            tmdbId: tmdbIdValue || null,
+                            videoTitle: title || 'Unknown',
+                            videoPoster: poster
                         }
-                    },
-                    create: {
-                        userId,
-                        videoId,
-                        videoTitle: title || 'Unknown',
-                        videoPoster: poster
-                    },
-                    update: {
-                        videoTitle: title || 'Unknown',
-                        videoPoster: poster
-                    }
-                });
+                    });
+                } else {
+                    favorite = await prisma.favorite.upsert({
+                        where: {
+                            userFavoriteTmdbUnique: {
+                                userId,
+                                tmdbId: tmdbIdValue
+                            }
+                        },
+                        create: {
+                            userId,
+                            tmdbId: tmdbIdValue,
+                            videoTitle: title || 'Unknown',
+                            videoPoster: poster
+                        },
+                        update: {
+                            videoTitle: title || 'Unknown',
+                            videoPoster: poster
+                        }
+                    });
+                }
 
                 console.log('Favorite created/updated:', favorite);
                 return NextResponse.json({ success: true, favorite });
             } catch (prismaError: any) {
                 console.error('Prisma error in favorite add:', prismaError.message);
-                
-                // If foreign key constraint fails, it's likely the videoId doesn't exist
-                // This is OK for TMDB content, so we'll create a record anyway
-                if (prismaError.code === 'P2025' || prismaError.code === 'P2003') {
-                    console.log('Video not found in database, creating favorite without video relation');
-                    // In this case, the favorite record can exist without a valid Video
-                    // The database schema requires it though, so this will still fail
-                    // We need to handle this differently
-                    throw prismaError;
-                }
+
                 throw prismaError;
             }
         } else if (action === 'remove') {
             const result = await prisma.favorite.deleteMany({
                 where: {
                     userId,
-                    videoId
+                    ...(videoIdValue ? { videoId: videoIdValue } : {}),
+                    ...(tmdbIdValue ? { tmdbId: tmdbIdValue } : {})
                 }
             });
 

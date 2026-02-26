@@ -26,7 +26,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
         if (assetId) {
             const fetchSignedAuth = async () => {
                 try {
-                    console.log(`🎬 [VideoPlayer] Fetching signed auth for assetId: ${assetId}`);
+                    console.log(`[VideoPlayer] Fetching signed auth for assetId: ${assetId}`);
                     const response = await fetch(`/api/watch/start`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -35,7 +35,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
 
                     if (!response.ok) {
                         const err = await response.json();
-                        console.warn('⚠️ [VideoPlayer] /api/watch/start failed, using direct URL:', err.error);
+                        console.warn('[VideoPlayer] /api/watch/start failed, using direct URL:', err.error);
                         // Fallback to direct URL
                         setPlaybackUrl(src);
                         setIsLoading(false);
@@ -43,14 +43,14 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
                     }
 
                     const data = await response.json();
-                    console.log(`✅ [VideoPlayer] Playback type: ${data.playbackType}, expires: ${data.expiresAt}`);
+                    console.log(`[VideoPlayer] Playback type: ${data.playbackType}, expires: ${data.expiresAt}`);
 
                     setPlaybackType(data.playbackType);
                     setPlaybackUrl(data.playbackUrl);
                     setIsLoading(false);
                 } catch (err) {
-                    console.error('❌ [VideoPlayer] Failed to fetch signed auth:', err);
-                    console.log('⚠️ [VideoPlayer] Falling back to direct URL');
+                    console.error('[VideoPlayer] Failed to fetch signed auth:', err);
+                    console.log('[VideoPlayer] Falling back to direct URL');
                     // Fallback to direct URL on error
                     setPlaybackUrl(src);
                     setIsLoading(false);
@@ -100,18 +100,18 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
             player.ready(() => {
                 const videoElement_ = player.tech_.el() as HTMLVideoElement;
                 if (HlsJs.isSupported() && playbackUrl.endsWith('.m3u8')) {
-                    console.log('🎬 [VideoPlayer] HLS.js initializing for HLS stream');
+                    console.log('[VideoPlayer] HLS.js initializing for HLS stream');
                     const hls = new HlsJs({
                         // Enable debug logging for HLS issues
                         debug: false,
                     });
                     hls.attachMedia(videoElement_);
                     hls.on(HlsJs.Events.MANIFEST_PARSED, () => {
-                        console.log('✅ [VideoPlayer] HLS manifest parsed successfully');
+                        console.log('[VideoPlayer] HLS manifest parsed successfully');
                         videoElement_.play();
                     });
                     hls.on(HlsJs.Events.ERROR, (event, data) => {
-                        console.error('❌ [VideoPlayer] HLS.js error:', data);
+                        console.error('[VideoPlayer] HLS.js error:', data);
                         if (data.fatal) {
                             setError(`HLS streaming error: ${data.details || 'Unknown error'}`);
                         }
@@ -119,14 +119,14 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
                     hls.loadSource(playbackUrl);
                 } else if (playbackUrl.endsWith('.m3u8')) {
                     // Fallback for browsers that support native HLS
-                    console.log('🎬 [VideoPlayer] Using native HLS support');
+                    console.log('[VideoPlayer] Using native HLS support');
                     videoElement_.src = playbackUrl;
                 }
             });
 
             player.on('error', () => {
                 const err = player.error();
-                console.error('❌ [VideoPlayer] VideoJS Error:', err);
+                console.error('[VideoPlayer] VideoJS Error:', err);
                 setError(`This video format may not be supported by your browser. Try opening with VLC or the mobile app.`);
             });
         }
