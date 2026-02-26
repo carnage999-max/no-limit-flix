@@ -39,6 +39,25 @@ const parseDurationSeconds = (value) => {
     return Number.isFinite(numeric) ? numeric : null;
 };
 
+const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
+const EXCLUDED_TITLE_KEYWORDS = [
+    'trailer',
+    'preview',
+    'teaser',
+    'promo',
+    'commercial',
+    'clip',
+    'newsreel',
+    'short',
+    'sample'
+];
+
+const isExcludedTitle = (value) => {
+    if (!value) return false;
+    const lower = value.toLowerCase();
+    return EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
+
 const stringifyMetadata = (value) => {
     if (value === null || value === undefined) return null;
     if (Array.isArray(value)) return value.join(', ');
@@ -162,11 +181,24 @@ app.post('/import', async (req, res) => {
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 const title = stringifyMetadata(metadata?.title) || identifier;
+                if (isExcludedTitle(title) || isExcludedTitle(bestFile.name)) {
+                    result.status = 'skipped';
+                    result.reason = 'Excluded by title keywords';
+                    results.push(result);
+                    continue;
+                }
                 const description = null;
                 const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date));
                 const genre = normalizeGenre(metadata);
                 const rating = normalizeRating(metadata);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
+
+                if (duration && duration < MIN_FEATURE_DURATION_SECONDS) {
+                    result.status = 'skipped';
+                    result.reason = `Duration ${Math.round(duration / 60)}m below minimum`;
+                    results.push(result);
+                    continue;
+                }
                 const fileSize = bestFile.size ? BigInt(bestFile.size).toString() : null;
                 const height = bestFile.height ? Number(bestFile.height) : null;
                 const resolution = height ? `${height}p` : null;

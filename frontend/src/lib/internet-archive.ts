@@ -9,19 +9,19 @@ export const ARCHIVE_PRESETS: ArchivePreset[] = [
     {
         id: 'public-domain-feature-films',
         label: 'Public Domain Feature Films',
-        query: '(collection:(feature_films) OR collection:(publicdomainmovies)) AND mediatype:(movies)',
+        query: 'collection:(publicmovies212) AND mediatype:(movies) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR clip OR newsreel)',
         description: 'Feature-length public domain films from IA collections.'
     },
     {
         id: 'public-domain-cartoons',
         label: 'Public Domain Cartoons',
-        query: '(collection:(classic_cartoons) OR subject:(cartoons)) AND mediatype:(movies)',
+        query: '(collection:(classic_cartoons) OR subject:(cartoons)) AND mediatype:(movies) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR clip)',
         description: 'Classic cartoons available in public domain collections.'
     },
     {
         id: 'film-noir',
         label: 'Film Noir',
-        query: '(collection:(film_noir) OR subject:("film noir")) AND mediatype:(movies)',
+        query: '(collection:(film_noir) OR subject:("film noir")) AND mediatype:(movies) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR clip OR newsreel)',
         description: 'Noir-era films from IA collections.'
     }
 ];
