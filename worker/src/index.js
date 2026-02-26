@@ -254,7 +254,7 @@ app.post('/import', async (req, res) => {
                 const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
                 const s3KeyPlayback = buildS3Key(identifier, bestFile.name);
 
-                const { s3Url, contentType } = await uploadToS3(playbackUrl, s3KeyPlayback, bestFile);
+                const { s3Url, contentType: uploadedContentType } = await uploadToS3(playbackUrl, s3KeyPlayback, bestFile);
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 let title = stringifyMetadata(metadata?.title) || identifier;
@@ -285,7 +285,7 @@ app.post('/import', async (req, res) => {
                 const fileSize = bestFile.size ? BigInt(bestFile.size).toString() : null;
                 const height = bestFile.height ? Number(bestFile.height) : null;
                 const resolution = height ? `${height}p` : null;
-                const mimeType = normalizeMimeType(bestFile) || contentType || inferMimeType(bestFile);
+                const mimeType = normalizeMimeType(bestFile) || uploadedContentType || inferMimeType(bestFile);
                 const parsed = parseSeasonEpisode(bestFile.name);
                 const episodeNumber = contentType === 'series'
                     ? (item.episodeNumber ?? parsed.episode ?? (startEpisodeInput !== null ? startEpisodeInput + index : null))
