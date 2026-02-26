@@ -121,6 +121,35 @@ const isGenericBundleTitle = (value) => {
         || normalized === 'publicmovies212';
 };
 
+const DEFAULT_POSTER_URL = 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+
+const findThumbnailForFile = (files, identifier, fileName) => {
+    if (!fileName) return null;
+    const base = fileName.replace(/\.[a-z0-9]+$/i, '').toLowerCase();
+    const imageCandidates = files.filter((file) => {
+        const name = (file?.name || '').toLowerCase();
+        if (!name) return false;
+        if (!name.includes(base)) return false;
+        return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+    });
+    const best = imageCandidates[0];
+    if (!best) return null;
+    return buildArchiveDownloadUrl(identifier, best.name);
+};
+
+const deriveTitleFromFileName = (fileName) => {
+    const base = fileName.replace(/\.[a-z0-9]+$/i, '');
+    return base.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const isGenericBundleTitle = (value) => {
+    if (!value) return true;
+    const normalized = value.toLowerCase().trim();
+    return normalized === 'public domain movies'
+        || normalized === 'publicdomainmovies'
+        || normalized === 'publicmovies212';
+};
+
 const normalizeText = (value) => {
     if (!value) return '';
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -285,10 +314,10 @@ app.post('/import', async (req, res) => {
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 let title = stringifyMetadata(metadata?.title) || identifier;
-                if (identifier === 'publicmovies212' && bestFile?.name) {
-                    if (isGenericBundleTitle(title)) {
-                        title = deriveTitleFromFileName(bestFile.name);
-                    }
+                const isBundleItem = identifier === 'publicmovies212';
+                const isBundleGeneric = isBundleItem && isGenericBundleTitle(title);
+                if (isBundleGeneric && bestFile?.name) {
+                    title = deriveTitleFromFileName(bestFile.name);
                 }
                 if (isExcludedTitle(title) || isExcludedTitle(bestFile.name)) {
                     result.status = 'skipped';
@@ -297,8 +326,9 @@ app.post('/import', async (req, res) => {
                     continue;
                 }
                 const description = null;
-                const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date));
-                const genre = normalizeGenre(metadata);
+                const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
+                    ?? (isBundleItem ? parseYear(bestFile.name) : null);
+                const genre = isBundleGeneric ? null : normalizeGenre(metadata);
                 const rating = normalizeRating(metadata);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
                 const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
@@ -322,6 +352,10 @@ app.post('/import', async (req, res) => {
                     ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
                     : null;
 
+                const thumbnailUrl = isBundleItem
+                    ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
+                    : `https://archive.org/services/img/${identifier}`;
+
                 const dbRow = await upsertVideo({
                     title,
                     description,
@@ -331,7 +365,7 @@ app.post('/import', async (req, res) => {
                     cloudfrontPath: `/${s3KeyPlayback}`,
                     s3KeySource: null,
                     s3Url,
-                    thumbnailUrl: `https://archive.org/services/img/${identifier}`,
+                    thumbnailUrl,
                     status: 'completed',
                     releaseYear,
                     duration,

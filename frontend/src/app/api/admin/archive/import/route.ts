@@ -121,6 +121,23 @@ const isGenericBundleTitle = (value?: string) => {
         || normalized === 'publicmovies212';
 };
 
+const DEFAULT_POSTER_URL = 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+
+const findThumbnailForFile = (files: any[], identifier: string, fileName: string) => {
+    if (!fileName) return null;
+    const base = fileName.replace(/\.[a-z0-9]+$/i, '').toLowerCase();
+    const imageCandidates = files.filter((file) => {
+        const name = (file?.name || '').toLowerCase();
+        if (!name) return false;
+        if (!name.includes(base)) return false;
+        return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+    });
+
+    const best = imageCandidates[0];
+    if (!best) return null;
+    return buildArchiveDownloadUrl(identifier, best.name);
+};
+
 const normalizeText = (value?: string) => {
     if (!value) return '';
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -348,10 +365,10 @@ export async function POST(request: NextRequest) {
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 let title = stringifyMetadata(metadata?.title) || identifier;
-                if (preset.bundleIdentifier && identifier === preset.bundleIdentifier && bestFile?.name) {
-                    if (isGenericBundleTitle(title)) {
-                        title = deriveTitleFromFileName(bestFile.name);
-                    }
+                const isBundleItem = Boolean(preset.bundleIdentifier && identifier === preset.bundleIdentifier);
+                const isBundleGeneric = isBundleItem && isGenericBundleTitle(title);
+                if (isBundleGeneric && bestFile?.name) {
+                    title = deriveTitleFromFileName(bestFile.name);
                 }
                 if (isExcludedTitle(title) || isExcludedTitle(bestFile.name)) {
                     result.status = 'skipped';
@@ -360,8 +377,9 @@ export async function POST(request: NextRequest) {
                     continue;
                 }
                 const description = null;
-                const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date));
-                const genre = normalizeGenre(metadata);
+                const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
+                    ?? (isBundleItem ? parseYear(bestFile.name) : null);
+                const genre = isBundleGeneric ? null : normalizeGenre(metadata);
                 const rating = normalizeRating(metadata);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
                 const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
@@ -388,6 +406,9 @@ export async function POST(request: NextRequest) {
                     ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
                     : null;
 
+                const thumbnailUrl = isBundleItem
+                    ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
+                    : `https://archive.org/services/img/${identifier}`;
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
                 if (!dryRun) {
@@ -406,7 +427,7 @@ export async function POST(request: NextRequest) {
                             cloudfrontPath: playbackUrl,
                             s3KeySource: null,
                             s3Url: playbackUrl,
-                            thumbnailUrl: `https://archive.org/services/img/${identifier}`,
+                            thumbnailUrl,
                             status: 'completed',
                             releaseYear,
                             duration,
@@ -434,7 +455,7 @@ export async function POST(request: NextRequest) {
                             s3KeyPlayback,
                             cloudfrontPath: playbackUrl,
                             s3Url: playbackUrl,
-                            thumbnailUrl: `https://archive.org/services/img/${identifier}`,
+                            thumbnailUrl,
                             status: 'completed',
                             releaseYear,
                             duration,
