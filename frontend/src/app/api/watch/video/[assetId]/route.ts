@@ -43,11 +43,10 @@ export async function GET(
             );
         }
 
-        const isExternal = video.sourceType === 'external_legal' || video.sourceProvider === 'internet_archive';
         const transformedVideo = {
             ...video,
-            s3Url: isExternal ? video.s3Url : transformToCloudFront(video.s3Url),
-            thumbnailUrl: isExternal ? video.thumbnailUrl : transformToCloudFront(video.thumbnailUrl),
+            s3Url: transformToCloudFront(video.s3Url),
+            thumbnailUrl: transformToCloudFront(video.thumbnailUrl),
         };
 
         return NextResponse.json({ video: transformedVideo });

@@ -4,6 +4,7 @@ import {
   generateCloudFrontSignedCookie,
   generateCloudFrontSignedURL,
 } from '@/lib/cloudfront-signed';
+import { transformToCloudFront } from '@/lib/utils';
 
 interface WatchStartRequest {
   assetId: string;
@@ -67,7 +68,20 @@ export async function POST(request: NextRequest) {
     }
 
     if (video.sourceType === 'external_legal' || video.sourceProvider === 'internet_archive') {
-      const playbackUrl = video.s3Url || video.cloudfrontPath;
+      let playbackUrl = video.s3Url ? transformToCloudFront(video.s3Url) : '';
+      if (!playbackUrl && video.cloudfrontPath) {
+        const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || '';
+        let resourcePath = video.cloudfrontPath;
+        if (resourcePath.startsWith('http')) {
+          playbackUrl = resourcePath;
+        } else if (cloudfrontUrl) {
+          if (!resourcePath.startsWith('/')) {
+            resourcePath = '/' + resourcePath;
+          }
+          const cfBase = cloudfrontUrl.replace(/\/$/, '');
+          playbackUrl = `${cfBase}${resourcePath}`;
+        }
+      }
       if (!playbackUrl) {
         return NextResponse.json(
           { error: 'Playback URL missing for external asset' },
