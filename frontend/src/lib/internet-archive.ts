@@ -132,13 +132,13 @@ export const buildArchiveDownloadUrl = (identifier: string, fileName: string) =>
     return `${IA_BASE}/download/${identifier}/${encodedName}`;
 };
 
-export async function searchArchiveIdentifiers(query: string, limit: number) {
+export async function searchArchiveIdentifiers(query: string, limit: number, page = 1) {
     const rows = Math.min(Math.max(limit, 1), 100);
     const url = new URL(`${IA_BASE}/advancedsearch.php`);
     url.searchParams.set('q', query);
     url.searchParams.set('fl[]', 'identifier');
     url.searchParams.set('rows', rows.toString());
-    url.searchParams.set('page', '1');
+    url.searchParams.set('page', Math.max(1, page).toString());
     url.searchParams.set('output', 'json');
 
     const response = await fetch(url.toString(), {

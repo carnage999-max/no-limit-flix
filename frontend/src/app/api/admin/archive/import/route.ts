@@ -62,6 +62,32 @@ const isExcludedTitle = (value?: string) => {
     return EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
 };
 
+const toSeedNumber = (value: string) => {
+    let hash = 2166136261;
+    for (let i = 0; i < value.length; i += 1) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+    }
+    return Math.abs(hash);
+};
+
+const shuffleWithSeed = <T,>(items: T[], seed: number) => {
+    const result = [...items];
+    let state = seed || 1;
+    const rand = () => {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return Math.abs(state);
+    };
+
+    for (let i = result.length - 1; i > 0; i -= 1) {
+        const j = rand() % (i + 1);
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+};
+
 const stringifyMetadata = (value: any) => {
     if (value === null || value === undefined) return null;
     if (Array.isArray(value)) return value.join(', ');
@@ -199,7 +225,9 @@ export async function POST(request: NextRequest) {
 
         const body = await request.json();
         const presetId = body?.preset || DEFAULT_ARCHIVE_PRESET_ID;
-        const limit = Math.min(Math.max(Number(body?.limit) || 1, 1), 50);
+        const limit = Math.min(Math.max(Number(body?.limit) || 1, 1), 200);
+        const page = Math.max(Number(body?.page) || 1, 1);
+        const shuffleSeedInput = body?.shuffleSeed ? String(body.shuffleSeed) : null;
         const allowMkv = Boolean(body?.allowMkv);
         const requestedType = body?.contentType || body?.importType;
         const contentType = requestedType === 'series' ? 'series' : 'movie';
@@ -250,20 +278,33 @@ export async function POST(request: NextRequest) {
                     return a.name.localeCompare(b.name);
                 });
             }
-            return rankedFiles.slice(0, limit).map((file) => {
-                const parsed = parseSeasonEpisode(file.name);
-                return {
-                    identifier: bundleId,
-                    fileName: file.name,
-                    seasonNumber: parsed.season,
-                    episodeNumber: parsed.episode
-                };
-            });
+            const seedValue = shuffleSeedInput || Date.now().toString();
+            const shuffled = shuffleWithSeed(rankedFiles, toSeedNumber(seedValue));
+            const start = (page - 1) * limit;
+            const end = start + limit;
+            const pageItems = shuffled.slice(start, end);
+            return {
+                seed: seedValue,
+                total: rankedFiles.length,
+                items: pageItems.map((file) => {
+                    const parsed = parseSeasonEpisode(file.name);
+                    return {
+                        identifier: bundleId,
+                        fileName: file.name,
+                        seasonNumber: parsed.season,
+                        episodeNumber: parsed.episode
+                    };
+                })
+            };
         };
 
-        const bundleItems = providedItems.length === 0 && preset.bundleIdentifier
+        const bundleResult = providedItems.length === 0 && preset.bundleIdentifier
             ? await hydrateBundleItems()
             : null;
+
+        const bundleItems = bundleResult?.items || null;
+        const shuffleSeed = bundleResult?.seed || shuffleSeedInput || null;
+        const totalAvailable = bundleResult?.total || null;
 
         if (contentType === 'series' && (!bundleItems || bundleItems.length === 0) && providedItems.length === 0) {
             return NextResponse.json(
@@ -278,7 +319,7 @@ export async function POST(request: NextRequest) {
                 ? bundleItems
                 : (providedIdentifiers.length > 0
                     ? providedIdentifiers.map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))
-                    : (await searchArchiveIdentifiers(seriesQuery, limit))
+                    : (await searchArchiveIdentifiers(seriesQuery, limit, page))
                         .map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))));
         const dryRun = Boolean(body?.dryRun);
 
@@ -520,6 +561,9 @@ export async function POST(request: NextRequest) {
             failed: results.filter((r) => r.status === 'failed').length,
             ready: results.filter((r) => r.status === 'ready').length,
             searchQuery: seriesQuery,
+            shuffleSeed,
+            totalAvailable,
+            page,
         };
 
         return NextResponse.json({

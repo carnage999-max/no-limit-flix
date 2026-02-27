@@ -26,6 +26,9 @@ export default function AdminImportPage() {
     const [seriesTitle, setSeriesTitle] = useState('');
     const [seasonNumber, setSeasonNumber] = useState(1);
     const [startEpisodeNumber, setStartEpisodeNumber] = useState(1);
+    const [page, setPage] = useState(1);
+    const [shuffleSeed, setShuffleSeed] = useState<string | null>(null);
+    const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [results, setResults] = useState<ImportResult[]>([]);
@@ -55,7 +58,7 @@ export default function AdminImportPage() {
 
     const getRowKey = (result: ImportResult) => `${result.identifier}::${result.fileName || ''}`;
 
-    const handlePreview = async () => {
+    const handlePreview = async (pageOverride?: number) => {
         setLoading(true);
         setError('');
         setSummary(null);
@@ -65,6 +68,7 @@ export default function AdminImportPage() {
         setJobStatus(null);
 
         try {
+            const targetPage = pageOverride ?? page;
             const res = await fetch('/api/admin/archive/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -76,6 +80,8 @@ export default function AdminImportPage() {
                     seriesTitle: importType === 'series' ? seriesTitle : undefined,
                     seasonNumber: importType === 'series' ? seasonNumber : undefined,
                     startEpisodeNumber: importType === 'series' ? startEpisodeNumber : undefined,
+                    page: targetPage,
+                    shuffleSeed,
                     dryRun: true
                 })
             });
@@ -89,6 +95,9 @@ export default function AdminImportPage() {
             setResults(data.results || []);
             setJobId(null);
             setJobStatus(null);
+            setShuffleSeed(data.summary?.shuffleSeed || shuffleSeed);
+            setTotalAvailable(data.summary?.totalAvailable ?? null);
+            setPage(targetPage);
         } catch (err: any) {
             setError(err.message || 'Import failed');
         } finally {
@@ -204,6 +213,14 @@ export default function AdminImportPage() {
 
     const allReadySelected = readyIdentifiers.length > 0
         && readyIdentifiers.every((id) => selectedIdentifiers[id]);
+
+    const totalPages = totalAvailable ? Math.max(1, Math.ceil(totalAvailable / limit)) : null;
+
+    useEffect(() => {
+        setPage(1);
+        setShuffleSeed(null);
+        setTotalAvailable(null);
+    }, [preset, importType, seriesTitle, limit]);
 
     const toggleSelectAll = () => {
         if (readyIdentifiers.length === 0) return;
@@ -329,7 +346,7 @@ export default function AdminImportPage() {
                     <input
                         type="number"
                         min={1}
-                        max={50}
+                        max={200}
                         value={limit}
                         onChange={(e) => setLimit(Number(e.target.value))}
                         style={{
@@ -342,6 +359,68 @@ export default function AdminImportPage() {
                             fontSize: '0.95rem'
                         }}
                     />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Page</label>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <button
+                            type="button"
+                            onClick={() => handlePreview(Math.max(1, page - 1))}
+                            disabled={loading || page <= 1}
+                            style={{
+                                padding: '0.5rem 0.75rem',
+                                borderRadius: '0.6rem',
+                                border: '1px solid rgba(167, 171, 180, 0.3)',
+                                background: 'transparent',
+                                color: '#A7ABB4',
+                                cursor: loading || page <= 1 ? 'not-allowed' : 'pointer',
+                                opacity: loading || page <= 1 ? 0.5 : 1
+                            }}
+                        >
+                            Prev
+                        </button>
+                        <input
+                            type="number"
+                            min={1}
+                            value={page}
+                            onChange={(e) => setPage(Math.max(1, Number(e.target.value) || 1))}
+                            style={{
+                                width: '72px',
+                                padding: '0.6rem',
+                                borderRadius: '0.6rem',
+                                background: 'rgba(11, 11, 13, 0.7)',
+                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                color: '#F3F4F6',
+                                fontSize: '0.95rem',
+                                textAlign: 'center'
+                            }}
+                        />
+                        <button
+                            type="button"
+                            onClick={() => handlePreview(page + 1)}
+                            disabled={loading || (totalPages ? page >= totalPages : false)}
+                            style={{
+                                padding: '0.5rem 0.75rem',
+                                borderRadius: '0.6rem',
+                                border: '1px solid rgba(167, 171, 180, 0.3)',
+                                background: 'transparent',
+                                color: '#A7ABB4',
+                                cursor: loading || (totalPages ? page >= totalPages : false) ? 'not-allowed' : 'pointer',
+                                opacity: loading || (totalPages ? page >= totalPages : false) ? 0.5 : 1
+                            }}
+                        >
+                            Next
+                        </button>
+                        {totalPages && (
+                            <span style={{ color: '#A7ABB4', fontSize: '0.8rem' }}>
+                                of {totalPages}
+                            </span>
+                        )}
+                    </div>
+                    <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
+                        Use Preview to load this page.
+                    </span>
                 </div>
 
                 {importType === 'series' && (
