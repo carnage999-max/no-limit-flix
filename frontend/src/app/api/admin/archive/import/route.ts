@@ -138,6 +138,13 @@ const findThumbnailForFile = (files: any[], identifier: string, fileName: string
     return buildArchiveDownloadUrl(identifier, best.name);
 };
 
+const buildArchiveIdentifier = (identifier: string, fileName: string | null, bundleIdentifier?: string) => {
+    if (bundleIdentifier && identifier === bundleIdentifier && fileName) {
+        return `${identifier}:${fileName}`;
+    }
+    return identifier;
+};
+
 const normalizeText = (value?: string) => {
     if (!value) return '';
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -291,6 +298,7 @@ export async function POST(request: NextRequest) {
                 },
                 body: JSON.stringify({
                     presetQuery: preset.query,
+                    bundleIdentifier: preset.bundleIdentifier || null,
                     limit,
                     allowMkv,
                     importType: contentType,
@@ -409,15 +417,16 @@ export async function POST(request: NextRequest) {
                 const thumbnailUrl = isBundleItem
                     ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                     : `https://archive.org/services/img/${identifier}`;
+                const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier);
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
                 if (!dryRun) {
                     const existing = await prisma.video.findUnique({
-                        where: { archiveIdentifier: identifier }
+                        where: { archiveIdentifier }
                     });
 
                     const upserted = await prisma.video.upsert({
-                        where: { archiveIdentifier: identifier },
+                        where: { archiveIdentifier },
                         create: {
                             title,
                             description,
@@ -443,7 +452,7 @@ export async function POST(request: NextRequest) {
                             sourceType: 'external_legal',
                             sourceProvider: 'internet_archive',
                             sourcePageUrl,
-                            archiveIdentifier: identifier,
+                            archiveIdentifier,
                             sourceRights: stringifyMetadata(metadata?.rights),
                             sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
                             sourceMetadata: metadata,
@@ -471,6 +480,7 @@ export async function POST(request: NextRequest) {
                             sourceType: 'external_legal',
                             sourceProvider: 'internet_archive',
                             sourcePageUrl,
+                            archiveIdentifier,
                             sourceRights: stringifyMetadata(metadata?.rights),
                             sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
                             sourceMetadata: metadata,

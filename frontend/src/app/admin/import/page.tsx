@@ -14,7 +14,7 @@ interface ImportResult {
     fileSize?: string | null;
     duration?: number | null;
     sourcePageUrl?: string;
-    status: 'imported' | 'updated' | 'skipped' | 'failed' | 'ready' | 'queued';
+    status: 'imported' | 'updated' | 'skipped' | 'failed' | 'ready' | 'queued' | 'reconciled' | 'existing';
     reason?: string;
 }
 
@@ -33,6 +33,7 @@ export default function AdminImportPage() {
     const [selectedIdentifiers, setSelectedIdentifiers] = useState<Record<string, boolean>>({});
     const [jobId, setJobId] = useState<string | null>(null);
     const [jobStatus, setJobStatus] = useState<any>(null);
+    const [reconcileLoading, setReconcileLoading] = useState(false);
 
     const presetOptions = useMemo(() => ARCHIVE_PRESETS, []);
 
@@ -139,6 +140,37 @@ export default function AdminImportPage() {
             setError(err.message || 'Import failed');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleReconcile = async () => {
+        setReconcileLoading(true);
+        setError('');
+        setSummary(null);
+        setResults([]);
+
+        try {
+            const res = await fetch('/api/admin/archive/reconcile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    bundleIdentifier: preset === DEFAULT_ARCHIVE_PRESET_ID ? 'publicmovies212' : undefined,
+                    limit
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Reconcile failed');
+            }
+
+            setJobId(data.jobId || null);
+            setJobStatus(null);
+            setSummary(data.summary || null);
+        } catch (err: any) {
+            setError(err.message || 'Reconcile failed');
+        } finally {
+            setReconcileLoading(false);
         }
     };
 
@@ -399,6 +431,24 @@ export default function AdminImportPage() {
                     >
                         Import Selected
                     </button>
+                    <button
+                        type="button"
+                        onClick={handleReconcile}
+                        disabled={reconcileLoading}
+                        style={{
+                            padding: '0.75rem 1rem',
+                            borderRadius: '0.75rem',
+                            background: 'rgba(56, 189, 248, 0.12)',
+                            border: '1px solid rgba(56, 189, 248, 0.35)',
+                            color: '#38BDF8',
+                            fontWeight: 600,
+                            fontSize: '0.95rem',
+                            cursor: reconcileLoading ? 'not-allowed' : 'pointer',
+                            opacity: reconcileLoading ? 0.6 : 1
+                        }}
+                    >
+                        {reconcileLoading ? 'Reconciling...' : 'Reconcile S3'}
+                    </button>
                     {error && (
                         <div style={{ color: '#F87171', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <AlertCircle className="w-4 h-4" />
@@ -434,11 +484,11 @@ export default function AdminImportPage() {
                         </div>
                         ))}
                     </div>
-                    {summary.searchQuery && (
-                        <div style={{ color: '#A7ABB4', fontSize: '0.75rem', wordBreak: 'break-word' }}>
-                            Query: {summary.searchQuery}
-                        </div>
-                    )}
+                        {summary.searchQuery && (
+                            <div style={{ color: '#A7ABB4', fontSize: '0.75rem', wordBreak: 'break-word' }}>
+                                Query: {summary.searchQuery}
+                            </div>
+                        )}
                     {jobId && (
                         <div style={{
                             padding: '1rem',
@@ -471,6 +521,8 @@ export default function AdminImportPage() {
                             </div>
                             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', color: '#A7ABB4', fontSize: '0.75rem' }}>
                                 <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? summary.requested}</span>
+                                {jobStatus?.reconciled !== undefined && <span>Reconciled: {jobStatus.reconciled}</span>}
+                                {jobStatus?.existing !== undefined && <span>Existing: {jobStatus.existing}</span>}
                                 <span>Imported: {jobStatus?.imported ?? 0}</span>
                                 <span>Updated: {jobStatus?.updated ?? 0}</span>
                                 <span>Skipped: {jobStatus?.skipped ?? 0}</span>
@@ -559,7 +611,11 @@ export default function AdminImportPage() {
                                             fontSize: '0.75rem',
                                             textTransform: 'uppercase',
                                             letterSpacing: '0.08em',
-                                            background: result.status === 'queued'
+                                            background: result.status === 'reconciled'
+                                                ? 'rgba(34, 197, 94, 0.18)'
+                                                : result.status === 'existing'
+                                                ? 'rgba(100, 116, 139, 0.2)'
+                                                : result.status === 'queued'
                                                 ? 'rgba(59, 130, 246, 0.15)'
                                                 : result.status === 'ready'
                                                 ? 'rgba(212, 175, 55, 0.15)'
@@ -570,7 +626,11 @@ export default function AdminImportPage() {
                                                     : result.status === 'skipped'
                                                         ? 'rgba(250, 204, 21, 0.15)'
                                                         : 'rgba(248, 113, 113, 0.15)',
-                                            color: result.status === 'queued'
+                                            color: result.status === 'reconciled'
+                                                ? '#22C55E'
+                                                : result.status === 'existing'
+                                                ? '#94A3B8'
+                                                : result.status === 'queued'
                                                 ? '#60A5FA'
                                                 : result.status === 'ready'
                                                 ? '#D4AF37'

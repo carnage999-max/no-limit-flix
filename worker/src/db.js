@@ -126,5 +126,12 @@ async function upsertVideo(payload) {
 
 module.exports = {
     upsertVideo,
-    pool
+    pool,
+    findVideoByS3KeyPlayback: async (s3KeyPlayback) => {
+        const result = await pool.query(
+            'SELECT id, "archiveIdentifier" FROM "Video" WHERE "s3KeyPlayback" = $1 LIMIT 1',
+            [s3KeyPlayback]
+        );
+        return result.rows[0] || null;
+    }
 };

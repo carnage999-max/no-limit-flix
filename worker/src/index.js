@@ -9,8 +9,8 @@ const {
     buildArchiveDownloadUrl,
     inferMimeType
 } = require('./internet-archive');
-const { upsertVideo } = require('./db');
-const { buildS3Key, uploadToS3 } = require('./ingest');
+const { upsertVideo, findVideoByS3KeyPlayback } = require('./db');
+const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
 const ADMIN_SECRET = process.env.INGEST_WORKER_SECRET;
@@ -137,6 +137,13 @@ const findThumbnailForFile = (files, identifier, fileName) => {
     return buildArchiveDownloadUrl(identifier, best.name);
 };
 
+const buildArchiveIdentifier = (identifier, fileName, bundleIdentifier) => {
+    if (bundleIdentifier && identifier === bundleIdentifier && fileName) {
+        return `${identifier}:${fileName}`;
+    }
+    return identifier;
+};
+
 const normalizeText = (value) => {
     if (!value) return '';
     return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -206,6 +213,185 @@ app.get('/jobs/:id', (req, res) => {
     return res.json({ success: true, job });
 });
 
+app.post('/reconcile', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const bundleIdentifier = String(req.body?.bundleIdentifier || 'publicmovies212');
+        const limit = Math.min(Math.max(Number(req.body?.limit) || 50, 1), 500);
+        const prefix = req.body?.prefix ? String(req.body.prefix) : `ia/${bundleIdentifier}/`;
+        const asyncMode = req.body?.async !== false;
+
+        const runReconcile = async (job) => {
+            const s3Keys = await listS3Objects(prefix, limit);
+            if (job) {
+                job.total = s3Keys.length;
+            }
+            const { metadata, files } = await fetchArchiveMetadata(bundleIdentifier);
+            const fileMap = new Map(files.map((file) => [file.name, file]));
+
+            let baseTitle = stringifyMetadata(metadata?.title) || bundleIdentifier;
+            const isBundleGeneric = isGenericBundleTitle(baseTitle);
+            if (isBundleGeneric) {
+                baseTitle = 'Public Domain Movies';
+            }
+
+            const results = [];
+
+            for (const key of s3Keys) {
+                const fileName = key.replace(prefix, '');
+                const result = { key, fileName, status: 'failed' };
+                try {
+                    const existing = await findVideoByS3KeyPlayback(key);
+                    if (existing) {
+                        result.status = 'existing';
+                        results.push(result);
+                        if (job) {
+                            job.processed += 1;
+                            job.existing += 1;
+                            job.lastUpdatedAt = Date.now();
+                        }
+                        continue;
+                    }
+
+                    const fileMeta = fileMap.get(fileName);
+                    if (!fileMeta) {
+                        result.status = 'skipped';
+                        results.push(result);
+                        if (job) {
+                            job.processed += 1;
+                            job.skipped += 1;
+                            job.lastUpdatedAt = Date.now();
+                        }
+                        continue;
+                    }
+
+                    let title = isBundleGeneric ? deriveTitleFromFileName(fileName) : baseTitle;
+                    const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
+                        ?? parseYear(fileName);
+                    const genre = isBundleGeneric ? null : normalizeGenre(metadata);
+                    const duration = parseDurationSeconds(fileMeta.length) || null;
+                    const fileSize = fileMeta.size ? BigInt(fileMeta.size).toString() : null;
+                    const height = fileMeta.height ? Number(fileMeta.height) : null;
+                    const resolution = height ? `${height}p` : null;
+                    const mimeType = normalizeMimeType(fileMeta) || inferMimeType(fileMeta) || 'video/mp4';
+                    const thumbnailUrl = findThumbnailForFile(files, bundleIdentifier, fileName) || DEFAULT_POSTER_URL;
+                    const archiveIdentifier = buildArchiveIdentifier(bundleIdentifier, fileName, bundleIdentifier);
+
+                    await upsertVideo({
+                        title,
+                        description: null,
+                        type: 'movie',
+                        playbackType: 'mp4',
+                        s3KeyPlayback: key,
+                        cloudfrontPath: `/${key}`,
+                        s3KeySource: null,
+                        s3Url: buildPublicUrl(key),
+                        thumbnailUrl,
+                        status: 'completed',
+                        releaseYear,
+                        duration,
+                        resolution,
+                        genre,
+                        rating: normalizeRating(metadata),
+                        seriesTitle: null,
+                        seasonNumber: null,
+                        episodeNumber: null,
+                        fileSize,
+                        mimeType,
+                        format: fileMeta.format || null,
+                        sourceType: 'external_legal',
+                        sourceProvider: 'internet_archive',
+                        sourcePageUrl: `https://archive.org/details/${bundleIdentifier}`,
+                        archiveIdentifier,
+                        sourceRights: stringifyMetadata(metadata?.rights),
+                        sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                        sourceMetadata: JSON.stringify(metadata)
+                    });
+
+                    result.status = 'reconciled';
+                    results.push(result);
+                    if (job) {
+                        job.processed += 1;
+                        job.reconciled += 1;
+                        job.lastUpdatedAt = Date.now();
+                    }
+                } catch (error) {
+                    result.status = 'failed';
+                    result.reason = error?.message || 'Reconcile failed';
+                    results.push(result);
+                    if (job) {
+                        job.processed += 1;
+                        job.failed += 1;
+                        job.lastUpdatedAt = Date.now();
+                    }
+                }
+            }
+
+            const summary = {
+                requested: s3Keys.length,
+                reconciled: results.filter((r) => r.status === 'reconciled').length,
+                existing: results.filter((r) => r.status === 'existing').length,
+                skipped: results.filter((r) => r.status === 'skipped').length,
+                failed: results.filter((r) => r.status === 'failed').length
+            };
+
+            return { summary, results };
+        };
+
+        if (asyncMode) {
+            const jobId = cuid();
+            const job = {
+                id: jobId,
+                type: 'reconcile',
+                status: 'running',
+                total: limit,
+                processed: 0,
+                reconciled: 0,
+                existing: 0,
+                skipped: 0,
+                failed: 0,
+                startedAt: Date.now(),
+                lastUpdatedAt: Date.now(),
+                finishedAt: null
+            };
+            jobs.set(jobId, job);
+            setImmediate(async () => {
+                try {
+                    const data = await runReconcile(job);
+                    job.status = 'completed';
+                    job.finishedAt = Date.now();
+                    job.summary = data.summary;
+                    console.log(`Reconcile job ${jobId} completed`, data.summary);
+                } catch (error) {
+                    job.status = 'failed';
+                    job.finishedAt = Date.now();
+                    console.error(`Reconcile job ${jobId} failed`, error);
+                }
+            });
+
+            return res.status(202).json({
+                success: true,
+                message: 'Reconcile queued',
+                jobId,
+                summary: {
+                    requested: limit,
+                    queued: limit
+                }
+            });
+        }
+
+        const data = await runReconcile(null);
+        return res.json({ success: true, ...data });
+    } catch (error) {
+        console.error('Worker reconcile error:', error);
+        return res.status(500).json({ error: 'Worker reconcile failed', details: error.message });
+    }
+});
+
 app.post('/import', async (req, res) => {
     try {
         const authHeader = req.headers.authorization || '';
@@ -221,6 +407,7 @@ app.post('/import', async (req, res) => {
         const seriesTitleInput = contentType === 'series' ? String(req.body?.seriesTitle || '').trim() : '';
         const seasonNumberInput = contentType === 'series' ? Number(req.body?.seasonNumber) || 1 : null;
         const startEpisodeInput = contentType === 'series' ? Number(req.body?.startEpisodeNumber) || 1 : null;
+        const bundleIdentifier = req.body?.bundleIdentifier ? String(req.body.bundleIdentifier) : null;
 
         if (contentType === 'series' && !seriesTitleInput) {
             return res.status(400).json({ error: 'Series title is required for series imports' });
@@ -343,6 +530,12 @@ app.post('/import', async (req, res) => {
                     ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                     : `https://archive.org/services/img/${identifier}`;
 
+                let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier);
+                const existingByKey = await findVideoByS3KeyPlayback(s3KeyPlayback);
+                if (existingByKey?.archiveIdentifier && existingByKey.archiveIdentifier !== archiveIdentifier) {
+                    archiveIdentifier = existingByKey.archiveIdentifier;
+                }
+
                 const dbRow = await upsertVideo({
                     title,
                     description,
@@ -368,7 +561,7 @@ app.post('/import', async (req, res) => {
                     sourceType: 'external_legal',
                     sourceProvider: 'internet_archive',
                     sourcePageUrl,
-                    archiveIdentifier: identifier,
+                    archiveIdentifier,
                     sourceRights: stringifyMetadata(metadata?.rights),
                     sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
                     sourceMetadata: JSON.stringify(metadata)

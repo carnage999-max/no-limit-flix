@@ -1,4 +1,4 @@
-const { S3Client } = require('@aws-sdk/client-s3');
+const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 
 const { inferMimeType } = require('./internet-archive');
@@ -70,7 +70,37 @@ async function uploadToS3(downloadUrl, key, fileMeta) {
     };
 }
 
+async function listS3Objects(prefix, limit = 1000) {
+    const keys = [];
+    let continuationToken;
+
+    while (keys.length < limit) {
+        const response = await s3Client.send(new ListObjectsV2Command({
+            Bucket: s3Bucket,
+            Prefix: prefix,
+            ContinuationToken: continuationToken,
+            MaxKeys: Math.min(1000, limit - keys.length)
+        }));
+
+        const contents = response.Contents || [];
+        for (const entry of contents) {
+            if (entry?.Key) {
+                keys.push(entry.Key);
+            }
+        }
+
+        if (!response.IsTruncated || !response.NextContinuationToken) {
+            break;
+        }
+        continuationToken = response.NextContinuationToken;
+    }
+
+    return keys;
+}
+
 module.exports = {
     buildS3Key,
-    uploadToS3
+    buildPublicUrl,
+    uploadToS3,
+    listS3Objects
 };
