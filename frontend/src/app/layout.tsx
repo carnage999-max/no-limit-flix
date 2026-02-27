@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Navbar, AppBanner } from "@/components";
+import { Navbar, AppBanner, MobileTabBar } from "@/components";
 import ToastContainer from "@/components/ToastContainer";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 
@@ -55,6 +55,7 @@ export default function RootLayout({
               <Navbar />
               <AppBanner />
               {children}
+              <MobileTabBar />
               <ToastContainer />
             </FavoritesProvider>
           </SearchProvider>

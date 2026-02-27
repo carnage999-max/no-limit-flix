@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
@@ -73,7 +74,10 @@ export default function HomePage() {
 
     const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const resultsRef = useRef<HTMLDivElement>(null);
+    const router = useRouter();
+    const urlSearchParams = useSearchParams();
     const [activeTab, setActiveTab] = useState<'watch' | 'discovery'>('watch');
+    const tabUpdateSource = useRef<'ui' | 'url' | null>(null);
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
@@ -93,6 +97,41 @@ export default function HomePage() {
             resultsRef.current.scrollIntoView({ behavior: 'smooth' });
         }
     }, []);
+
+    useEffect(() => {
+        const tabParam = urlSearchParams?.get('tab');
+        const nextTab = tabParam === 'discovery' ? 'discovery' : 'watch';
+
+        if (nextTab !== activeTab) {
+            tabUpdateSource.current = 'url';
+            setActiveTab(nextTab);
+        }
+    }, [activeTab, urlSearchParams]);
+
+    useEffect(() => {
+        if (tabUpdateSource.current === 'url') {
+            tabUpdateSource.current = null;
+            return;
+        }
+
+        const currentTabParam = urlSearchParams?.get('tab');
+        const nextTabParam = activeTab === 'discovery' ? 'discovery' : null;
+
+        if (currentTabParam === nextTabParam || (!currentTabParam && !nextTabParam)) {
+            tabUpdateSource.current = null;
+            return;
+        }
+
+        const nextParams = new URLSearchParams(urlSearchParams?.toString());
+        if (nextTabParam) {
+            nextParams.set('tab', nextTabParam);
+        } else {
+            nextParams.delete('tab');
+        }
+        const queryString = nextParams.toString();
+        router.replace(queryString ? `/?${queryString}` : '/', { scroll: false });
+        tabUpdateSource.current = null;
+    }, [activeTab, router, urlSearchParams]);
 
     // Fetch hosted content on mount
     useEffect(() => {
@@ -167,6 +206,11 @@ export default function HomePage() {
         setSelectedMoods(prev =>
             selected ? [...prev, moodLabel] : prev.filter(m => m !== moodLabel)
         );
+    };
+
+    const handleTabChange = (tab: 'watch' | 'discovery') => {
+        tabUpdateSource.current = 'ui';
+        setActiveTab(tab);
     };
 
     const [searchError, setSearchError] = useState<string | null>(null);
@@ -460,7 +504,7 @@ export default function HomePage() {
                     padding: '1rem 0',
                 }}
             >
-                <TabSwitch activeTab={activeTab} onTabChange={setActiveTab} />
+                <TabSwitch activeTab={activeTab} onTabChange={handleTabChange} />
             </div>
 
             {/* Watch Tab */}

@@ -128,8 +128,18 @@ export async function GET(request: NextRequest) {
 
         console.log('Fetched favorites:', { count: favorites.length, total });
 
+        const safeFavorites = favorites.map((favorite) => ({
+            ...favorite,
+            video: favorite.video
+                ? {
+                    ...favorite.video,
+                    fileSize: favorite.video.fileSize ? favorite.video.fileSize.toString() : null
+                }
+                : null
+        }));
+
         return NextResponse.json({
-            favorites,
+            favorites: safeFavorites,
             pagination: {
                 page,
                 limit,
