@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Trash2, Heart } from 'lucide-react';
+import { CardViewToggle } from '@/components';
+import { useCardView } from '@/context/CardViewContext';
 
 interface Favorite {
     id: string;
@@ -36,6 +38,19 @@ export default function FavoritesPage() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
+    const { viewSize } = useCardView();
+
+    const gridStyle = {
+        display: 'grid',
+        gridTemplateColumns:
+            viewSize === 'compact'
+                ? 'repeat(auto-fill, minmax(140px, 1fr))'
+                : viewSize === 'standard'
+                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
+                    : 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
+        marginTop: '2rem',
+    };
 
     useEffect(() => {
         const storedUserId = localStorage.getItem('userId');
@@ -167,6 +182,7 @@ export default function FavoritesPage() {
                             {favorites.length} {favorites.length === 1 ? 'title' : 'titles'} saved
                         </p>
                     </div>
+                    <CardViewToggle />
                 </div>
             </div>
 
@@ -176,12 +192,7 @@ export default function FavoritesPage() {
                 padding: '0 2rem'
             }}>
                 {loading ? (
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                        gap: '1.5rem',
-                        marginTop: '2rem'
-                    }}>
+                    <div style={gridStyle}>
                         {[...Array(8)].map((_, i) => (
                             <div
                                 key={i}
@@ -196,12 +207,7 @@ export default function FavoritesPage() {
                     </div>
                 ) : favorites.length > 0 ? (
                     <>
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                            gap: '1.5rem',
-                            marginTop: '2rem'
-                        }}>
+                        <div style={gridStyle}>
                             {favorites.map((favorite) => {
                                 const displayTitle = favorite.video?.title || favorite.videoTitle || 'Untitled';
                                 const displayPoster = favorite.video?.thumbnailUrl || favorite.videoPoster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';

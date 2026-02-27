@@ -35,6 +35,7 @@ export const viewport = {
 import { SearchProvider } from "@/context/SearchContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
+import { CardViewProvider } from "@/context/CardViewContext";
 
 // ... (keep metadata exports)
 
@@ -50,15 +51,17 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <AuthProvider>
-          <SearchProvider>
-            <FavoritesProvider>
-              <Navbar />
-              <AppBanner />
-              {children}
-              <MobileTabBar />
-              <ToastContainer />
-            </FavoritesProvider>
-          </SearchProvider>
+          <CardViewProvider>
+            <SearchProvider>
+              <FavoritesProvider>
+                <Navbar />
+                <AppBanner />
+                {children}
+                <MobileTabBar />
+                <ToastContainer />
+              </FavoritesProvider>
+            </SearchProvider>
+          </CardViewProvider>
         </AuthProvider>
       </body>
     </html>

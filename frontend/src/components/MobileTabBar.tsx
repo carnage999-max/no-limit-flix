@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { Clapperboard, Layers, Search, Bookmark, Settings } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 
@@ -22,7 +22,7 @@ const tabs = [
     {
         key: 'search',
         label: 'Search',
-        href: '/?tab=discovery',
+        href: '/?tab=discovery&mode=title',
         icon: Search,
     },
     {
@@ -54,12 +54,50 @@ const getIsHiddenRoute = (pathname: string) => {
 
 export default function MobileTabBar() {
     const pathname = usePathname();
-    const searchParams = useSearchParams();
     const { user, isLoading } = useAuth();
 
     const isHiddenRoute = getIsHiddenRoute(pathname || '');
-    const isSearchTab = pathname === '/' && searchParams?.get('tab') === 'discovery';
+    const [isSearchTab, setIsSearchTab] = useState(false);
     const shouldRender = !isLoading && Boolean(user) && !isHiddenRoute;
+
+    useEffect(() => {
+        const updateSearchTab = () => {
+            if (typeof window === 'undefined') return;
+            const params = new URLSearchParams(window.location.search);
+            setIsSearchTab(pathname === '/' && params.get('tab') === 'discovery');
+        };
+
+        if (typeof window === 'undefined') return;
+
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+
+        const dispatchLocationChange = () => window.dispatchEvent(new Event('locationchange'));
+
+        history.pushState = function (...args) {
+            const result = originalPushState.apply(this, args as any);
+            dispatchLocationChange();
+            return result;
+        };
+
+        history.replaceState = function (...args) {
+            const result = originalReplaceState.apply(this, args as any);
+            dispatchLocationChange();
+            return result;
+        };
+
+        updateSearchTab();
+
+        window.addEventListener('popstate', updateSearchTab);
+        window.addEventListener('locationchange', updateSearchTab);
+
+        return () => {
+            history.pushState = originalPushState;
+            history.replaceState = originalReplaceState;
+            window.removeEventListener('popstate', updateSearchTab);
+            window.removeEventListener('locationchange', updateSearchTab);
+        };
+    }, [pathname]);
 
     useEffect(() => {
         if (!shouldRender) {
@@ -82,10 +120,10 @@ export default function MobileTabBar() {
                 position: 'fixed',
                 left: 0,
                 right: 0,
-                zIndex: 950,
+                zIndex: 5000,
                 display: 'flex',
                 justifyContent: 'center',
-                pointerEvents: 'none',
+                pointerEvents: 'auto',
                 bottom: 'max(16px, env(safe-area-inset-bottom))',
             }}
         >

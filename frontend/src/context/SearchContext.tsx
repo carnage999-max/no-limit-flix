@@ -4,8 +4,6 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import type { MoviePick, AIPickRequest } from '@/types';
 
 type SearchMode = 'vibe' | 'title' | 'actor';
-type ViewSize = 'compact' | 'standard' | 'large';
-
 interface SearchState {
     searchMode: SearchMode;
     setSearchMode: (mode: SearchMode) => void;
@@ -25,8 +23,6 @@ interface SearchState {
     setResults: (results: { hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null) => void;
     sessionId: string | null;
     setSessionId: (id: string | null) => void;
-    viewSize: ViewSize;
-    setViewSize: (size: ViewSize) => void;
     onlyPlayable: boolean;
     setOnlyPlayable: (val: boolean) => void;
 }
@@ -43,7 +39,6 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
-    const [viewSize, setViewSize] = useState<ViewSize>('standard');
     const [onlyPlayable, setOnlyPlayable] = useState(false);
 
     return (
@@ -57,7 +52,6 @@ export function SearchProvider({ children }: { children: ReactNode }) {
             isLoading, setIsLoading,
             results, setResults,
             sessionId, setSessionId,
-            viewSize, setViewSize,
             onlyPlayable, setOnlyPlayable
         }}>
             {children}

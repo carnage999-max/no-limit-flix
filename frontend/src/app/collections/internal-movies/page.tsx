@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { CardViewToggle } from '@/components';
+import { useCardView } from '@/context/CardViewContext';
 
 interface MovieItem {
     id: string;
@@ -19,6 +21,18 @@ interface MovieItem {
 export default function InternalMoviesPage() {
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const { viewSize } = useCardView();
+
+    const gridStyle = {
+        display: 'grid',
+        gridTemplateColumns:
+            viewSize === 'compact'
+                ? 'repeat(auto-fill, minmax(140px, 1fr))'
+                : viewSize === 'standard'
+                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
+                    : 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
+    };
 
     const getMovieLink = (movie: MovieItem) => {
         // Encode movie data to pass to title page
@@ -75,24 +89,29 @@ export default function InternalMoviesPage() {
         <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
                 {/* Content */}
                 <div style={{ maxWidth: '1200px', margin: '0 auto', paddingLeft: '2rem', paddingRight: '2rem', paddingTop: '2rem' }}>
-                    <h1 style={{
-                        color: '#F3F4F6',
-                        fontSize: 'clamp(2rem, 8vw, 3.2rem)',
-                        fontWeight: '700',
-                        marginBottom: '0.5rem'
-                    }}>
-                        All Movies
-                    </h1>
-                    <p style={{
-                        color: '#A7ABB4',
-                        fontSize: '1rem',
-                        marginBottom: '2rem'
-                    }}>
-                        Watch all available movies from our library
-                    </p>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1.5rem' }}>
+                        <div>
+                            <h1 style={{
+                                color: '#F3F4F6',
+                                fontSize: 'clamp(2rem, 8vw, 3.2rem)',
+                                fontWeight: '700',
+                                marginBottom: '0.5rem'
+                            }}>
+                                All Movies
+                            </h1>
+                            <p style={{
+                                color: '#A7ABB4',
+                                fontSize: '1rem',
+                                marginBottom: '0.5rem'
+                            }}>
+                                Watch all available movies from our library
+                            </p>
+                        </div>
+                        <CardViewToggle />
+                    </div>
 
                     {loading ? (
-                        <div className="watch-grid">
+                        <div style={gridStyle}>
                             {[...Array(8)].map((_, i) => (
                                 <div key={i} style={{
                                     aspectRatio: '2/3',
@@ -103,7 +122,7 @@ export default function InternalMoviesPage() {
                             ))}
                         </div>
                     ) : movies.length > 0 ? (
-                        <div className="watch-grid">
+                        <div style={gridStyle}>
                             {movies.map((movie) => (
                                 <Link
                                     key={movie.id}

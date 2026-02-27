@@ -1,3 +1,5 @@
+ 'use client';
+
 import Link from 'next/link';
 import { Info, ShieldCheck, FileText, ChevronRight } from 'lucide-react';
 

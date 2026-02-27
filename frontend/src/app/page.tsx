@@ -1,10 +1,11 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch } from '@/components';
+import { useRouter } from 'next/navigation';
+import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch, CardViewToggle } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
+import { useCardView } from '@/context/CardViewContext';
 import {
     Rocket,
     Heart,
@@ -68,19 +69,39 @@ export default function HomePage() {
         isLoading, setIsLoading,
         results, setResults,
         sessionId, setSessionId,
-        viewSize, setViewSize,
         onlyPlayable, setOnlyPlayable
     } = useSearch();
+    const { viewSize } = useCardView();
 
-    const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
     const resultsRef = useRef<HTMLDivElement>(null);
+    const searchInputRef = useRef<HTMLInputElement | null>(null);
     const router = useRouter();
-    const urlSearchParams = useSearchParams();
+    const [urlSearch, setUrlSearch] = useState('');
     const [activeTab, setActiveTab] = useState<'watch' | 'discovery'>('watch');
     const tabUpdateSource = useRef<'ui' | 'url' | null>(null);
+    const searchUpdateSource = useRef<'ui' | 'url' | null>(null);
+    const titleSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastTitleQuery = useRef<string>('');
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
+
+    const cardGridStyle: React.CSSProperties = {
+        display: 'grid',
+        gridTemplateColumns:
+            viewSize === 'compact'
+                ? 'repeat(auto-fill, minmax(140px, 1fr))'
+                : viewSize === 'standard'
+                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
+                    : 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
+        width: '100%',
+    };
+
+    const cardTileStyle: React.CSSProperties =
+        viewSize === 'compact'
+            ? { width: '100%', maxWidth: '220px', margin: '0 auto' }
+            : { width: '100%' };
 
     const pickRandomItems = <T,>(items: T[], count: number) => {
         const copy = [...items];
@@ -99,39 +120,108 @@ export default function HomePage() {
     }, []);
 
     useEffect(() => {
-        const tabParam = urlSearchParams?.get('tab');
+        if (typeof window === 'undefined') return;
+
+        const updateUrlSearch = () => {
+            setUrlSearch(window.location.search || '');
+        };
+
+        updateUrlSearch();
+        window.addEventListener('popstate', updateUrlSearch);
+
+        return () => window.removeEventListener('popstate', updateUrlSearch);
+    }, []);
+
+    useEffect(() => {
+        const params = new URLSearchParams(urlSearch);
+        const tabParam = params.get('tab');
         const nextTab = tabParam === 'discovery' ? 'discovery' : 'watch';
 
         if (nextTab !== activeTab) {
             tabUpdateSource.current = 'url';
             setActiveTab(nextTab);
         }
-    }, [activeTab, urlSearchParams]);
+
+        const modeParam = params.get('mode');
+        if (modeParam === 'title' || modeParam === 'actor' || modeParam === 'vibe') {
+            if (modeParam !== searchMode) {
+                searchUpdateSource.current = 'url';
+                setSearchMode(modeParam);
+            }
+        }
+    }, [activeTab, searchMode, setSearchMode, urlSearch]);
 
     useEffect(() => {
-        if (tabUpdateSource.current === 'url') {
+        if (tabUpdateSource.current === 'url' || searchUpdateSource.current === 'url') {
             tabUpdateSource.current = null;
+            searchUpdateSource.current = null;
             return;
         }
 
-        const currentTabParam = urlSearchParams?.get('tab');
+        const params = new URLSearchParams(urlSearch);
+        const currentTabParam = params.get('tab');
+        const currentModeParam = params.get('mode');
         const nextTabParam = activeTab === 'discovery' ? 'discovery' : null;
+        const nextModeParam = activeTab === 'discovery' && searchMode !== 'vibe' ? searchMode : null;
 
-        if (currentTabParam === nextTabParam || (!currentTabParam && !nextTabParam)) {
+        if (currentTabParam === nextTabParam && currentModeParam === nextModeParam) {
             tabUpdateSource.current = null;
             return;
         }
 
-        const nextParams = new URLSearchParams(urlSearchParams?.toString());
+        const nextParams = new URLSearchParams(params.toString());
         if (nextTabParam) {
             nextParams.set('tab', nextTabParam);
         } else {
             nextParams.delete('tab');
         }
+        if (nextModeParam) {
+            nextParams.set('mode', nextModeParam);
+        } else {
+            nextParams.delete('mode');
+        }
         const queryString = nextParams.toString();
-        router.replace(queryString ? `/?${queryString}` : '/', { scroll: false });
+        const nextSearch = queryString ? `?${queryString}` : '';
+        if (nextSearch !== urlSearch) {
+            router.replace(queryString ? `/?${queryString}` : '/', { scroll: false });
+            setUrlSearch(nextSearch);
+        }
         tabUpdateSource.current = null;
-    }, [activeTab, router, urlSearchParams]);
+        searchUpdateSource.current = null;
+    }, [activeTab, router, urlSearch, searchMode]);
+
+    useEffect(() => {
+        if (activeTab !== 'discovery' || searchMode !== 'title') return;
+        if (!searchInputRef.current) return;
+
+        searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        searchInputRef.current.focus();
+        searchInputRef.current.select();
+    }, [activeTab, searchMode]);
+
+    useEffect(() => {
+        if (searchMode !== 'title' || activeTab !== 'discovery') return;
+        if (isInterpreting || isLoading) return;
+
+        if (titleSearchTimeout.current) {
+            clearTimeout(titleSearchTimeout.current);
+        }
+
+        const query = vibeText.trim();
+        if (query.length < 2) return;
+
+        titleSearchTimeout.current = setTimeout(() => {
+            if (lastTitleQuery.current === query) return;
+            lastTitleQuery.current = query;
+            handleTitleSearch();
+        }, 400);
+
+        return () => {
+            if (titleSearchTimeout.current) {
+                clearTimeout(titleSearchTimeout.current);
+            }
+        };
+    }, [activeTab, vibeText, searchMode, isInterpreting, isLoading]);
 
     // Fetch hosted content on mount
     useEffect(() => {
@@ -213,6 +303,12 @@ export default function HomePage() {
         setActiveTab(tab);
     };
 
+    const handleSearchModeChange = (mode: 'vibe' | 'title' | 'actor') => {
+        searchUpdateSource.current = 'ui';
+        setSearchMode(mode);
+        setSearchError(null);
+    };
+
     const [searchError, setSearchError] = useState<string | null>(null);
 
     const handleSearch = async (e?: React.FormEvent) => {
@@ -249,6 +345,40 @@ export default function HomePage() {
         } catch (err: any) {
             console.error("Search Handler Error:", err);
             setSearchError(err.message || "An unexpected error occurred. Please try again.");
+        }
+    };
+
+    const fetchInternalMatches = async (query: string) => {
+        if (!query || query.length < 2) return [];
+        try {
+            const response = await fetch(`/api/library/search?q=${encodeURIComponent(query)}&limit=12`);
+            if (!response.ok) return [];
+            const data = await response.json();
+            const items = data.results || [];
+            return items.map((video: any) => ({
+                id: video.id,
+                title: video.title || video.seriesTitle || 'Untitled',
+                year: video.releaseYear || new Date().getFullYear(),
+                runtime: Math.floor((video.duration || 0) / 60),
+                poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+                genres: video.genre ? [video.genre] : [],
+                explanation: 'Available in your library',
+                watchProviders: [],
+                permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
+                playable: true,
+                assetId: video.id,
+                cloudfrontUrl: video.s3Url,
+                sourceProvider: video.sourceProvider,
+                sourcePageUrl: video.sourcePageUrl,
+                sourceRights: video.sourceRights,
+                sourceLicenseUrl: video.sourceLicenseUrl,
+                archiveIdentifier: video.archiveIdentifier,
+                format: video.format,
+                fileSize: video.fileSize,
+            }));
+        } catch (error) {
+            console.error('Internal search error:', error);
+            return [];
         }
     };
 
@@ -301,6 +431,11 @@ export default function HomePage() {
     const handleTitleSearch = async () => {
         setIsLoading(true);
         try {
+            const query = vibeText.trim();
+            if (query) {
+                lastTitleQuery.current = query;
+            }
+
             const response = await fetch('/api/ai/similar', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -323,8 +458,21 @@ export default function HomePage() {
                 explanationTokens: data.explanationTokens
             };
 
+            const internalMatches = await fetchInternalMatches(query);
+            if (internalMatches.length > 0) {
+                const existingIds = new Set([data.hero?.id, ...data.alternates].map((m: any) => m?.id).filter(Boolean));
+                const existingTitles = new Set([data.hero?.title, ...data.alternates].map((m: any) => (m?.title || '').toLowerCase()));
+                const filteredInternal = internalMatches.filter((movie) => {
+                    if (existingIds.has(movie.id)) return false;
+                    if (existingTitles.has(movie.title.toLowerCase())) return false;
+                    return true;
+                });
+
+                finalResults.alternates = [...filteredInternal, ...finalResults.alternates];
+            }
+
             if (onlyPlayable) {
-                const all = [data.hero, ...data.alternates];
+                const all = [finalResults.hero, ...finalResults.alternates].filter(Boolean);
                 const playables = all.filter((m: any) => m.playable);
                 if (playables.length > 0) {
                     finalResults.hero = playables[0];
@@ -552,6 +700,16 @@ export default function HomePage() {
                             </p>
                         </div>
 
+                        <div
+                            style={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                marginBottom: '2rem',
+                            }}
+                        >
+                            <CardViewToggle />
+                        </div>
+
                         {/* Movies Section */}
                         {isWatchLoading ? (
                             <div
@@ -617,20 +775,15 @@ export default function HomePage() {
                                                 </span>
                                             </a>
                                         </div>
-                                        <div
-                                            className="watch-grid watch-grid-compact"
-                                            style={{
-                                                width: '100%',
-                                            } as React.CSSProperties}
-                                        >
+                                        <div style={cardGridStyle}>
                                             {hostedMovies.map((movie) => (
                                                 <div
                                                     key={movie.id}
                                                     style={{
+                                                        ...cardTileStyle,
                                                         cursor: 'pointer',
                                                         transition: 'transform 0.2s',
                                                     }}
-                                                    className="watch-tile-compact"
                                                     onMouseEnter={(e) => {
                                                         (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
                                                     }}
@@ -688,21 +841,15 @@ export default function HomePage() {
                                                 </span>
                                             </a>
                                         </div>
-                                        <div
-                                            className="watch-grid watch-grid-compact"
-                                            style={{
-                                                marginBottom: '3rem',
-                                                width: '100%',
-                                            } as React.CSSProperties}
-                                        >
+                                        <div style={{ ...cardGridStyle, marginBottom: '3rem' }}>
                                             {hostedSeries.map((series) => (
                                                 <div
                                                     key={series.id}
                                                     style={{
+                                                        ...cardTileStyle,
                                                         cursor: 'pointer',
                                                         transition: 'transform 0.2s',
                                                     }}
-                                                    className="watch-tile-compact"
                                                     onMouseEnter={(e) => {
                                                         (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
                                                     }}
@@ -746,7 +893,7 @@ export default function HomePage() {
                                         elem.style.boxShadow = 'none';
                                     }}
                                 >
-                                    <span style={{ fontSize: '1.5rem' }}>✨</span>
+                                    <Sparkles className="w-6 h-6" />
                                     <div style={{ flex: 1 }}>
                                         <p
                                             style={{
@@ -893,7 +1040,7 @@ export default function HomePage() {
                         width: '100%'
                     }}>
                         <button
-                            onClick={() => { setSearchMode('vibe'); setSearchError(null); }}
+                            onClick={() => handleSearchModeChange('vibe')}
                             style={{
                                 padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                                 borderRadius: '2rem',
@@ -912,7 +1059,7 @@ export default function HomePage() {
                             </span>
                         </button>
                         <button
-                            onClick={() => { setSearchMode('title'); setSearchError(null); }}
+                            onClick={() => handleSearchModeChange('title')}
                             style={{
                                 padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                                 borderRadius: '2rem',
@@ -931,7 +1078,7 @@ export default function HomePage() {
                             </span>
                         </button>
                         <button
-                            onClick={() => { setSearchMode('actor'); setSearchError(null); }}
+                            onClick={() => handleSearchModeChange('actor')}
                             style={{
                                 padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
                                 borderRadius: '2rem',
@@ -955,6 +1102,7 @@ export default function HomePage() {
                     <div className="animate-slide-up" style={{ maxWidth: '600px', margin: '0 auto 3rem', position: 'relative' }}>
                         <form onSubmit={handleSearch} style={{ position: 'relative' }}>
                             <input
+                                ref={searchInputRef}
                                 type="text"
                                 value={vibeText}
                                 onChange={(e) => { setVibeText(e.target.value); setSearchError(null); }}
@@ -1193,134 +1341,9 @@ export default function HomePage() {
                                     )}
                                 </div>
 
-                                {/* Fixed View Size Toggle */}
                                 {!isLoading && results && (
-                                    <div style={{
-                                        position: 'fixed',
-                                        bottom: '2rem',
-                                        right: '2rem',
-                                        zIndex: 100
-                                    }}>
-                                        {/* (Dropdown Menu same as before) */}
-                                        {isViewMenuOpen && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                bottom: '4.5rem',
-                                                right: 0,
-                                                background: 'rgba(11, 11, 13, 0.95)',
-                                                backdropFilter: 'blur(12px)',
-                                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                                borderRadius: '0.75rem',
-                                                padding: '0.5rem',
-                                                minWidth: '150px',
-                                                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
-                                            }}>
-                                                <button
-                                                    onClick={() => { setViewSize('compact'); setIsViewMenuOpen(false); }}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.75rem 1rem',
-                                                        borderRadius: '0.5rem',
-                                                        fontSize: '0.875rem',
-                                                        fontWeight: '500',
-                                                        border: 'none',
-                                                        background: viewSize === 'compact' ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
-                                                        color: viewSize === 'compact' ? '#D4AF37' : '#A7ABB4',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s',
-                                                        textAlign: 'left',
-                                                        marginBottom: '0.25rem'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        if (viewSize !== 'compact') e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        if (viewSize !== 'compact') e.currentTarget.style.background = 'transparent';
-                                                    }}
-                                                >
-                                                    ⊞ Compact
-                                                </button>
-                                                <button
-                                                    onClick={() => { setViewSize('standard'); setIsViewMenuOpen(false); }}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.75rem 1rem',
-                                                        borderRadius: '0.5rem',
-                                                        fontSize: '0.875rem',
-                                                        fontWeight: '500',
-                                                        border: 'none',
-                                                        background: viewSize === 'standard' ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
-                                                        color: viewSize === 'standard' ? '#D4AF37' : '#A7ABB4',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s',
-                                                        textAlign: 'left',
-                                                        marginBottom: '0.25rem'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        if (viewSize !== 'standard') e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        if (viewSize !== 'standard') e.currentTarget.style.background = 'transparent';
-                                                    }}
-                                                >
-                                                    ⊟ Standard
-                                                </button>
-                                                <button
-                                                    onClick={() => { setViewSize('large'); setIsViewMenuOpen(false); }}
-                                                    style={{
-                                                        width: '100%',
-                                                        padding: '0.75rem 1rem',
-                                                        borderRadius: '0.5rem',
-                                                        fontSize: '0.875rem',
-                                                        fontWeight: '500',
-                                                        border: 'none',
-                                                        background: viewSize === 'large' ? 'rgba(212, 175, 55, 0.15)' : 'transparent',
-                                                        color: viewSize === 'large' ? '#D4AF37' : '#A7ABB4',
-                                                        cursor: 'pointer',
-                                                        transition: 'all 0.2s',
-                                                        textAlign: 'left'
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        if (viewSize !== 'large') e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        if (viewSize !== 'large') e.currentTarget.style.background = 'transparent';
-                                                    }}
-                                                >
-                                                    ▭ Large
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* Toggle Button */}
-                                        <button
-                                            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
-                                            style={{
-                                                width: '3.5rem',
-                                                height: '3.5rem',
-                                                borderRadius: '50%',
-                                                background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
-                                                border: 'none',
-                                                color: '#0B0B0D',
-                                                fontSize: '1.5rem',
-                                                cursor: 'pointer',
-                                                boxShadow: '0 4px 12px rgba(212, 175, 55, 0.3)',
-                                                transition: 'all 0.2s',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.currentTarget.style.transform = 'scale(1.1)';
-                                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(212, 175, 55, 0.4)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.currentTarget.style.transform = 'scale(1)';
-                                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(212, 175, 55, 0.3)';
-                                            }}
-                                        >
-                                            ⊞
-                                        </button>
+                                    <div style={{ marginLeft: 'auto' }}>
+                                        <CardViewToggle />
                                     </div>
                                 )}
                             </div>

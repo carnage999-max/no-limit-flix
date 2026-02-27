@@ -3,10 +3,11 @@
 import { useState, use, useEffect } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { TitleTile, TileSkeleton } from '@/components';
+import { TitleTile, TileSkeleton, CardViewToggle } from '@/components';
 import { getMoviesByCollection } from '@/lib/tmdb';
 import type { Movie, MoviePick, FilterLength, FilterIntensity, FilterTone } from '@/types';
 import { ArrowLeft } from 'lucide-react';
+import { useCardView } from '@/context/CardViewContext';
 
 const COLLECTIONS_META: Record<string, { title: string; promiseStatement: string; accentColor: string }> = {
     'mind-benders': {
@@ -77,6 +78,18 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
 
     const [movies, setMovies] = useState<MoviePick[]>([]);
     const [loading, setLoading] = useState(true);
+    const { viewSize } = useCardView();
+
+    const gridStyle = {
+        display: 'grid',
+        gridTemplateColumns:
+            viewSize === 'compact'
+                ? 'repeat(auto-fill, minmax(140px, 1fr))'
+                : viewSize === 'standard'
+                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
+                    : 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
+    };
 
     // Filters
     const [lengthFilter, setLengthFilter] = useState<FilterLength | null>(null);
@@ -196,7 +209,7 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
 
             {/* Filters Section */}
             <div style={{ padding: '2rem', borderBottom: '1px solid rgba(167, 171, 180, 0.05)', background: 'rgba(255,255,255,0.01)' }}>
-                <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', gap: '3rem', flexWrap: 'wrap' }}>
+                <div style={{ maxWidth: '1400px', margin: '0 auto', display: 'flex', gap: '3rem', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
                     <FilterGroup
                         label="Length"
                         options={['Short', 'Medium', 'Long']}
@@ -215,6 +228,9 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
                         current={toneFilter}
                         onChange={setToneFilter}
                     />
+                    <div style={{ marginLeft: 'auto' }}>
+                        <CardViewToggle />
+                    </div>
                 </div>
             </div>
 
@@ -222,11 +238,11 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
             <div style={{ padding: '4rem 2rem' }}>
                 <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
                     {loading ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '2rem' }}>
+                        <div style={gridStyle}>
                             {Array(12).fill(0).map((_, i) => <TileSkeleton key={i} />)}
                         </div>
                     ) : filteredMovies.length > 0 ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '2rem' }}>
+                        <div style={gridStyle}>
                             {filteredMovies.map(movie => <TitleTile key={movie.id} movie={movie} />)}
                         </div>
                     ) : (
