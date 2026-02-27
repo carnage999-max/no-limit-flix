@@ -566,11 +566,23 @@ export async function POST(request: NextRequest) {
             page,
         };
 
+        const safeResults = results.map((result) => ({
+            identifier: result.identifier,
+            title: result.title,
+            fileName: result.fileName ?? null,
+            playbackUrl: result.playbackUrl ?? null,
+            fileSize: result.fileSize ?? null,
+            duration: result.duration ?? null,
+            sourcePageUrl: result.sourcePageUrl ?? null,
+            status: result.status,
+            reason: result.reason ?? null
+        }));
+
         return NextResponse.json({
             success: true,
-            preset,
+            presetId: preset.id,
             summary,
-            results
+            results: safeResults
         });
     } catch (error: any) {
         console.error('Archive import error:', error);

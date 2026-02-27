@@ -68,7 +68,7 @@ export default function AdminImportPage() {
         setJobStatus(null);
 
         try {
-            const targetPage = pageOverride ?? page;
+            const targetPage = Number.isFinite(pageOverride) ? (pageOverride as number) : page;
             const res = await fetch('/api/admin/archive/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -481,7 +481,7 @@ export default function AdminImportPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.75rem' }}>
                     <ButtonPrimary
-                        onClick={handlePreview}
+                        onClick={() => handlePreview()}
                         disabled={loading || (importType === 'series' && !seriesTitle.trim())}
                         fullWidth
                     >

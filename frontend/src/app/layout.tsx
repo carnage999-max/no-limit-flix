@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar, AppBanner } from "@/components";
 import ToastContainer from "@/components/ToastContainer";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -44,6 +45,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        <GoogleAnalytics />
+      </head>
       <body className="antialiased">
         <AuthProvider>
           <SearchProvider>
