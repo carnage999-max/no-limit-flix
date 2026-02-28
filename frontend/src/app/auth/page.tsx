@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 
-export default function AuthPage() {
+function AuthContent() {
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -400,5 +400,30 @@ export default function AuthPage() {
                 }
             `}</style>
         </main>
+    );
+}
+
+export default function AuthPage() {
+    return (
+        <Suspense
+            fallback={(
+                <main style={{
+                    minHeight: '100vh',
+                    background: '#0B0B0D',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#A7ABB4',
+                    padding: '2rem',
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Loading...
+                    </div>
+                </main>
+            )}
+        >
+            <AuthContent />
+        </Suspense>
     );
 }
