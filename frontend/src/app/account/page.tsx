@@ -2,14 +2,20 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from '@/context/SessionContext';
 
 export default function AccountPage() {
     const router = useRouter();
+    const { user, loading } = useSession();
 
     useEffect(() => {
-        // Redirect to auth page
-        router.push('/auth');
-    }, [router]);
+        if (loading) return;
+        if (!user) {
+            router.push('/auth?redirect=/account/favorites');
+            return;
+        }
+        router.push('/account/favorites');
+    }, [router, user, loading]);
 
     return (
         <div style={{

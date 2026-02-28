@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/db';
+import { getSessionUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
     try {
+        const sessionUser = await getSessionUser(request);
+        const userId = sessionUser?.id || null;
+
         const searchParams = request.nextUrl.searchParams;
-        const userId = searchParams.get('userId');
         const type = searchParams.get('type') || 'watch_stats'; // watch_stats, top_movies, user_activity
 
         if (!userId) {
             return NextResponse.json(
-                { error: 'Missing userId' },
-                { status: 400 }
+                { error: 'Unauthorized' },
+                { status: 401 }
             );
         }
 

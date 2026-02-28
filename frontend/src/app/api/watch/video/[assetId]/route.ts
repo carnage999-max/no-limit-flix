@@ -1,12 +1,18 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { transformToCloudFront } from '@/lib/utils';
+import { getSessionUser } from '@/lib/auth-server';
 
 export async function GET(
-    request: Request,
+    request: NextRequest,
     { params }: { params: Promise<{ assetId: string }> }
 ) {
     try {
+        const sessionUser = await getSessionUser(request);
+        if (!sessionUser) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
         const { assetId } = await params;
 
         if (!assetId) {

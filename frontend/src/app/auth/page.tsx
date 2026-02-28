@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
+import { useSession } from '@/context/SessionContext';
 
 export default function AuthPage() {
     const [isLogin, setIsLogin] = useState(true);
@@ -14,22 +15,17 @@ export default function AuthPage() {
     const [loading, setLoading] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const { user, loading: sessionLoading, refresh } = useSession();
 
     // Redirect if already authenticated (require both user + userId)
     useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        const storedUserId = localStorage.getItem('userId');
-        const redirectUrl = localStorage.getItem('redirectAfterLogin');
-
-        if (storedUser && storedUserId) {
-            if (redirectUrl) {
-                localStorage.removeItem('redirectAfterLogin');
-                router.push(redirectUrl);
-            } else {
-                router.push('/');
-            }
+        if (sessionLoading) return;
+        if (user) {
+            const redirectUrl = searchParams.get('redirect');
+            router.push(redirectUrl || '/');
         }
-    }, [router]);
+    }, [router, user, sessionLoading, searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -52,18 +48,11 @@ export default function AuthPage() {
             const data = await response.json();
 
             if (response.ok) {
-                localStorage.setItem('user', JSON.stringify(data.user));
-                localStorage.setItem('userId', data.user.id);
                 setSuccessMessage(isLogin ? 'Login successful! Redirecting...' : 'Account created! Redirecting...');
+                await refresh();
                 setTimeout(() => {
-                    // Check if there's a redirect URL stored
-                    const redirectUrl = localStorage.getItem('redirectAfterLogin');
-                    if (redirectUrl) {
-                        localStorage.removeItem('redirectAfterLogin');
-                        router.push(redirectUrl);
-                    } else {
-                        router.push('/');
-                    }
+                    const redirectUrl = searchParams.get('redirect');
+                    router.push(redirectUrl || '/');
                     router.refresh();
                 }, 1500);
             } else {

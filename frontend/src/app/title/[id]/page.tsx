@@ -9,6 +9,7 @@ import { getMovieDetails } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import type { MoviePick } from '@/types';
 import { CheckCircle2, ExternalLink, Play, Smartphone } from 'lucide-react';
+import { useSession } from '@/context/SessionContext';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -18,17 +19,16 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
     const [tmdbData, setTmdbData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
+    const { user, loading: sessionLoading } = useSession();
 
     // Check authentication on mount
     useEffect(() => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            // Store the current URL to redirect back after login
+        if (sessionLoading) return;
+        if (!user) {
             const currentUrl = `/title/${id}${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
-            localStorage.setItem('redirectAfterLogin', currentUrl);
-            router.push('/auth');
+            router.push(`/auth?redirect=${encodeURIComponent(currentUrl)}`);
         }
-    }, [id, router, searchParams]);
+    }, [id, router, searchParams, user, sessionLoading]);
 
     useEffect(() => {
         async function loadMovie() {

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { MoviePick } from '@/types';
+import { useSession } from './SessionContext';
 
 interface FavoritesContextType {
     favorites: MoviePick[];
@@ -17,21 +18,24 @@ const FavoritesContext = createContext<FavoritesContextType | undefined>(undefin
 export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     const [favorites, setFavorites] = useState<MoviePick[]>([]);
     const [loaded, setLoaded] = useState(false);
+    const { user, loading: sessionLoading } = useSession();
 
     // Load favorites from API on mount
     useEffect(() => {
-        loadFavorites();
-    }, []);
+        if (!sessionLoading) {
+            loadFavorites();
+        }
+    }, [sessionLoading, user]);
 
     const loadFavorites = useCallback(async () => {
         try {
-            const userId = localStorage.getItem('userId');
+            const userId = user?.id;
             if (!userId) {
                 setLoaded(true);
                 return;
             }
 
-            const response = await fetch(`/api/favorites?userId=${userId}`);
+            const response = await fetch(`/api/favorites`);
             if (response.ok) {
                 const data = await response.json();
                 console.log('Loaded favorites:', data);
@@ -65,7 +69,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoaded(true);
         }
-    }, []);
+    }, [user]);
 
     const isFavorite = useCallback((movieId: string | number): boolean => {
         const target = String(movieId);
@@ -73,7 +77,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     }, [favorites]);
 
     const addFavorite = useCallback(async (movie: MoviePick) => {
-        const userId = localStorage.getItem('userId');
+        const userId = user?.id;
         if (!userId) return;
 
         const videoId = movie.assetId ? String(movie.assetId) : undefined;
@@ -91,7 +95,6 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId,
                     videoId,
                     tmdbId,
                     action: 'add',
@@ -113,7 +116,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
     }, [isFavorite]);
 
     const removeFavorite = useCallback(async (movieId: string | number, tmdbId?: string | number) => {
-        const userId = localStorage.getItem('userId');
+        const userId = user?.id;
         if (!userId) return;
 
         // Optimistic update
@@ -126,7 +129,6 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId,
                     videoId: movieId,
                     tmdbId,
                     action: 'remove'
@@ -147,7 +149,7 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
                 setFavorites(prev => [...prev, removedFavorite]);
             }
         }
-    }, [favorites]);
+    }, [favorites, user]);
 
     const toggleFavorite = useCallback(async (movie: MoviePick) => {
         const movieId = movie.assetId || movie.tmdb_id || movie.id;

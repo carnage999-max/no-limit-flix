@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Film, BarChart3 } from 'lucide-react';
+import { useSession } from '@/context/SessionContext';
 
 interface WatchStat {
     title: string;
@@ -27,8 +28,7 @@ interface GenreStats {
 
 export default function AnalyticsDashboard() {
     const router = useRouter();
-    const [userId, setUserId] = useState<string | null>(null);
-    const [userRole, setUserRole] = useState<string | null>(null);
+    const { user, loading: sessionLoading } = useSession();
     const [stats, setStats] = useState<any>(null);
     const [topMovies, setTopMovies] = useState<TopMovie[]>([]);
     const [loading, setLoading] = useState(true);
@@ -36,46 +36,24 @@ export default function AnalyticsDashboard() {
     const [page, setPage] = useState(1);
 
     useEffect(() => {
-        // Get userId and role from localStorage or auth check
-        const storedUserId = localStorage.getItem('userId');
-        const storedUser = localStorage.getItem('user');
-        
-        if (!storedUserId) {
-            router.push('/auth');
+        if (sessionLoading) return;
+        if (!user) {
+            router.push('/auth?redirect=/account/dashboard');
             return;
         }
-
-        // Parse user to get role
-        let role = 'user';
-        if (storedUser) {
-            try {
-                const userData = JSON.parse(storedUser);
-                role = userData.role || 'user';
-            } catch (err) {
-                console.error('Failed to parse user:', err);
-                router.push('/auth');
-                return;
-            }
-        }
-
-        setUserRole(role);
-
-        // Only admins can see analytics
-        if (role !== 'admin') {
+        if (user.role !== 'admin') {
             router.push('/account/favorites');
             return;
         }
+        fetchAnalytics();
+    }, [router, user, sessionLoading, page]);
 
-        setUserId(storedUserId);
-        fetchAnalytics(storedUserId);
-    }, [router]);
-
-    const fetchAnalytics = async (uid: string) => {
+    const fetchAnalytics = async () => {
         try {
             setLoading(true);
             const [statsRes, moviesRes] = await Promise.all([
-                fetch(`/api/analytics?userId=${uid}&type=watch_stats`),
-                fetch(`/api/analytics?userId=${uid}&type=top_movies&page=${page}&limit=10`)
+                fetch(`/api/analytics?type=watch_stats`),
+                fetch(`/api/analytics?type=top_movies&page=${page}&limit=10`)
             ]);
 
             if (statsRes.ok) {
@@ -94,7 +72,8 @@ export default function AnalyticsDashboard() {
         }
     };
 
-    if (!userId) return null;
+    if (sessionLoading) return null;
+    if (!user) return null;
 
     return (
         <main style={{

@@ -6,6 +6,7 @@ import { Heart } from 'lucide-react';
 import type { MoviePick } from '@/types';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useCardView } from '@/context/CardViewContext';
+import { useSession } from '@/context/SessionContext';
 import { useToast } from './Toast';
 
 interface TitleTileProps {
@@ -16,14 +17,9 @@ export default function TitleTile({ movie }: TitleTileProps) {
     const { isFavorite, toggleFavorite } = useFavorites();
     const { showToast } = useToast();
     const { viewSize } = useCardView();
+    const { user } = useSession();
     const [isFav, setIsFav] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [userId, setUserId] = useState<string | null>(null);
-
-    useEffect(() => {
-        const id = localStorage.getItem('userId');
-        setUserId(id);
-    }, []);
 
     useEffect(() => {
         const movieId = movie.assetId || movie.id || movie.tmdb_id;
@@ -56,7 +52,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
         e.preventDefault();
         e.stopPropagation();
         
-        if (!userId) {
+        if (!user) {
             showToast('Please log in to add favorites', 'info');
             return;
         }
@@ -134,7 +130,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
                     />
 
                     {/* Favorite Button - visible if user is authenticated */}
-                    {userId && (
+                    {user && (
                         <button
                             onClick={handleFavoriteClick}
                             disabled={isLoading}

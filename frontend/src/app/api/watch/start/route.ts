@@ -5,6 +5,7 @@ import {
   generateCloudFrontSignedURL,
 } from '@/lib/cloudfront-signed';
 import { transformToCloudFront } from '@/lib/utils';
+import { getSessionUser } from '@/lib/auth-server';
 
 interface WatchStartRequest {
   assetId: string;
@@ -38,6 +39,11 @@ interface WatchStartResponse {
  */
 export async function POST(request: NextRequest) {
   try {
+    const sessionUser = await getSessionUser(request);
+    if (!sessionUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = (await request.json()) as WatchStartRequest;
     const { assetId } = body;
 

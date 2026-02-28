@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword, verifyPassword, generateSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE } from '@/lib/auth';
+import { hashPassword, verifyPassword, createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
@@ -39,7 +39,11 @@ export async function POST(request: NextRequest) {
             });
 
             // Generate session token
-            const token = generateSessionToken();
+            const token = createSessionToken({
+                userId: user.id,
+                role: user.role,
+                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000
+            });
 
             // Set session cookie
             const response = NextResponse.json({
@@ -75,7 +79,11 @@ export async function POST(request: NextRequest) {
             }
 
             // Generate session token
-            const token = generateSessionToken();
+            const token = createSessionToken({
+                userId: user.id,
+                role: user.role,
+                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000
+            });
 
             const response = NextResponse.json({
                 success: true,

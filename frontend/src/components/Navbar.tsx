@@ -1,36 +1,43 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { BarChart3, Heart, LogIn, ArrowLeft } from 'lucide-react';
+import { useSession } from '@/context/SessionContext';
+import { ConfirmModal } from '@/components';
+import { BarChart3, LogIn, ArrowLeft, User, Settings, Bookmark, LogOut } from 'lucide-react';
 
 export default function Navbar() {
     const pathname = usePathname();
-    const router = useRouter();
     const isHome = pathname === '/';
-    const [userRole, setUserRole] = useState<string | null>(null);
-    const [userId, setUserId] = useState<string | null>(null);
+    const { user, loading } = useSession();
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [menuHover, setMenuHover] = useState(false);
+    const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'logout' })
+            });
+        } finally {
+            window.location.href = '/auth';
+        }
+    };
 
     useEffect(() => {
-        // Get user role and ID from localStorage
-        const storedUser = localStorage.getItem('user');
-        const storedUserId = localStorage.getItem('userId');
-        if (storedUser && storedUserId) {
-            try {
-                const userData = JSON.parse(storedUser);
-                setUserRole(userData.role || 'user');
-                setUserId(storedUserId);
-            } catch (err) {
-                console.error('Failed to parse user:', err);
-                setUserRole(null);
-                setUserId(null);
+        const handleClick = (event: MouseEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target) return;
+            if (!target.closest('.profile-menu')) {
+                setMenuOpen(false);
             }
-        } else {
-            setUserRole(null);
-            setUserId(null);
-        }
-    }, [pathname, router]);
+        };
+        document.addEventListener('click', handleClick);
+        return () => document.removeEventListener('click', handleClick);
+    }, []);
+    const userRole = user?.role || null;
 
     return (
         <header
@@ -143,36 +150,190 @@ export default function Navbar() {
                     </Link>
                 )}
                 {userRole && (
-                    <Link
-                        href="/account/favorites"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '0.5rem',
-                            background: 'rgba(212, 175, 55, 0.1)',
-                            border: '1px solid rgba(212, 175, 55, 0.2)',
-                            color: '#D4AF37',
-                            textDecoration: 'none',
-                            fontWeight: '600',
-                            transition: 'all 0.2s',
-                        }}
-                        title="Favorites"
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
-                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
-                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
-                        }}
+                    <div
+                        className="profile-menu"
+                        style={{ position: 'relative' }}
+                        onMouseEnter={() => setMenuHover(true)}
+                        onMouseLeave={() => setMenuHover(false)}
                     >
-                        <Heart size={18} />
-                    </Link>
+                        <button
+                            type="button"
+                            onClick={() => setMenuOpen((prev) => !prev)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '40px',
+                                height: '40px',
+                                borderRadius: '0.5rem',
+                                background: 'rgba(212, 175, 55, 0.1)',
+                                border: '1px solid rgba(212, 175, 55, 0.2)',
+                                color: '#D4AF37',
+                                textDecoration: 'none',
+                                fontWeight: '600',
+                                transition: 'all 0.2s',
+                                cursor: 'pointer',
+                                padding: 0,
+                            }}
+                            title="Profile"
+                        >
+                            {user?.avatar ? (
+                                <img
+                                    src={user.avatar}
+                                    alt={user.username || 'Profile'}
+                                    style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        borderRadius: '0.5rem',
+                                        objectFit: 'cover',
+                                    }}
+                                />
+                            ) : (
+                                <span style={{
+                                    fontSize: '0.95rem',
+                                    fontWeight: 700,
+                                    color: '#D4AF37'
+                                }}>
+                                    {(user?.username || user?.email || 'U').charAt(0).toUpperCase()}
+                                </span>
+                            )}
+                        </button>
+                        {(menuOpen || menuHover) && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    right: 0,
+                                    top: 'calc(100% + 0.75rem)',
+                                    minWidth: '220px',
+                                    background: 'rgba(11, 11, 13, 0.98)',
+                                    border: '1px solid rgba(167, 171, 180, 0.12)',
+                                    borderRadius: '0.75rem',
+                                    boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
+                                    padding: '0.5rem',
+                                    zIndex: 200,
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '0.6rem',
+                                        border: '1px solid rgba(167, 171, 180, 0.12)',
+                                        background: 'rgba(167, 171, 180, 0.06)',
+                                        color: '#F3F4F6',
+                                        marginBottom: '0.35rem',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: '36px',
+                                            height: '36px',
+                                            borderRadius: '12px',
+                                            overflow: 'hidden',
+                                            background: 'rgba(212, 175, 55, 0.12)',
+                                            border: '1px solid rgba(212, 175, 55, 0.3)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#D4AF37',
+                                        }}
+                                    >
+                                        {user?.avatar ? (
+                                            <img
+                                                src={user.avatar}
+                                                alt={user.username || 'Profile'}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                        ) : (
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                                                {(user?.username || user?.email || 'U').charAt(0).toUpperCase()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'grid', gap: '0.1rem' }}>
+                                        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>{user?.username || 'User'}</span>
+                                        <span style={{ fontSize: '0.75rem', color: '#A7ABB4' }}>{user?.email}</span>
+                                    </div>
+                                </div>
+                                <Link
+                                    href="/account/favorites"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '0.6rem',
+                                        textDecoration: 'none',
+                                        color: '#F3F4F6',
+                                    }}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    <Bookmark size={16} />
+                                    Favorites
+                                </Link>
+                                <Link
+                                    href="/profile"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '0.6rem',
+                                        textDecoration: 'none',
+                                        color: '#F3F4F6',
+                                    }}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    <User size={16} />
+                                    Profile
+                                </Link>
+                                <Link
+                                    href="/settings"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '0.6rem',
+                                        textDecoration: 'none',
+                                        color: '#F3F4F6',
+                                    }}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    <Settings size={16} />
+                                    Settings
+                                </Link>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        setShowLogoutConfirm(true);
+                                    }}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '0.6rem',
+                                        border: 'none',
+                                        width: '100%',
+                                        textAlign: 'left',
+                                        background: 'rgba(244, 63, 94, 0.12)',
+                                        color: '#FCA5A5',
+                                        cursor: 'pointer',
+                                        marginTop: '0.25rem',
+                                    }}
+                                >
+                                    <LogOut size={16} />
+                                    Log out
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 )}
-                {!userId && (
+                {!loading && !user && (
                     <Link
                         href="/auth"
                         style={{
@@ -203,6 +364,19 @@ export default function Navbar() {
                     </Link>
                 )}
             </div>
+            <ConfirmModal
+                open={showLogoutConfirm}
+                title="Log out of No Limit Flix?"
+                description="You will need to sign in again to access your watchlist and account settings."
+                confirmLabel="Log out"
+                cancelLabel="Cancel"
+                tone="danger"
+                onCancel={() => setShowLogoutConfirm(false)}
+                onConfirm={async () => {
+                    setShowLogoutConfirm(false);
+                    await handleLogout();
+                }}
+            />
         </header>
     );
 }

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Clapperboard, Layers, Search, Bookmark, Settings } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from '@/context/SessionContext';
 
 const tabs = [
     {
@@ -54,7 +54,7 @@ const getIsHiddenRoute = (pathname: string) => {
 
 export default function MobileTabBar() {
     const pathname = usePathname();
-    const { user, isLoading } = useAuth();
+    const { user, loading: isLoading } = useSession();
 
     const isHiddenRoute = getIsHiddenRoute(pathname || '');
     const [isSearchTab, setIsSearchTab] = useState(false);

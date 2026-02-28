@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/db';
+import { getSessionUser } from '@/lib/auth-server';
 
 export async function POST(request: NextRequest) {
     try {
-        const { userId, videoId, action, title, poster, tmdbId } = await request.json();
+        const sessionUser = await getSessionUser(request);
+        if (!sessionUser) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { videoId, action, title, poster, tmdbId } = await request.json();
+        const userId = sessionUser.id;
         const videoIdValue = videoId ? String(videoId) : undefined;
         const tmdbIdValue = tmdbId ? String(tmdbId) : undefined;
 
-        if (!userId || (!videoIdValue && !tmdbIdValue)) {
+        if (!videoIdValue && !tmdbIdValue) {
             return NextResponse.json(
-                { error: 'Missing required fields: userId and videoId or tmdbId' },
+                { error: 'Missing required fields: videoId or tmdbId' },
                 { status: 400 }
             );
         }
@@ -99,15 +104,16 @@ export async function POST(request: NextRequest) {
 // Get user's favorites
 export async function GET(request: NextRequest) {
     try {
+        const sessionUser = await getSessionUser(request);
+        const userId = sessionUser?.id || null;
         const searchParams = request.nextUrl.searchParams;
-        const userId = searchParams.get('userId');
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '20');
 
         if (!userId) {
             return NextResponse.json(
-                { error: 'Missing userId' },
-                { status: 400 }
+                { error: 'Unauthorized' },
+                { status: 401 }
             );
         }
 

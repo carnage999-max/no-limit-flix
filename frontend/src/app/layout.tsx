@@ -33,9 +33,9 @@ export const viewport = {
 };
 
 import { SearchProvider } from "@/context/SearchContext";
-import { AuthProvider } from "@/context/AuthContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { CardViewProvider } from "@/context/CardViewContext";
+import { SessionProvider } from "@/context/SessionContext";
 
 // ... (keep metadata exports)
 
@@ -50,8 +50,8 @@ export default function RootLayout({
         <GoogleAnalytics />
       </head>
       <body className="antialiased">
-        <AuthProvider>
-          <CardViewProvider>
+        <CardViewProvider>
+          <SessionProvider>
             <SearchProvider>
               <FavoritesProvider>
                 <Navbar />
@@ -61,8 +61,8 @@ export default function RootLayout({
                 <ToastContainer />
               </FavoritesProvider>
             </SearchProvider>
-          </CardViewProvider>
-        </AuthProvider>
+          </SessionProvider>
+        </CardViewProvider>
       </body>
     </html>
   );

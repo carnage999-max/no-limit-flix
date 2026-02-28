@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import { ExternalLink, Loader2, ArrowLeft } from 'lucide-react';
+import { useSession } from '@/context/SessionContext';
 
 interface Video {
     id: string;
@@ -36,16 +37,15 @@ export default function WatchPage() {
     const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { user, loading: sessionLoading } = useSession();
 
     // Check authentication on mount
     useEffect(() => {
-        const userId = localStorage.getItem('userId');
-        if (!userId) {
-            // Store the current URL to redirect back after login
-            localStorage.setItem('redirectAfterLogin', `/watch/${assetId}`);
-            router.push('/auth');
+        if (sessionLoading) return;
+        if (!user) {
+            router.push(`/auth?redirect=/watch/${assetId}`);
         }
-    }, [assetId, router]);
+    }, [assetId, router, user, sessionLoading]);
 
     useEffect(() => {
         if (!assetId) {

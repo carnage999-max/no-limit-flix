@@ -2,10 +2,12 @@
 
 import { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch, CardViewToggle } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
 import { useCardView } from '@/context/CardViewContext';
+import { useSession } from '@/context/SessionContext';
 import {
     Rocket,
     Heart,
@@ -77,7 +79,7 @@ export default function HomePage() {
     const searchInputRef = useRef<HTMLInputElement | null>(null);
     const router = useRouter();
     const [urlSearch, setUrlSearch] = useState('');
-    const [activeTab, setActiveTab] = useState<'watch' | 'discovery'>('watch');
+    const [activeTab, setActiveTab] = useState<'watch' | 'discovery'>('discovery');
     const tabUpdateSource = useRef<'ui' | 'url' | null>(null);
     const searchUpdateSource = useRef<'ui' | 'url' | null>(null);
     const titleSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -85,6 +87,7 @@ export default function HomePage() {
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
+    const { user, loading: sessionLoading } = useSession();
 
     const cardGridStyle: React.CSSProperties = {
         display: 'grid',
@@ -138,6 +141,11 @@ export default function HomePage() {
         const tabParam = params.get('tab');
         const nextTab = tabParam === 'discovery' ? 'discovery' : 'watch';
 
+        if (nextTab === 'watch' && !sessionLoading && !user) {
+            router.push(`/auth?redirect=${encodeURIComponent('/?tab=watch')}`);
+            return;
+        }
+
         if (nextTab !== activeTab) {
             tabUpdateSource.current = 'url';
             setActiveTab(nextTab);
@@ -150,7 +158,7 @@ export default function HomePage() {
                 setSearchMode(modeParam);
             }
         }
-    }, [activeTab, searchMode, setSearchMode, urlSearch]);
+    }, [activeTab, searchMode, setSearchMode, urlSearch, user, sessionLoading, router]);
 
     useEffect(() => {
         if (tabUpdateSource.current === 'url' || searchUpdateSource.current === 'url') {
@@ -224,10 +232,17 @@ export default function HomePage() {
         };
     }, [activeTab, vibeText, searchMode, isInterpreting, isLoading]);
 
-    // Fetch hosted content on mount
+    // Fetch hosted content when authenticated
     useEffect(() => {
+        if (sessionLoading) return;
+        if (!user) {
+            setHostedMovies([]);
+            setHostedSeries([]);
+            setIsWatchLoading(false);
+            return;
+        }
         fetchHostedContent();
-    }, []);
+    }, [user, sessionLoading]);
 
     const fetchHostedContent = async () => {
         try {
@@ -300,6 +315,10 @@ export default function HomePage() {
     };
 
     const handleTabChange = (tab: 'watch' | 'discovery') => {
+        if (tab === 'watch' && !user && !sessionLoading) {
+            router.push(`/auth?redirect=${encodeURIComponent('/?tab=watch')}`);
+            return;
+        }
         tabUpdateSource.current = 'ui';
         setActiveTab(tab);
     };
@@ -670,49 +689,82 @@ export default function HomePage() {
                             margin: '0 auto',
                         }}
                     >
-                        {/* Watch Header */}
-                        <div
-                            style={{
-                                textAlign: 'center',
-                                marginBottom: '3rem',
-                            }}
-                        >
-                            <h2
-                                style={{
-                                    fontSize: 'clamp(2rem, 5vw, 3rem)',
-                                    fontWeight: '800',
-                                    color: '#F3F4F6',
-                                    margin: 0,
-                                    marginBottom: '0.5rem',
-                                    letterSpacing: '-0.5px',
-                                }}
-                            >
-                                Premium Content
-                            </h2>
-                            <p
-                                style={{
-                                    fontSize: '1rem',
-                                    color: '#D4AF37',
-                                    fontWeight: '600',
-                                    margin: 0,
-                                }}
-                            >
-                                Hand-picked, permanent library
-                            </p>
-                        </div>
+                        {!user && !sessionLoading ? (
+                            <div style={{
+                                padding: '3rem',
+                                borderRadius: '1.5rem',
+                                border: '1px solid rgba(212, 175, 55, 0.2)',
+                                background: 'rgba(212, 175, 55, 0.05)',
+                                textAlign: 'center'
+                            }}>
+                                <h2 style={{ color: '#F3F4F6', fontSize: 'clamp(1.75rem, 4vw, 2.5rem)', marginBottom: '0.75rem' }}>
+                                    Sign in to access Watch
+                                </h2>
+                                <p style={{ color: '#A7ABB4', marginBottom: '1.5rem' }}>
+                                    Your watch library is available once you&apos;re authenticated.
+                                </p>
+                                <Link
+                                    href={`/auth?redirect=${encodeURIComponent('/?tab=watch')}`}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '0.75rem 1.5rem',
+                                        borderRadius: '999px',
+                                        background: 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)',
+                                        color: '#0B0B0D',
+                                        fontWeight: 700,
+                                        textDecoration: 'none',
+                                    }}
+                                >
+                                    Sign In
+                                </Link>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Watch Header */}
+                                <div
+                                    style={{
+                                        textAlign: 'center',
+                                        marginBottom: '3rem',
+                                    }}
+                                >
+                                    <h2
+                                        style={{
+                                            fontSize: 'clamp(2rem, 5vw, 3rem)',
+                                            fontWeight: '800',
+                                            color: '#F3F4F6',
+                                            margin: 0,
+                                            marginBottom: '0.5rem',
+                                            letterSpacing: '-0.5px',
+                                        }}
+                                    >
+                                        Premium Content
+                                    </h2>
+                                    <p
+                                        style={{
+                                            fontSize: '1rem',
+                                            color: '#D4AF37',
+                                            fontWeight: '600',
+                                            margin: 0,
+                                        }}
+                                    >
+                                        Hand-picked, permanent library
+                                    </p>
+                                </div>
 
-                        <div
-                            style={{
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                marginBottom: '2rem',
-                            }}
-                        >
-                            <CardViewToggle />
-                        </div>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'flex-end',
+                                        marginBottom: '2rem',
+                                    }}
+                                >
+                                    <CardViewToggle />
+                                </div>
 
-                        {/* Movies Section */}
-                        {isWatchLoading ? (
+                                {/* Movies Section */}
+                                {isWatchLoading ? (
                             <div
                                 style={{
                                     display: 'flex',
@@ -930,6 +982,8 @@ export default function HomePage() {
                                         <p style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>No content available yet.</p>
                                         <p style={{ fontSize: '0.95rem' }}>Check back soon or use AI Discovery to find movies from our global catalog!</p>
                                     </div>
+                                )}
+                            </>
                                 )}
                             </>
                         )}

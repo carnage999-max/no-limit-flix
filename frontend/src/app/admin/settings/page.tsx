@@ -20,6 +20,21 @@ interface UsersResponse {
     totalPages: number;
 }
 
+interface DeletionRequest {
+    id: string;
+    userId?: string | null;
+    email: string;
+    reason?: string | null;
+    status: string;
+    createdAt: string;
+    processedAt?: string | null;
+    user?: {
+        id: string;
+        username: string;
+        email: string;
+    } | null;
+}
+
 export default function AdminSettingsPage() {
     const router = useRouter();
     const [users, setUsers] = useState<User[]>([]);
@@ -31,6 +46,9 @@ export default function AdminSettingsPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
+    const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
+    const [deletionLoading, setDeletionLoading] = useState(false);
+    const [deletionError, setDeletionError] = useState('');
     const pageSize = 10;
 
     // Check if admin session exists
@@ -41,7 +59,43 @@ export default function AdminSettingsPage() {
             return;
         }
         fetchUsers(1);
+        fetchDeletionRequests();
     }, [router]);
+
+    const fetchDeletionRequests = async () => {
+        try {
+            setDeletionLoading(true);
+            setDeletionError('');
+            const response = await fetch('/api/admin/deletion-requests');
+            if (!response.ok) {
+                throw new Error('Failed to fetch deletion requests');
+            }
+            const data = await response.json();
+            setDeletionRequests(data.requests || []);
+        } catch (err) {
+            setDeletionError(err instanceof Error ? err.message : 'Failed to fetch deletion requests');
+        } finally {
+            setDeletionLoading(false);
+        }
+    };
+
+    const handleDeleteRequest = async (requestId: string) => {
+        try {
+            setDeletionError('');
+            const response = await fetch('/api/admin/deletion-requests', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: requestId })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to delete request');
+            }
+            setDeletionRequests((prev) => prev.filter((request) => request.id !== requestId));
+        } catch (err) {
+            setDeletionError(err instanceof Error ? err.message : 'Failed to delete request');
+        }
+    };
 
     const fetchUsers = async (page: number = 1) => {
         try {
@@ -595,6 +649,184 @@ export default function AdminSettingsPage() {
                                     }}>
                                         ADMIN
                                     </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div style={{
+                    marginTop: '2rem',
+                    padding: '2rem',
+                    borderRadius: '1.25rem',
+                    background: 'rgba(167, 171, 180, 0.03)',
+                    border: '1px solid rgba(167, 171, 180, 0.1)'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '1rem',
+                        marginBottom: '1.5rem',
+                        flexWrap: 'wrap'
+                    }}>
+                        <h2 style={{
+                            fontSize: '1.25rem',
+                            fontWeight: '700',
+                            color: '#F3F4F6',
+                        }}>
+                            Account Deletion Requests
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={fetchDeletionRequests}
+                            style={{
+                                padding: '0.55rem 1rem',
+                                borderRadius: '0.65rem',
+                                border: '1px solid rgba(212, 175, 55, 0.3)',
+                                background: 'rgba(212, 175, 55, 0.12)',
+                                color: '#D4AF37',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            Refresh
+                        </button>
+                    </div>
+
+                    {deletionError && (
+                        <div style={{
+                            padding: '0.75rem 1rem',
+                            borderRadius: '0.75rem',
+                            background: 'rgba(244, 63, 94, 0.08)',
+                            border: '1px solid rgba(244, 63, 94, 0.35)',
+                            color: '#FCA5A5',
+                            marginBottom: '1rem',
+                            fontWeight: 600,
+                        }}>
+                            {deletionError}
+                        </div>
+                    )}
+
+                    {deletionLoading ? (
+                        <div style={{
+                            padding: '2rem',
+                            textAlign: 'center',
+                            color: '#A7ABB4'
+                        }}>
+                            Loading deletion requests...
+                        </div>
+                    ) : deletionRequests.length === 0 ? (
+                        <div style={{
+                            padding: '2rem',
+                            textAlign: 'center',
+                            color: '#A7ABB4'
+                        }}>
+                            No deletion requests yet.
+                        </div>
+                    ) : (
+                        <div style={{ display: 'grid', gap: '1rem' }}>
+                            {deletionRequests.map((request) => (
+                                <div
+                                    key={request.id}
+                                    style={{
+                                        padding: '1rem',
+                                        borderRadius: '0.9rem',
+                                        background: 'rgba(11, 11, 13, 0.75)',
+                                        border: '1px solid rgba(167, 171, 180, 0.15)',
+                                        display: 'grid',
+                                        gap: '0.75rem'
+                                    }}
+                                >
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: '1rem',
+                                        flexWrap: 'wrap'
+                                    }}>
+                                        <div>
+                                            <div style={{
+                                                fontSize: '1rem',
+                                                fontWeight: 700,
+                                                color: '#F3F4F6'
+                                            }}>
+                                                {request.user?.username || request.email}
+                                            </div>
+                                            <div style={{
+                                                fontSize: '0.85rem',
+                                                color: '#A7ABB4'
+                                            }}>
+                                                {request.email}
+                                            </div>
+                                        </div>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.75rem',
+                                            flexWrap: 'wrap'
+                                        }}>
+                                            <span style={{
+                                                padding: '0.35rem 0.75rem',
+                                                borderRadius: '9999px',
+                                                background: 'rgba(212, 175, 55, 0.2)',
+                                                color: '#D4AF37',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 700,
+                                                textTransform: 'uppercase'
+                                            }}>
+                                                {request.status}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (window.confirm('Delete this request?')) {
+                                                        handleDeleteRequest(request.id);
+                                                    }
+                                                }}
+                                                style={{
+                                                    padding: '0.45rem 0.85rem',
+                                                    borderRadius: '0.6rem',
+                                                    border: '1px solid rgba(244, 63, 94, 0.4)',
+                                                    background: 'rgba(244, 63, 94, 0.12)',
+                                                    color: '#FCA5A5',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div style={{
+                                        display: 'flex',
+                                        gap: '1rem',
+                                        flexWrap: 'wrap',
+                                        color: '#A7ABB4',
+                                        fontSize: '0.8rem'
+                                    }}>
+                                        <span>
+                                            Submitted: {new Date(request.createdAt).toLocaleString()}
+                                        </span>
+                                        {request.processedAt && (
+                                            <span>
+                                                Processed: {new Date(request.processedAt).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    {request.reason && (
+                                        <div style={{
+                                            fontSize: '0.85rem',
+                                            color: '#F3F4F6',
+                                            background: 'rgba(167, 171, 180, 0.08)',
+                                            borderRadius: '0.6rem',
+                                            padding: '0.6rem 0.75rem',
+                                            border: '1px solid rgba(167, 171, 180, 0.12)'
+                                        }}>
+                                            {request.reason}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

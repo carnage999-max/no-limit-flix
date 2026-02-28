@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/db';
+import { getSessionUser } from '@/lib/auth-server';
 
 // Track watch history
 export async function POST(request: NextRequest) {
     try {
-        const { userId, videoId, watchedDuration, totalDuration, title, poster } = await request.json();
+        const sessionUser = await getSessionUser(request);
+        if (!sessionUser) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
 
-        if (!userId || !videoId) {
+        const { videoId, watchedDuration, totalDuration, title, poster } = await request.json();
+        const userId = sessionUser.id;
+
+        if (!videoId) {
             return NextResponse.json(
                 { error: 'Missing required fields' },
                 { status: 400 }
@@ -74,16 +79,17 @@ export async function POST(request: NextRequest) {
 // Get watch history for user
 export async function GET(request: NextRequest) {
     try {
+        const sessionUser = await getSessionUser(request);
+        const userId = sessionUser?.id || null;
         const searchParams = request.nextUrl.searchParams;
-        const userId = searchParams.get('userId');
         const page = parseInt(searchParams.get('page') || '1');
         const limit = parseInt(searchParams.get('limit') || '20');
         const search = searchParams.get('search') || '';
 
         if (!userId) {
             return NextResponse.json(
-                { error: 'Missing userId' },
-                { status: 400 }
+                { error: 'Unauthorized' },
+                { status: 401 }
             );
         }
 

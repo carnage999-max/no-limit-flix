@@ -81,6 +81,7 @@ model User {
   watchHistory      WatchHistory[]
   favorites         Favorite[]
   analyticsEvents   AnalyticsEvent[]
+  deletionRequests  AccountDeletionRequest[]
 
   @@index([email])
   @@index([username])
@@ -141,4 +142,21 @@ model AnalyticsEvent {
   @@index([userId])
   @@index([eventType])
   @@index([createdAt])
+}
+
+model AccountDeletionRequest {
+  id          String   @id @default(cuid())
+  userId      String?
+  email       String
+  reason      String?
+  status      String   @default("pending") // pending, processing, completed, rejected
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  processedAt DateTime?
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([email])
+  @@index([userId])
+  @@index([status])
 }

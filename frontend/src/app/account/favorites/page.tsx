@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, ArrowRight, Trash2, Heart } from 'lucide-react';
 import { CardViewToggle } from '@/components';
 import { useCardView } from '@/context/CardViewContext';
+import { useSession } from '@/context/SessionContext';
 
 interface Favorite {
     id: string;
@@ -32,13 +33,13 @@ interface Favorite {
 
 export default function FavoritesPage() {
     const router = useRouter();
-    const [userId, setUserId] = useState<string | null>(null);
     const [favorites, setFavorites] = useState<Favorite[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
     const { viewSize } = useCardView();
+    const { user, loading: sessionLoading } = useSession();
 
     const gridStyle = {
         display: 'grid',
@@ -54,24 +55,20 @@ export default function FavoritesPage() {
                 : 'grid-large-responsive';
 
     useEffect(() => {
-        const storedUserId = localStorage.getItem('userId');
-        if (!storedUserId) {
-            router.push('/auth');
+        if (sessionLoading) return;
+        if (!user) {
+            router.push('/auth?redirect=/account/favorites');
             return;
         }
-        setUserId(storedUserId);
-    }, [router]);
-
-    useEffect(() => {
-        if (userId) {
+        if (user?.id) {
             fetchFavorites();
         }
-    }, [userId, page]);
+    }, [user, page, sessionLoading]);
 
     const fetchFavorites = async () => {
         try {
             setLoading(true);
-            const res = await fetch(`/api/favorites?userId=${userId}&page=${page}&limit=20`);
+            const res = await fetch(`/api/favorites?page=${page}&limit=20`);
             if (res.ok) {
                 const data = await res.json();
                 setFavorites(data.favorites);
@@ -123,7 +120,6 @@ export default function FavoritesPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    userId,
                     videoId,
                     tmdbId,
                     action: 'remove'
@@ -138,7 +134,7 @@ export default function FavoritesPage() {
         }
     };
 
-    if (!userId) return null;
+    if (sessionLoading) return null;
 
     return (
         <main style={{
