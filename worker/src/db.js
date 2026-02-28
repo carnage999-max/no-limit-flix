@@ -137,6 +137,29 @@ module.exports = {
         );
         return result.rowCount || 0;
     },
+    updateVideoMetadata: async (id, payload) => {
+        const result = await pool.query(
+            `UPDATE "Video"
+             SET "thumbnailUrl" = COALESCE($1, "thumbnailUrl"),
+                 "tmdbId" = COALESCE($2, "tmdbId"),
+                 "description" = COALESCE($3, "description"),
+                 "releaseYear" = COALESCE($4, "releaseYear"),
+                 "genre" = COALESCE($5, "genre"),
+                 "rating" = COALESCE($6, "rating"),
+                 "updatedAt" = NOW()
+             WHERE "id" = $7`,
+            [
+                payload.thumbnailUrl || null,
+                payload.tmdbId || null,
+                payload.description || null,
+                payload.releaseYear || null,
+                payload.genre || null,
+                payload.rating || null,
+                id
+            ]
+        );
+        return result.rowCount || 0;
+    },
     findVideoByS3KeyPlayback: async (s3KeyPlayback) => {
         const result = await pool.query(
             'SELECT id, "archiveIdentifier" FROM "Video" WHERE "s3KeyPlayback" = $1 LIMIT 1',

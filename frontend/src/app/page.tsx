@@ -88,15 +88,16 @@ export default function HomePage() {
 
     const cardGridStyle: React.CSSProperties = {
         display: 'grid',
-        gridTemplateColumns:
-            viewSize === 'compact'
-                ? 'repeat(auto-fill, minmax(140px, 1fr))'
-                : viewSize === 'standard'
-                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
-                    : 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
         width: '100%',
     };
+
+    const gridClassName =
+        viewSize === 'compact'
+            ? 'grid-compact-responsive'
+            : viewSize === 'standard'
+                ? 'grid-standard-responsive'
+                : 'grid-large-responsive';
 
     const cardTileStyle: React.CSSProperties =
         viewSize === 'compact'
@@ -775,7 +776,7 @@ export default function HomePage() {
                                                 </span>
                                             </a>
                                         </div>
-                                        <div style={cardGridStyle}>
+                                        <div style={cardGridStyle} className={gridClassName}>
                                             {hostedMovies.map((movie) => (
                                                 <div
                                                     key={movie.id}
@@ -841,7 +842,7 @@ export default function HomePage() {
                                                 </span>
                                             </a>
                                         </div>
-                                        <div style={{ ...cardGridStyle, marginBottom: '3rem' }}>
+                                        <div style={{ ...cardGridStyle, marginBottom: '3rem' }} className={gridClassName}>
                                             {hostedSeries.map((series) => (
                                                 <div
                                                     key={series.id}

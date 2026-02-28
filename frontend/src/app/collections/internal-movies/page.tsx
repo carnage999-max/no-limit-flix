@@ -4,13 +4,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CardViewToggle } from '@/components';
 import { useCardView } from '@/context/CardViewContext';
+import { ArrowUp } from 'lucide-react';
 
 interface MovieItem {
     id: string;
     title: string;
     thumbnailUrl?: string;
     genre?: string;
+    description?: string;
     duration?: number;
+    releaseYear?: number;
+    rating?: string;
     tmdbId?: string;
     sourceProvider?: string;
     sourcePageUrl?: string;
@@ -21,18 +25,20 @@ interface MovieItem {
 export default function InternalMoviesPage() {
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [showScrollTop, setShowScrollTop] = useState(false);
     const { viewSize } = useCardView();
 
     const gridStyle = {
         display: 'grid',
-        gridTemplateColumns:
-            viewSize === 'compact'
-                ? 'repeat(auto-fill, minmax(140px, 1fr))'
-                : viewSize === 'standard'
-                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
-                    : 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
     };
+
+    const gridClassName =
+        viewSize === 'compact'
+            ? 'grid-compact-responsive'
+            : viewSize === 'standard'
+                ? 'grid-standard-responsive'
+                : 'grid-large-responsive';
 
     const getMovieLink = (movie: MovieItem) => {
         // Encode movie data to pass to title page
@@ -40,10 +46,10 @@ export default function InternalMoviesPage() {
             id: movie.id,
             title: movie.title,
             poster: movie.thumbnailUrl,
-            year: new Date().getFullYear(),
+            year: movie.releaseYear || new Date().getFullYear(),
             runtime: movie.duration,
             genres: [movie.genre || 'Movie'],
-            explanation: '',
+            explanation: movie.description || '',
             playable: true,
             assetId: movie.id,
             tmdbId: movie.tmdbId,
@@ -67,7 +73,10 @@ export default function InternalMoviesPage() {
                         title: video.title,
                         thumbnailUrl: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
                         genre: video.genre,
+                        description: video.description,
                         duration: Math.floor((video.duration || 0) / 60),
+                        releaseYear: video.releaseYear,
+                        rating: video.rating,
                         tmdbId: video.tmdbId || video.tmdb_id,
                         sourceProvider: video.sourceProvider,
                         sourcePageUrl: video.sourcePageUrl,
@@ -83,6 +92,15 @@ export default function InternalMoviesPage() {
             }
         };
         fetchMovies();
+    }, []);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setShowScrollTop(window.scrollY > 600);
+        };
+        handleScroll();
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
     return (
@@ -111,7 +129,7 @@ export default function InternalMoviesPage() {
                     </div>
 
                     {loading ? (
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {[...Array(8)].map((_, i) => (
                                 <div key={i} style={{
                                     aspectRatio: '2/3',
@@ -122,7 +140,7 @@ export default function InternalMoviesPage() {
                             ))}
                         </div>
                     ) : movies.length > 0 ? (
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {movies.map((movie) => (
                                 <Link
                                     key={movie.id}
@@ -184,7 +202,7 @@ export default function InternalMoviesPage() {
                                                 fontSize: '0.75rem',
                                                 color: '#A7ABB4'
                                             }}>
-                                                {movie.duration ? `${movie.duration}m` : ''}
+                                                {movie.releaseYear || '—'} {movie.duration ? `· ${movie.duration}m` : ''}
                                             </p>
                                         </div>
                                     </div>
@@ -197,6 +215,31 @@ export default function InternalMoviesPage() {
                         </div>
                     )}
                 </div>
+                {showScrollTop && (
+                    <button
+                        type="button"
+                        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                        style={{
+                            position: 'fixed',
+                            right: '1.5rem',
+                            bottom: '7rem',
+                            width: '3rem',
+                            height: '3rem',
+                            borderRadius: '999px',
+                            border: '1px solid rgba(212, 175, 55, 0.4)',
+                            background: 'rgba(11, 11, 13, 0.85)',
+                            color: '#D4AF37',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
+                            zIndex: 40
+                        }}
+                    >
+                        <ArrowUp className="w-4 h-4" />
+                    </button>
+                )}
             </main>
     );
 }

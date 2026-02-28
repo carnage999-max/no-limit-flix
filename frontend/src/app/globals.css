@@ -358,18 +358,43 @@ a:focus-visible {
    RESPONSIVE GRID LAYOUTS
    ============================================ */
 
-/* Desktop breakpoint - increase columns for smaller cards */
-@media (min-width: 768px) {
+/* Base layouts (mobile) */
+.grid-compact-responsive {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.grid-standard-responsive {
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+}
+
+.grid-large-responsive {
+  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  justify-items: center;
+}
+
+.grid-large-responsive > * {
+  max-width: 320px;
+  width: 100%;
+  justify-self: center;
+}
+
+@media (min-width: 640px) {
   .grid-compact-responsive {
-    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-  }
-  
-  .grid-standard-responsive {
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
-  }
-  
-  .grid-large-responsive {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .grid-standard-responsive {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-compact-responsive {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .grid-standard-responsive {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 

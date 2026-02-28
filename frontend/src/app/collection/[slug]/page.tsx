@@ -82,14 +82,15 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
 
     const gridStyle = {
         display: 'grid',
-        gridTemplateColumns:
-            viewSize === 'compact'
-                ? 'repeat(auto-fill, minmax(140px, 1fr))'
-                : viewSize === 'standard'
-                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
-                    : 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
     };
+
+    const gridClassName =
+        viewSize === 'compact'
+            ? 'grid-compact-responsive'
+            : viewSize === 'standard'
+                ? 'grid-standard-responsive'
+                : 'grid-large-responsive';
 
     // Filters
     const [lengthFilter, setLengthFilter] = useState<FilterLength | null>(null);
@@ -238,11 +239,11 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
             <div style={{ padding: '4rem 2rem' }}>
                 <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
                     {loading ? (
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {Array(12).fill(0).map((_, i) => <TileSkeleton key={i} />)}
                         </div>
                     ) : filteredMovies.length > 0 ? (
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {filteredMovies.map(movie => <TitleTile key={movie.id} movie={movie} />)}
                         </div>
                     ) : (

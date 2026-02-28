@@ -10,7 +10,7 @@ const {
     inferMimeType
 } = require('./internet-archive');
 const { findBestPoster, resolveOmdbDetails } = require('./catalog');
-const { upsertVideo, findVideoByS3KeyPlayback, pool, updateVideoPoster } = require('./db');
+const { upsertVideo, findVideoByS3KeyPlayback, pool, updateVideoPoster, updateVideoMetadata } = require('./db');
 const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -470,13 +470,30 @@ app.post('/refresh-posters', async (req, res) => {
                         const derived = deriveTitleFromIdentifiers(row.archiveIdentifier, row.s3KeyPlayback);
                         if (derived) title = derived;
                     }
-                    const posterMatch = await findBestPoster({
-                        title,
-                        year: row.releaseYear,
-                        type: row.type === 'series' ? 'series' : 'movie'
-                    });
+                    const contentType = row.type === 'series' ? 'series' : 'movie';
+                    const omdbDetails = await resolveOmdbDetails({ title, type: contentType });
+                    const omdbPosterUrl = omdbDetails?.imdbId
+                        ? `https://img.omdbapi.com/?i=${encodeURIComponent(omdbDetails.imdbId)}&h=600&apikey=${encodeURIComponent(process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '')}`
+                        : omdbDetails?.poster;
+                    const posterMatch = omdbPosterUrl
+                        ? { posterUrl: omdbPosterUrl, tmdbId: null }
+                        : await findBestPoster({
+                            title,
+                            year: null,
+                            type: contentType
+                        });
 
-                    if (!posterMatch) {
+                    const omdbYear = parseYear(omdbDetails?.year);
+                    const payload = {
+                        thumbnailUrl: posterMatch?.posterUrl || null,
+                        tmdbId: posterMatch?.tmdbId || null,
+                        description: omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null,
+                        releaseYear: omdbYear || null,
+                        genre: omdbDetails?.genre || null,
+                        rating: omdbDetails?.rated || null
+                    };
+
+                    if (!posterMatch && !omdbDetails) {
                         result.status = 'skipped';
                         results.push(result);
                         if (job) {
@@ -487,7 +504,7 @@ app.post('/refresh-posters', async (req, res) => {
                         continue;
                     }
 
-                    await updateVideoPoster(row.id, posterMatch.posterUrl, posterMatch.tmdbId);
+                    await updateVideoMetadata(row.id, payload);
                     result.status = 'refreshed';
                     results.push(result);
                     if (job) {

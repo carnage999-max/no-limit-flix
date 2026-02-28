@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { Heart } from 'lucide-react';
 import type { MoviePick } from '@/types';
 import { useFavorites } from '@/context/FavoritesContext';
+import { useCardView } from '@/context/CardViewContext';
 import { useToast } from './Toast';
 
 interface TitleTileProps {
@@ -14,6 +15,7 @@ interface TitleTileProps {
 export default function TitleTile({ movie }: TitleTileProps) {
     const { isFavorite, toggleFavorite } = useFavorites();
     const { showToast } = useToast();
+    const { viewSize } = useCardView();
     const [isFav, setIsFav] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [userId, setUserId] = useState<string | null>(null);
@@ -86,10 +88,13 @@ export default function TitleTile({ movie }: TitleTileProps) {
     return (
         <Link
             href={getHref()}
-            className="block transition-all duration-300"
+            className="title-tile block transition-all duration-300"
             style={{
                 textDecoration: 'none',
                 transform: 'translateY(0)',
+                width: '100%',
+                maxWidth: viewSize === 'large' ? '320px' : undefined,
+                margin: viewSize === 'large' ? '0 auto' : undefined,
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-8px)';

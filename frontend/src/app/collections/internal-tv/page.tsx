@@ -19,14 +19,15 @@ export default function InternalTVPage() {
 
     const gridStyle = {
         display: 'grid',
-        gridTemplateColumns:
-            viewSize === 'compact'
-                ? 'repeat(auto-fill, minmax(140px, 1fr))'
-                : viewSize === 'standard'
-                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
-                    : 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
     };
+
+    const gridClassName =
+        viewSize === 'compact'
+            ? 'grid-compact-responsive'
+            : viewSize === 'standard'
+                ? 'grid-standard-responsive'
+                : 'grid-large-responsive';
 
     useEffect(() => {
         const fetchSeries = async () => {
@@ -71,7 +72,7 @@ export default function InternalTVPage() {
                     </div>
 
                     {loading ? (
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {[...Array(8)].map((_, i) => (
                                 <div key={i} style={{
                                     aspectRatio: '2/3',
@@ -82,7 +83,7 @@ export default function InternalTVPage() {
                             ))}
                         </div>
                     ) : series.length > 0 ? (
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {series.map((show) => (
                                 <Link
                                     key={show.seriesTitle}

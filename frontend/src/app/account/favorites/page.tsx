@@ -42,15 +42,16 @@ export default function FavoritesPage() {
 
     const gridStyle = {
         display: 'grid',
-        gridTemplateColumns:
-            viewSize === 'compact'
-                ? 'repeat(auto-fill, minmax(140px, 1fr))'
-                : viewSize === 'standard'
-                    ? 'repeat(auto-fill, minmax(180px, 1fr))'
-                    : 'repeat(auto-fill, minmax(220px, 1fr))',
         gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
         marginTop: '2rem',
     };
+
+    const gridClassName =
+        viewSize === 'compact'
+            ? 'grid-compact-responsive'
+            : viewSize === 'standard'
+                ? 'grid-standard-responsive'
+                : 'grid-large-responsive';
 
     useEffect(() => {
         const storedUserId = localStorage.getItem('userId');
@@ -207,7 +208,7 @@ export default function FavoritesPage() {
                     </div>
                 ) : favorites.length > 0 ? (
                     <>
-                        <div style={gridStyle}>
+                        <div style={gridStyle} className={gridClassName}>
                             {favorites.map((favorite) => {
                                 const displayTitle = favorite.video?.title || favorite.videoTitle || 'Untitled';
                                 const displayPoster = favorite.video?.thumbnailUrl || favorite.videoPoster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
