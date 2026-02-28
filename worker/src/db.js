@@ -39,6 +39,7 @@ async function upsertVideo(payload) {
             "episodeNumber",
             "fileSize",
             "mimeType",
+            "tmdbId",
             "format",
             "sourceType",
             "sourceProvider",
@@ -52,7 +53,7 @@ async function upsertVideo(payload) {
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-            $21, $22, $23, $24, $25, $26, $27, $28, $29::jsonb, $30, $31
+            $21, $22, $23, $24, $25, $26, $27, $28, $29, $30::jsonb, $31, $32
         )
         ON CONFLICT ("archiveIdentifier") DO UPDATE SET
             "title" = EXCLUDED."title",
@@ -75,6 +76,7 @@ async function upsertVideo(payload) {
             "episodeNumber" = EXCLUDED."episodeNumber",
             "fileSize" = EXCLUDED."fileSize",
             "mimeType" = EXCLUDED."mimeType",
+            "tmdbId" = EXCLUDED."tmdbId",
             "format" = EXCLUDED."format",
             "sourceType" = EXCLUDED."sourceType",
             "sourceProvider" = EXCLUDED."sourceProvider",
@@ -108,6 +110,7 @@ async function upsertVideo(payload) {
         payload.episodeNumber,
         payload.fileSize,
         payload.mimeType,
+        payload.tmdbId,
         payload.format,
         payload.sourceType,
         payload.sourceProvider,
@@ -127,6 +130,13 @@ async function upsertVideo(payload) {
 module.exports = {
     upsertVideo,
     pool,
+    updateVideoPoster: async (id, thumbnailUrl, tmdbId) => {
+        const result = await pool.query(
+            'UPDATE "Video" SET "thumbnailUrl" = $1, "tmdbId" = COALESCE($2, "tmdbId"), "updatedAt" = NOW() WHERE "id" = $3',
+            [thumbnailUrl, tmdbId, id]
+        );
+        return result.rowCount || 0;
+    },
     findVideoByS3KeyPlayback: async (s3KeyPlayback) => {
         const result = await pool.query(
             'SELECT id, "archiveIdentifier" FROM "Video" WHERE "s3KeyPlayback" = $1 LIMIT 1',

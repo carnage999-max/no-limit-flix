@@ -9,7 +9,8 @@ const {
     buildArchiveDownloadUrl,
     inferMimeType
 } = require('./internet-archive');
-const { upsertVideo, findVideoByS3KeyPlayback } = require('./db');
+const { findCatalogPoster } = require('./catalog');
+const { upsertVideo, findVideoByS3KeyPlayback, pool, updateVideoPoster } = require('./db');
 const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -60,6 +61,24 @@ const isExcludedTitle = (value) => {
     if (!value) return false;
     const lower = value.toLowerCase();
     return EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
+
+const fetchVideosNeedingPoster = async (limit) => {
+    const result = await pool.query(
+        `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl"
+         FROM "Video"
+         WHERE "status" = 'completed'
+           AND "sourceProvider" = 'internet_archive'
+           AND (
+               "thumbnailUrl" IS NULL
+               OR "thumbnailUrl" = $1
+               OR "thumbnailUrl" LIKE 'https://archive.org/services/img/%'
+           )
+         ORDER BY "updatedAt" DESC
+         LIMIT $2`,
+        [DEFAULT_POSTER_URL, limit]
+    );
+    return result.rows || [];
 };
 
 const stringifyMetadata = (value) => {
@@ -278,7 +297,15 @@ app.post('/reconcile', async (req, res) => {
                     const height = fileMeta.height ? Number(fileMeta.height) : null;
                     const resolution = height ? `${height}p` : null;
                     const mimeType = normalizeMimeType(fileMeta) || inferMimeType(fileMeta) || 'video/mp4';
-                    const thumbnailUrl = findThumbnailForFile(files, bundleIdentifier, fileName) || DEFAULT_POSTER_URL;
+                    const posterMatch = await findCatalogPoster({
+                        title,
+                        year: releaseYear,
+                        type: 'movie'
+                    });
+                    const tmdbId = posterMatch?.tmdbId || null;
+                    const thumbnailUrl = posterMatch?.posterUrl
+                        || findThumbnailForFile(files, bundleIdentifier, fileName)
+                        || DEFAULT_POSTER_URL;
                     const archiveIdentifier = buildArchiveIdentifier(bundleIdentifier, fileName, bundleIdentifier);
 
                     await upsertVideo({
@@ -303,6 +330,7 @@ app.post('/reconcile', async (req, res) => {
                         fileSize,
                         mimeType,
                         format: fileMeta.format || null,
+                        tmdbId,
                         sourceType: 'external_legal',
                         sourceProvider: 'internet_archive',
                         sourcePageUrl: `https://archive.org/details/${bundleIdentifier}`,
@@ -389,6 +417,117 @@ app.post('/reconcile', async (req, res) => {
     } catch (error) {
         console.error('Worker reconcile error:', error);
         return res.status(500).json({ error: 'Worker reconcile failed', details: error.message });
+    }
+});
+
+app.post('/refresh-posters', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const limit = Math.min(Math.max(Number(req.body?.limit) || 100, 1), 500);
+        const asyncMode = req.body?.async !== false;
+
+        const runRefresh = async (job) => {
+            const rows = await fetchVideosNeedingPoster(limit);
+            if (job) {
+                job.total = rows.length;
+            }
+
+            const results = [];
+
+            for (const row of rows) {
+                const result = { id: row.id, title: row.title, status: 'failed' };
+                try {
+                    const title = row.type === 'series'
+                        ? (row.seriesTitle || row.title)
+                        : row.title;
+                    const posterMatch = await findCatalogPoster({
+                        title,
+                        year: row.releaseYear,
+                        type: row.type === 'series' ? 'series' : 'movie'
+                    });
+
+                    if (!posterMatch) {
+                        result.status = 'skipped';
+                        results.push(result);
+                        if (job) {
+                            job.processed += 1;
+                            job.skipped += 1;
+                            job.lastUpdatedAt = Date.now();
+                        }
+                        continue;
+                    }
+
+                    await updateVideoPoster(row.id, posterMatch.posterUrl, posterMatch.tmdbId);
+                    result.status = 'refreshed';
+                    results.push(result);
+                    if (job) {
+                        job.processed += 1;
+                        job.refreshed += 1;
+                        job.lastUpdatedAt = Date.now();
+                    }
+                } catch (error) {
+                    result.status = 'failed';
+                    result.reason = error?.message || 'Poster refresh failed';
+                    results.push(result);
+                    if (job) {
+                        job.processed += 1;
+                        job.failed += 1;
+                        job.lastUpdatedAt = Date.now();
+                    }
+                }
+            }
+
+            const summary = {
+                requested: rows.length,
+                refreshed: results.filter((r) => r.status === 'refreshed').length,
+                skipped: results.filter((r) => r.status === 'skipped').length,
+                failed: results.filter((r) => r.status === 'failed').length
+            };
+
+            return { summary, results };
+        };
+
+        if (asyncMode) {
+            const jobId = cuid();
+            const job = {
+                id: jobId,
+                type: 'poster_refresh',
+                status: 'running',
+                total: limit,
+                processed: 0,
+                refreshed: 0,
+                skipped: 0,
+                failed: 0,
+                startedAt: Date.now(),
+                lastUpdatedAt: Date.now(),
+                finishedAt: null
+            };
+            jobs.set(jobId, job);
+
+            runRefresh(job)
+                .then((result) => {
+                    job.status = 'completed';
+                    job.finishedAt = Date.now();
+                    job.summary = result.summary;
+                })
+                .catch((error) => {
+                    job.status = 'failed';
+                    job.finishedAt = Date.now();
+                    job.error = error.message;
+                });
+
+            return res.json({ success: true, jobId, summary: job.summary || null });
+        }
+
+        const result = await runRefresh(null);
+        return res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Worker refresh posters error:', error);
+        return res.status(500).json({ error: 'Worker poster refresh failed', details: error.message });
     }
 });
 
@@ -526,9 +665,18 @@ app.post('/import', async (req, res) => {
                     ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
                     : null;
 
-                const thumbnailUrl = isBundleItem
-                    ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
-                    : `https://archive.org/services/img/${identifier}`;
+                const posterTitle = contentType === 'series' ? (seriesTitle || title) : title;
+                const posterMatch = await findCatalogPoster({
+                    title: posterTitle,
+                    year: releaseYear,
+                    type: contentType
+                });
+                const tmdbId = posterMatch?.tmdbId || null;
+                const thumbnailUrl = posterMatch?.posterUrl || (
+                    isBundleItem
+                        ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
+                        : `https://archive.org/services/img/${identifier}`
+                );
 
                 let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier);
                 const existingByKey = await findVideoByS3KeyPlayback(s3KeyPlayback);
@@ -558,6 +706,7 @@ app.post('/import', async (req, res) => {
                     fileSize,
                     mimeType,
                     format: bestFile.format || null,
+                    tmdbId,
                     sourceType: 'external_legal',
                     sourceProvider: 'internet_archive',
                     sourcePageUrl,

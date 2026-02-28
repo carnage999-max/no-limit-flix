@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { fetchFromTMDB } from '@/lib/tmdb';
 import {
     ARCHIVE_PRESETS,
     DEFAULT_ARCHIVE_PRESET_ID,
@@ -211,6 +212,76 @@ const parseSeasonEpisode = (value?: string) => {
         return { season: null, episode: Number(match[1]) };
     }
     return { season: null, episode: null };
+};
+
+const stripYearFromTitle = (value?: string) => {
+    if (!value) return '';
+    return value.replace(/\((19|20)\d{2}\)/g, '').replace(/\b(19|20)\d{2}\b/g, '');
+};
+
+const normalizeTitle = (value?: string) => {
+    if (!value) return '';
+    const cleaned = stripYearFromTitle(value)
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+    return cleaned.replace(/^(the|a|an)\s+/i, '');
+};
+
+const parseTmdbYear = (value?: string) => {
+    if (!value) return null;
+    const match = value.match(/(19|20)\d{2}/);
+    return match ? Number(match[0]) : null;
+};
+
+const scoreCandidate = (candidate: string, target: string, candidateYear: number | null, targetYear: number | null) => {
+    if (!candidate || !target) return 0;
+    let score = 0;
+    if (candidate === target) score += 5;
+    if (candidate.startsWith(target) || target.startsWith(candidate)) score += 3;
+    if (candidate.includes(target) || target.includes(candidate)) score += 2;
+    if (targetYear && candidateYear) {
+        if (candidateYear === targetYear) score += 2;
+        if (Math.abs(candidateYear - targetYear) === 1) score += 1;
+    }
+    return score;
+};
+
+const findCatalogPoster = async (
+    title: string | null,
+    year: number | null,
+    type: 'movie' | 'series'
+) => {
+    if (!title) return null;
+    try {
+        const endpoint = type === 'series' ? '/search/tv' : '/search/movie';
+        const params: Record<string, string> = { query: title };
+        if (year) {
+            params[type === 'series' ? 'first_air_date_year' : 'year'] = String(year);
+        }
+        const data = await fetchFromTMDB(endpoint, params);
+        const results = data?.results || [];
+        if (!results.length) return null;
+
+        const target = normalizeTitle(title);
+        const scored = results.map((item: any) => {
+            const candidateTitle = item?.title || item?.name || '';
+            const candidateYear = parseTmdbYear(item?.release_date || item?.first_air_date);
+            const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
+            return { item, score };
+        });
+        scored.sort((a: any, b: any) => b.score - a.score);
+        const best = scored[0];
+        if (!best || best.score < 3 || !best.item?.poster_path) return null;
+
+        return {
+            posterUrl: `https://image.tmdb.org/t/p/w500${best.item.poster_path}`,
+            tmdbId: String(best.item.id)
+        };
+    } catch (error) {
+        return null;
+    }
 };
 
 export async function POST(request: NextRequest) {
@@ -455,9 +526,14 @@ export async function POST(request: NextRequest) {
                     ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
                     : null;
 
-                const thumbnailUrl = isBundleItem
-                    ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
-                    : `https://archive.org/services/img/${identifier}`;
+                const posterTitle = contentType === 'series' ? (seriesTitle || title) : title;
+                const posterMatch = await findCatalogPoster(posterTitle, releaseYear, contentType);
+                const tmdbId = posterMatch?.tmdbId || null;
+                const thumbnailUrl = posterMatch?.posterUrl || (
+                    isBundleItem
+                        ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
+                        : `https://archive.org/services/img/${identifier}`
+                );
                 const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier);
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
@@ -489,6 +565,7 @@ export async function POST(request: NextRequest) {
                             episodeNumber,
                             fileSize,
                             mimeType,
+                            tmdbId,
                             format: bestFile.format || null,
                             sourceType: 'external_legal',
                             sourceProvider: 'internet_archive',
@@ -517,6 +594,7 @@ export async function POST(request: NextRequest) {
                             episodeNumber,
                             fileSize,
                             mimeType,
+                            tmdbId,
                             format: bestFile.format || null,
                             sourceType: 'external_legal',
                             sourceProvider: 'internet_archive',

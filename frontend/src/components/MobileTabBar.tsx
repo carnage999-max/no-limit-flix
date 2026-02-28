@@ -22,7 +22,7 @@ const tabs = [
     {
         key: 'search',
         label: 'Search',
-        href: '/?tab=discovery&mode=title',
+        href: '/search',
         icon: Search,
     },
     {
@@ -64,7 +64,7 @@ export default function MobileTabBar() {
         const updateSearchTab = () => {
             if (typeof window === 'undefined') return;
             const params = new URLSearchParams(window.location.search);
-            setIsSearchTab(pathname === '/' && params.get('tab') === 'discovery');
+            setIsSearchTab(pathname === '/search' || (pathname === '/' && params.get('tab') === 'discovery'));
         };
 
         if (typeof window === 'undefined') return;

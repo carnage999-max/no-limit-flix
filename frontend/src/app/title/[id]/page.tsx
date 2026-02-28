@@ -317,8 +317,8 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 </div>
                             )}
 
-                            {/* === WATCH ON APP CTA (hide if already playing) === */}
-                            {!(movie.playable && movie.cloudfrontUrl) && (
+                            {/* === WATCH ON APP CTA (internal library only) === */}
+                            {movie.playable && movie.cloudfrontUrl && (
                             <div style={{
                                 padding: '2rem',
                                 borderRadius: '1.5rem',

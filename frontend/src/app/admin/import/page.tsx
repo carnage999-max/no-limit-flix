@@ -37,6 +37,7 @@ export default function AdminImportPage() {
     const [jobId, setJobId] = useState<string | null>(null);
     const [jobStatus, setJobStatus] = useState<any>(null);
     const [reconcileLoading, setReconcileLoading] = useState(false);
+    const [refreshLoading, setRefreshLoading] = useState(false);
 
     const presetOptions = useMemo(() => ARCHIVE_PRESETS, []);
 
@@ -180,6 +181,34 @@ export default function AdminImportPage() {
             setError(err.message || 'Reconcile failed');
         } finally {
             setReconcileLoading(false);
+        }
+    };
+
+    const handleRefreshPosters = async () => {
+        setRefreshLoading(true);
+        setError('');
+        setSummary(null);
+        setResults([]);
+
+        try {
+            const res = await fetch('/api/admin/archive/posters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || 'Poster refresh failed');
+            }
+
+            setJobId(data.jobId || null);
+            setJobStatus(null);
+            setSummary(data.summary || null);
+        } catch (err: any) {
+            setError(err.message || 'Poster refresh failed');
+        } finally {
+            setRefreshLoading(false);
         }
     };
 
@@ -528,6 +557,24 @@ export default function AdminImportPage() {
                     >
                         {reconcileLoading ? 'Reconciling...' : 'Reconcile S3'}
                     </button>
+                    <button
+                        type="button"
+                        onClick={handleRefreshPosters}
+                        disabled={refreshLoading}
+                        style={{
+                            padding: '0.75rem 1rem',
+                            borderRadius: '0.75rem',
+                            background: 'rgba(14, 165, 233, 0.12)',
+                            border: '1px solid rgba(14, 165, 233, 0.35)',
+                            color: '#38BDF8',
+                            fontWeight: 600,
+                            fontSize: '0.95rem',
+                            cursor: refreshLoading ? 'not-allowed' : 'pointer',
+                            opacity: refreshLoading ? 0.6 : 1
+                        }}
+                    >
+                        {refreshLoading ? 'Refreshing...' : 'Refresh Posters'}
+                    </button>
                     {error && (
                         <div style={{ color: '#F87171', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <AlertCircle className="w-4 h-4" />
@@ -544,9 +591,10 @@ export default function AdminImportPage() {
                         { label: 'Ready', value: summary.ready, color: '#D4AF37' },
                         { label: 'Imported', value: summary.imported, color: '#22C55E' },
                         { label: 'Updated', value: summary.updated, color: '#38BDF8' },
+                        { label: 'Refreshed', value: summary.refreshed, color: '#38BDF8' },
                         { label: 'Skipped', value: summary.skipped, color: '#FACC15' },
                         { label: 'Failed', value: summary.failed, color: '#F87171' },
-                        ].map((item) => (
+                        ].filter((item) => item.value !== undefined).map((item) => (
                         <div key={item.label} style={{
                             padding: '0.75rem 1rem',
                             background: 'rgba(11, 11, 13, 0.6)',
@@ -601,6 +649,7 @@ export default function AdminImportPage() {
                             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', color: '#A7ABB4', fontSize: '0.75rem' }}>
                                 <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? summary.requested}</span>
                                 {jobStatus?.reconciled !== undefined && <span>Reconciled: {jobStatus.reconciled}</span>}
+                                {jobStatus?.refreshed !== undefined && <span>Refreshed: {jobStatus.refreshed}</span>}
                                 {jobStatus?.existing !== undefined && <span>Existing: {jobStatus.existing}</span>}
                                 <span>Imported: {jobStatus?.imported ?? 0}</span>
                                 <span>Updated: {jobStatus?.updated ?? 0}</span>
