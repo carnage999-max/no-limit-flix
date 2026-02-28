@@ -393,15 +393,12 @@ const findWikipediaPoster = async (title: string | null, year: number | null, ty
 };
 
 const findBestPoster = async (title: string | null, year: number | null, type: 'movie' | 'series') => {
-    let poster = await findCatalogPoster(title, year, type, { minScore: 2 });
-    if (!poster && year) {
-        poster = await findCatalogPoster(title, year, type, { minScore: 2, ignoreYear: true });
+    let poster = await findCatalogPoster(title, null, type, { minScore: 2, ignoreYear: true });
+    if (!poster) {
+        poster = await findOmdbPoster(title, null, type);
     }
     if (!poster) {
-        poster = await findOmdbPoster(title, year, type);
-    }
-    if (!poster) {
-        poster = await findWikipediaPoster(title, year, type);
+        poster = await findWikipediaPoster(title, null, type);
     }
     return poster;
 };

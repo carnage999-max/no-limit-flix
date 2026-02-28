@@ -162,15 +162,12 @@ async function findWikipediaPoster({ title, year, type }) {
 }
 
 async function findBestPoster({ title, year, type }) {
-    let poster = await findCatalogPoster({ title, year, type, minScore: 2 });
-    if (!poster && year) {
-        poster = await findCatalogPoster({ title, year, type, minScore: 2, ignoreYear: true });
+    let poster = await findCatalogPoster({ title, year: null, type, minScore: 2, ignoreYear: true });
+    if (!poster) {
+        poster = await findOmdbPoster({ title, year: null, type });
     }
     if (!poster) {
-        poster = await findOmdbPoster({ title, year, type });
-    }
-    if (!poster) {
-        poster = await findWikipediaPoster({ title, year, type });
+        poster = await findWikipediaPoster({ title, year: null, type });
     }
     return poster;
 }
