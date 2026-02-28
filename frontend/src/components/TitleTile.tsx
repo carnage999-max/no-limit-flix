@@ -213,6 +213,22 @@ export default function TitleTile({ movie }: TitleTileProps) {
                     >
                         {movie.year} · {movie.runtime} min
                     </p>
+                    {movie.playable && movie.explanation && (
+                        <p
+                            style={{
+                                fontSize: 'clamp(0.7rem, 1.2vw, 0.8rem)',
+                                color: '#8C9099',
+                                marginTop: '0.4rem',
+                                lineHeight: 1.4,
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {movie.explanation}
+                        </p>
+                    )}
                 </div>
             </div>
         </Link>

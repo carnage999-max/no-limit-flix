@@ -204,6 +204,20 @@ export default function InternalMoviesPage() {
                                             }}>
                                                 {movie.releaseYear || '—'} {movie.duration ? `· ${movie.duration}m` : ''}
                                             </p>
+                                            {movie.description && (
+                                                <p style={{
+                                                    fontSize: '0.7rem',
+                                                    color: '#8C9099',
+                                                    marginTop: '0.4rem',
+                                                    lineHeight: 1.4,
+                                                    display: '-webkit-box',
+                                                    WebkitLineClamp: 2,
+                                                    WebkitBoxOrient: 'vertical',
+                                                    overflow: 'hidden'
+                                                }}>
+                                                    {movie.description}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </Link>

@@ -193,7 +193,7 @@ export default function FavoritesPage() {
                 padding: '0 2rem'
             }}>
                 {loading ? (
-                    <div style={gridStyle}>
+                    <div style={gridStyle} className={gridClassName}>
                         {[...Array(8)].map((_, i) => (
                             <div
                                 key={i}

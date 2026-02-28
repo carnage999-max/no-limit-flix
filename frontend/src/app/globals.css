@@ -360,11 +360,11 @@ a:focus-visible {
 
 /* Base layouts (mobile) */
 .grid-compact-responsive {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
 }
 
 .grid-standard-responsive {
-  grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
 
 .grid-large-responsive {
@@ -380,7 +380,7 @@ a:focus-visible {
 
 @media (min-width: 640px) {
   .grid-compact-responsive {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
   }
 
   .grid-standard-responsive {
@@ -395,6 +395,12 @@ a:focus-visible {
 
   .grid-standard-responsive {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .grid-compact-responsive {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 

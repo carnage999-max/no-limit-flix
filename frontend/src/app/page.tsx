@@ -1387,11 +1387,6 @@ export default function HomePage() {
                             <div
                                 style={{
                                     display: 'grid',
-                                    gridTemplateColumns: viewSize === 'compact'
-                                        ? 'repeat(3, minmax(0, 1fr))'
-                                        : viewSize === 'standard'
-                                            ? 'repeat(2, minmax(0, 1fr))'
-                                            : '1fr',
                                     gap: viewSize === 'compact' ? '0.75rem' : '1.5rem',
                                     width: '100%',
                                     overflow: 'hidden'
