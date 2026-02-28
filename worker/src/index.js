@@ -9,7 +9,7 @@ const {
     buildArchiveDownloadUrl,
     inferMimeType
 } = require('./internet-archive');
-const { findBestPoster } = require('./catalog');
+const { findBestPoster, resolveOmdbDetails } = require('./catalog');
 const { upsertVideo, findVideoByS3KeyPlayback, pool, updateVideoPoster } = require('./db');
 const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
 
@@ -68,15 +68,10 @@ const fetchVideosNeedingPoster = async (limit) => {
         `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl", "archiveIdentifier", "s3KeyPlayback"
          FROM "Video"
          WHERE "status" = 'completed'
-           AND "sourceProvider" = 'internet_archive'
-           AND (
-               "thumbnailUrl" IS NULL
-               OR "thumbnailUrl" = $1
-               OR "thumbnailUrl" LIKE 'https://archive.org/services/img/%'
-           )
+           AND "type" = 'movie'
          ORDER BY "updatedAt" DESC
-         LIMIT $2`,
-        [DEFAULT_POSTER_URL, limit]
+         LIMIT $1`,
+        [limit]
     );
     return result.rows || [];
 };
@@ -308,19 +303,27 @@ app.post('/reconcile', async (req, res) => {
                     }
 
                     let title = isBundleGeneric ? deriveTitleFromFileName(fileName) : baseTitle;
-                    const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
+                    const omdbDetails = await resolveOmdbDetails({ title, type: 'movie' });
+                    const omdbYear = parseYear(omdbDetails?.year);
+                    const releaseYear = omdbYear
+                        ?? parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
                         ?? parseYear(fileName);
-                    const genre = isBundleGeneric ? null : normalizeGenre(metadata);
+                    const genre = omdbDetails?.genre || (isBundleGeneric ? null : normalizeGenre(metadata));
                     const duration = parseDurationSeconds(fileMeta.length) || null;
                     const fileSize = fileMeta.size ? BigInt(fileMeta.size).toString() : null;
                     const height = fileMeta.height ? Number(fileMeta.height) : null;
                     const resolution = height ? `${height}p` : null;
                     const mimeType = normalizeMimeType(fileMeta) || inferMimeType(fileMeta) || 'video/mp4';
-                    const posterMatch = await findBestPoster({
-                        title,
-                        year: releaseYear,
-                        type: 'movie'
-                    });
+                    const omdbPosterUrl = omdbDetails?.imdbId
+                        ? `https://img.omdbapi.com/?i=${encodeURIComponent(omdbDetails.imdbId)}&h=600&apikey=${encodeURIComponent(process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '')}`
+                        : omdbDetails?.poster;
+                    const posterMatch = omdbPosterUrl
+                        ? { posterUrl: omdbPosterUrl, tmdbId: null }
+                        : await findBestPoster({
+                            title,
+                            year: null,
+                            type: 'movie'
+                        });
                     const tmdbId = posterMatch?.tmdbId || null;
                     const thumbnailUrl = posterMatch?.posterUrl
                         || findThumbnailForFile(files, bundleIdentifier, fileName)
@@ -329,7 +332,7 @@ app.post('/reconcile', async (req, res) => {
 
                     await upsertVideo({
                         title,
-                        description: null,
+                        description: omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null,
                         type: 'movie',
                         playbackType: 'mp4',
                         s3KeyPlayback: key,
@@ -342,7 +345,7 @@ app.post('/reconcile', async (req, res) => {
                         duration,
                         resolution,
                         genre,
-                        rating: normalizeRating(metadata),
+                        rating: omdbDetails?.rated || normalizeRating(metadata),
                         seriesTitle: null,
                         seasonNumber: null,
                         episodeNumber: null,
@@ -661,11 +664,15 @@ app.post('/import', async (req, res) => {
                     results.push(result);
                     continue;
                 }
-                const description = null;
-                const releaseYear = parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
+                const omdbQueryTitle = contentType === 'series' ? (seriesTitleInput || title) : title;
+                const omdbDetails = await resolveOmdbDetails({ title: omdbQueryTitle, type: contentType });
+                const description = omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null;
+                const omdbYear = parseYear(omdbDetails?.year);
+                const releaseYear = omdbYear
+                    ?? parseYear(stringifyMetadata(metadata?.year) || stringifyMetadata(metadata?.date))
                     ?? (isBundleItem ? parseYear(bestFile.name) : null);
-                const genre = isBundleGeneric ? null : normalizeGenre(metadata);
-                const rating = normalizeRating(metadata);
+                const genre = omdbDetails?.genre || (isBundleGeneric ? null : normalizeGenre(metadata));
+                const rating = omdbDetails?.rated || normalizeRating(metadata);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
                 const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
 
@@ -689,11 +696,16 @@ app.post('/import', async (req, res) => {
                     : null;
 
                 const posterTitle = contentType === 'series' ? (seriesTitle || title) : title;
-                const posterMatch = await findBestPoster({
-                    title: posterTitle,
-                    year: releaseYear,
-                    type: contentType
-                });
+                const omdbPosterUrl = omdbDetails?.imdbId
+                    ? `https://img.omdbapi.com/?i=${encodeURIComponent(omdbDetails.imdbId)}&h=600&apikey=${encodeURIComponent(process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '')}`
+                    : omdbDetails?.poster;
+                const posterMatch = omdbPosterUrl
+                    ? { posterUrl: omdbPosterUrl, tmdbId: null }
+                    : await findBestPoster({
+                        title: posterTitle,
+                        year: null,
+                        type: contentType
+                    });
                 const tmdbId = posterMatch?.tmdbId || null;
                 const thumbnailUrl = posterMatch?.posterUrl || (
                     isBundleItem

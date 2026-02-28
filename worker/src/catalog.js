@@ -20,6 +20,19 @@ const normalizeTitle = (value) => {
     return cleaned.replace(/^(the|a|an)\s+/i, '');
 };
 
+const sanitizeSearchTitle = (value) => {
+    if (!value) return '';
+    let cleaned = String(value);
+    cleaned = cleaned.replace(/\.[a-z0-9]+$/i, '');
+    cleaned = cleaned.replace(/\[[^\]]*\]/g, ' ');
+    cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
+    cleaned = cleaned.replace(/\b(480|720|1080|2160)p\b/gi, ' ');
+    cleaned = cleaned.replace(/\b(x264|x265|h264|h265|hevc|hdrip|webrip|web|dvdrip|bluray|brrip|hd|sd|uhd)\b/gi, ' ');
+    cleaned = cleaned.replace(/[_-]+/g, ' ');
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+    return cleaned;
+};
+
 const parseYear = (value) => {
     if (!value) return null;
     const match = String(value).match(/(19|20)\d{2}/);
@@ -54,10 +67,11 @@ async function findCatalogPoster({ title, year, type, minScore = 3, ignoreYear =
     const apiKey = getApiKey();
     if (!apiKey || !title) return null;
 
+    const safeTitle = sanitizeSearchTitle(title) || title;
     const endpoint = type === 'series' ? 'tv' : 'movie';
     const params = new URLSearchParams({
         api_key: apiKey,
-        query: title,
+        query: safeTitle,
     });
 
     if (year && !ignoreYear) {
@@ -89,22 +103,74 @@ async function findCatalogPoster({ title, year, type, minScore = 3, ignoreYear =
     };
 }
 
+const fetchOmdbJson = async (params) => {
+    return fetchJson(`https://www.omdbapi.com/?${params.toString()}`);
+};
+
+const resolveOmdbDetails = async ({ title, type }) => {
+    const apiKey = process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '';
+    if (!apiKey || !title) return null;
+
+    const safeTitle = sanitizeSearchTitle(title) || title;
+
+    const params = new URLSearchParams({
+        apikey: apiKey,
+        t: safeTitle,
+    });
+    if (type === 'series') params.set('type', 'series');
+    if (type === 'movie') params.set('type', 'movie');
+
+    let data = await fetchOmdbJson(params);
+    if (!data || data.Response === 'False') {
+        const searchParams = new URLSearchParams({
+            apikey: apiKey,
+            s: safeTitle,
+        });
+        if (type === 'series') searchParams.set('type', 'series');
+        if (type === 'movie') searchParams.set('type', 'movie');
+
+        const searchData = await fetchOmdbJson(searchParams);
+        const results = searchData?.Search || [];
+        if (!results.length) return null;
+
+        const target = normalizeTitle(safeTitle);
+        const scored = results.map((item) => {
+            const candidateTitle = item?.Title || '';
+            const score = scoreCandidate(normalizeTitle(candidateTitle), target, null, null);
+            return { item, score };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        const best = scored[0]?.item;
+        if (!best?.imdbID) return null;
+
+        const detailParams = new URLSearchParams({
+            apikey: apiKey,
+            i: best.imdbID,
+            plot: 'short',
+        });
+        data = await fetchOmdbJson(detailParams);
+        if (!data || data.Response === 'False') return null;
+    }
+
+    return {
+        title: data.Title || null,
+        year: data.Year || null,
+        genre: data.Genre || null,
+        rated: data.Rated || null,
+        plot: data.Plot || null,
+        imdbId: data.imdbID || null,
+        poster: data.Poster && data.Poster !== 'N/A' ? data.Poster : null,
+    };
+};
+
 async function findOmdbPoster({ title, year, type }) {
     const apiKey = process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '';
     if (!apiKey || !title) return null;
 
-    const params = new URLSearchParams({
-        apikey: apiKey,
-        t: title,
-    });
-    if (year) params.set('y', String(year));
-    if (type === 'series') params.set('type', 'series');
-    if (type === 'movie') params.set('type', 'movie');
+    const details = await resolveOmdbDetails({ title, type });
+    if (!details) return null;
 
-    const data = await fetchJson(`https://www.omdbapi.com/?${params.toString()}`);
-    if (!data || data.Response === 'False') return null;
-
-    const imdbId = data.imdbID;
+    const imdbId = details.imdbId;
     if (imdbId) {
         return {
             posterUrl: `https://img.omdbapi.com/?i=${encodeURIComponent(imdbId)}&h=600&apikey=${encodeURIComponent(apiKey)}`,
@@ -113,8 +179,8 @@ async function findOmdbPoster({ title, year, type }) {
         };
     }
 
-    if (!data.Poster || data.Poster === 'N/A') return null;
-    return { posterUrl: data.Poster, tmdbId: null, source: 'omdb' };
+    if (!details.poster) return null;
+    return { posterUrl: details.poster, tmdbId: null, source: 'omdb' };
 }
 
 async function findWikipediaPoster({ title, year, type }) {
@@ -162,9 +228,9 @@ async function findWikipediaPoster({ title, year, type }) {
 }
 
 async function findBestPoster({ title, year, type }) {
-    let poster = await findCatalogPoster({ title, year: null, type, minScore: 2, ignoreYear: true });
+    let poster = await findOmdbPoster({ title, year: null, type });
     if (!poster) {
-        poster = await findOmdbPoster({ title, year: null, type });
+        poster = await findCatalogPoster({ title, year: null, type, minScore: 2, ignoreYear: true });
     }
     if (!poster) {
         poster = await findWikipediaPoster({ title, year: null, type });
@@ -177,4 +243,5 @@ module.exports = {
     findBestPoster,
     findOmdbPoster,
     findWikipediaPoster,
+    resolveOmdbDetails,
 };
