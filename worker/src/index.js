@@ -9,7 +9,7 @@ const {
     buildArchiveDownloadUrl,
     inferMimeType
 } = require('./internet-archive');
-const { findCatalogPoster } = require('./catalog');
+const { findBestPoster } = require('./catalog');
 const { upsertVideo, findVideoByS3KeyPlayback, pool, updateVideoPoster } = require('./db');
 const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
 
@@ -316,7 +316,7 @@ app.post('/reconcile', async (req, res) => {
                     const height = fileMeta.height ? Number(fileMeta.height) : null;
                     const resolution = height ? `${height}p` : null;
                     const mimeType = normalizeMimeType(fileMeta) || inferMimeType(fileMeta) || 'video/mp4';
-                    const posterMatch = await findCatalogPoster({
+                    const posterMatch = await findBestPoster({
                         title,
                         year: releaseYear,
                         type: 'movie'
@@ -467,21 +467,11 @@ app.post('/refresh-posters', async (req, res) => {
                         const derived = deriveTitleFromIdentifiers(row.archiveIdentifier, row.s3KeyPlayback);
                         if (derived) title = derived;
                     }
-                    let posterMatch = await findCatalogPoster({
+                    const posterMatch = await findBestPoster({
                         title,
                         year: row.releaseYear,
-                        type: row.type === 'series' ? 'series' : 'movie',
-                        minScore: 2
+                        type: row.type === 'series' ? 'series' : 'movie'
                     });
-                    if (!posterMatch && row.releaseYear) {
-                        posterMatch = await findCatalogPoster({
-                            title,
-                            year: row.releaseYear,
-                            type: row.type === 'series' ? 'series' : 'movie',
-                            minScore: 2,
-                            ignoreYear: true
-                        });
-                    }
 
                     if (!posterMatch) {
                         result.status = 'skipped';
@@ -699,7 +689,7 @@ app.post('/import', async (req, res) => {
                     : null;
 
                 const posterTitle = contentType === 'series' ? (seriesTitle || title) : title;
-                const posterMatch = await findCatalogPoster({
+                const posterMatch = await findBestPoster({
                     title: posterTitle,
                     year: releaseYear,
                     type: contentType

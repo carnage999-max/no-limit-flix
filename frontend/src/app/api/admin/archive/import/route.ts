@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { fetchFromTMDB } from '@/lib/tmdb';
 import {
     ARCHIVE_PRESETS,
     DEFAULT_ARCHIVE_PRESET_ID,
@@ -45,6 +44,8 @@ const parseDurationSeconds = (value?: string) => {
 
 const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
 const MIN_SERIES_DURATION_SECONDS = 5 * 60;
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 const EXCLUDED_TITLE_KEYWORDS = [
     'trailer',
     'preview',
@@ -248,19 +249,49 @@ const scoreCandidate = (candidate: string, target: string, candidateYear: number
     return score;
 };
 
+const getTmdbKey = () => process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY || '';
+
+const fetchJson = async (url: string) => {
+    try {
+        const response = await fetch(url, {
+            headers: { Accept: 'application/json' },
+            signal: AbortSignal.timeout(8000),
+            next: { revalidate: 3600 }
+        });
+        if (!response.ok) return null;
+        return await response.json();
+    } catch (error) {
+        return null;
+    }
+};
+
+const fetchTmdb = async (endpoint: string, params: Record<string, string>) => {
+    const apiKey = getTmdbKey();
+    if (!apiKey) return null;
+    const queryParams = new URLSearchParams({
+        api_key: apiKey,
+        ...params
+    });
+    return fetchJson(`${TMDB_BASE_URL}${endpoint}?${queryParams.toString()}`);
+};
+
 const findCatalogPoster = async (
     title: string | null,
     year: number | null,
-    type: 'movie' | 'series'
+    type: 'movie' | 'series',
+    options: { minScore?: number; ignoreYear?: boolean } = {}
 ) => {
     if (!title) return null;
+    const minScore = options.minScore ?? 3;
+    const ignoreYear = options.ignoreYear ?? false;
+
     try {
         const endpoint = type === 'series' ? '/search/tv' : '/search/movie';
         const params: Record<string, string> = { query: title };
-        if (year) {
+        if (year && !ignoreYear) {
             params[type === 'series' ? 'first_air_date_year' : 'year'] = String(year);
         }
-        const data = await fetchFromTMDB(endpoint, params);
+        const data = await fetchTmdb(endpoint, params);
         const results = data?.results || [];
         if (!results.length) return null;
 
@@ -273,15 +304,106 @@ const findCatalogPoster = async (
         });
         scored.sort((a: any, b: any) => b.score - a.score);
         const best = scored[0];
-        if (!best || best.score < 3 || !best.item?.poster_path) return null;
+        if (!best || best.score < minScore || !best.item?.poster_path) return null;
 
         return {
-            posterUrl: `https://image.tmdb.org/t/p/w500${best.item.poster_path}`,
+            posterUrl: `${TMDB_IMAGE_BASE}${best.item.poster_path}`,
             tmdbId: String(best.item.id)
         };
     } catch (error) {
         return null;
     }
+};
+
+const findOmdbPoster = async (title: string | null, year: number | null, type: 'movie' | 'series') => {
+    const apiKey = process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '';
+    if (!apiKey || !title) return null;
+
+    const params = new URLSearchParams({
+        apikey: apiKey,
+        t: title
+    });
+    if (year) params.set('y', String(year));
+    if (type === 'series') params.set('type', 'series');
+    if (type === 'movie') params.set('type', 'movie');
+
+    const data = await fetchJson(`https://www.omdbapi.com/?${params.toString()}`);
+    if (!data || data.Response === 'False') return null;
+
+    const imdbId = data.imdbID;
+    if (imdbId) {
+        return {
+            posterUrl: `https://img.omdbapi.com/?i=${encodeURIComponent(imdbId)}&h=600&apikey=${encodeURIComponent(apiKey)}`,
+            tmdbId: null
+        };
+    }
+
+    if (!data.Poster || data.Poster === 'N/A') return null;
+    return {
+        posterUrl: data.Poster,
+        tmdbId: null
+    };
+};
+
+const findWikipediaPoster = async (title: string | null, year: number | null, type: 'movie' | 'series') => {
+    if (!title) return null;
+    const intent = type === 'series' ? 'tv series' : 'film';
+    const search = `${title} ${year || ''} ${intent}`.trim();
+
+    const searchParams = new URLSearchParams({
+        action: 'query',
+        list: 'search',
+        srsearch: search,
+        srlimit: '5',
+        format: 'json',
+        origin: '*'
+    });
+
+    const searchData = await fetchJson(`https://en.wikipedia.org/w/api.php?${searchParams.toString()}`);
+    const hits = searchData?.query?.search || [];
+    if (!hits.length) return null;
+
+    const pageIds = hits.map((hit: any) => hit.pageid).filter(Boolean);
+    if (!pageIds.length) return null;
+
+    const imageParams = new URLSearchParams({
+        action: 'query',
+        prop: 'pageimages',
+        piprop: 'thumbnail',
+        pithumbsize: '500',
+        format: 'json',
+        pageids: pageIds.join(','),
+        origin: '*'
+    });
+
+    const imageData = await fetchJson(`https://en.wikipedia.org/w/api.php?${imageParams.toString()}`);
+    const pages = imageData?.query?.pages || {};
+
+    for (const pageId of pageIds) {
+        const page = pages[pageId];
+        if (page?.thumbnail?.source) {
+            return {
+                posterUrl: page.thumbnail.source,
+                tmdbId: null
+            };
+        }
+    }
+
+    return null;
+};
+
+const findBestPoster = async (title: string | null, year: number | null, type: 'movie' | 'series') => {
+    let poster = await findCatalogPoster(title, year, type, { minScore: 2 });
+    if (!poster && year) {
+        poster = await findCatalogPoster(title, year, type, { minScore: 2, ignoreYear: true });
+    }
+    if (!poster) {
+        poster = await findOmdbPoster(title, year, type);
+    }
+    if (!poster) {
+        poster = await findWikipediaPoster(title, year, type);
+    }
+    return poster;
 };
 
 export async function POST(request: NextRequest) {
@@ -527,7 +649,7 @@ export async function POST(request: NextRequest) {
                     : null;
 
                 const posterTitle = contentType === 'series' ? (seriesTitle || title) : title;
-                const posterMatch = await findCatalogPoster(posterTitle, releaseYear, contentType);
+                const posterMatch = await findBestPoster(posterTitle, releaseYear, contentType);
                 const tmdbId = posterMatch?.tmdbId || null;
                 const thumbnailUrl = posterMatch?.posterUrl || (
                     isBundleItem
