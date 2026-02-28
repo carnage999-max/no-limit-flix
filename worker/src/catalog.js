@@ -50,7 +50,7 @@ const fetchJson = async (url) => {
     return response.json();
 };
 
-async function findCatalogPoster({ title, year, type }) {
+async function findCatalogPoster({ title, year, type, minScore = 3, ignoreYear = false }) {
     const apiKey = getApiKey();
     if (!apiKey || !title) return null;
 
@@ -60,7 +60,7 @@ async function findCatalogPoster({ title, year, type }) {
         query: title,
     });
 
-    if (year) {
+    if (year && !ignoreYear) {
         params.set(type === 'series' ? 'first_air_date_year' : 'year', String(year));
     }
 
@@ -81,7 +81,7 @@ async function findCatalogPoster({ title, year, type }) {
     scored.sort((a, b) => b.score - a.score);
     const best = scored[0];
 
-    if (!best || best.score < 3 || !best.item?.poster_path) return null;
+    if (!best || best.score < minScore || !best.item?.poster_path) return null;
 
     return {
         posterUrl: `${TMDB_IMAGE_BASE}${best.item.poster_path}`,

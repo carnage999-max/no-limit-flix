@@ -65,7 +65,7 @@ const isExcludedTitle = (value) => {
 
 const fetchVideosNeedingPoster = async (limit) => {
     const result = await pool.query(
-        `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl"
+        `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl", "archiveIdentifier", "s3KeyPlayback"
          FROM "Video"
          WHERE "status" = 'completed'
            AND "sourceProvider" = 'internet_archive'
@@ -130,6 +130,25 @@ const normalizeMimeType = (file) => {
 const deriveTitleFromFileName = (fileName) => {
     const base = fileName.replace(/\.[a-z0-9]+$/i, '');
     return base.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const deriveTitleFromIdentifiers = (archiveIdentifier, s3KeyPlayback) => {
+    let fileName = null;
+    if (archiveIdentifier && archiveIdentifier.includes(':')) {
+        const parts = archiveIdentifier.split(':');
+        fileName = parts.slice(1).join(':') || null;
+    }
+    if (!fileName && s3KeyPlayback) {
+        const parts = s3KeyPlayback.split('/');
+        fileName = parts[parts.length - 1] || null;
+    }
+    if (!fileName) return null;
+    try {
+        fileName = decodeURIComponent(fileName);
+    } catch {
+        fileName = fileName;
+    }
+    return deriveTitleFromFileName(fileName);
 };
 
 const isGenericBundleTitle = (value) => {
@@ -441,14 +460,28 @@ app.post('/refresh-posters', async (req, res) => {
             for (const row of rows) {
                 const result = { id: row.id, title: row.title, status: 'failed' };
                 try {
-                    const title = row.type === 'series'
+                    let title = row.type === 'series'
                         ? (row.seriesTitle || row.title)
                         : row.title;
-                    const posterMatch = await findCatalogPoster({
+                    if (!title || isGenericBundleTitle(title)) {
+                        const derived = deriveTitleFromIdentifiers(row.archiveIdentifier, row.s3KeyPlayback);
+                        if (derived) title = derived;
+                    }
+                    let posterMatch = await findCatalogPoster({
                         title,
                         year: row.releaseYear,
-                        type: row.type === 'series' ? 'series' : 'movie'
+                        type: row.type === 'series' ? 'series' : 'movie',
+                        minScore: 2
                     });
+                    if (!posterMatch && row.releaseYear) {
+                        posterMatch = await findCatalogPoster({
+                            title,
+                            year: row.releaseYear,
+                            type: row.type === 'series' ? 'series' : 'movie',
+                            minScore: 2,
+                            ignoreYear: true
+                        });
+                    }
 
                     if (!posterMatch) {
                         result.status = 'skipped';
