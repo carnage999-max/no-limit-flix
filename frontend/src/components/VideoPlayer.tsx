@@ -107,7 +107,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     nativeVideoTracks: false,
                     nativeAudioTracks: false,
                     nativeTextTracks: false,
-                    nativeControlsForTouch: true
+                    nativeControlsForTouch: false
                 }
             }, () => {
                 onReady && onReady(player);
@@ -126,6 +126,14 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 setDuration(player.duration?.() || 0);
                 setCurrentTime(player.currentTime?.() || 0);
                 setIsPlaying(!player.paused());
+                const techEl = player.tech_?.el?.() as HTMLVideoElement | undefined;
+                if (techEl) {
+                    techEl.setAttribute('playsinline', 'playsinline');
+                    techEl.setAttribute('webkit-playsinline', 'webkit-playsinline');
+                    techEl.setAttribute('x5-playsinline', 'x5-playsinline');
+                    (techEl as any).playsInline = true;
+                    techEl.controls = false;
+                }
                 const rootEl = player.el();
                 if (rootEl) {
                     rootEl.addEventListener('mousemove', keepControlsVisible);
@@ -298,7 +306,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 </div>
             ) : (
                 <div className="relative">
-                    <div ref={videoRef} />
+                    <div ref={videoRef} style={{ position: 'relative', zIndex: 1 }} />
                     <div
                         style={{
                             position: 'absolute',
@@ -307,6 +315,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                             flexDirection: 'column',
                             justifyContent: 'flex-end',
                             pointerEvents: 'none',
+                            zIndex: 5,
                         }}
                     >
                         {!isPlaying && (
@@ -467,6 +476,12 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     border-radius: 12px;
                     overflow: hidden;
                     font-family: inherit;
+                    position: relative;
+                    z-index: 1;
+                }
+                .video-js .vjs-tech {
+                    position: relative;
+                    z-index: 1;
                 }
                 .video-js .vjs-control-bar {
                     display: none !important;
