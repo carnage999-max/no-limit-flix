@@ -394,93 +394,76 @@ export default function AnalyticsDashboard() {
                             {topMovies.length > 0 ? (
                                 <div style={{
                                     display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-                                    gap: '1.5rem'
+                                    gap: '0.9rem'
                                 }}>
-                                    {topMovies.map((movie, idx) => (
-                                        <div
-                                            key={movie.videoId}
-                                            style={{
-                                                position: 'relative',
-                                                borderRadius: '1rem',
-                                                overflow: 'hidden',
-                                                cursor: 'pointer',
-                                                transition: 'transform 0.3s',
-                                                aspectRatio: '2/3'
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
-                                            }}
-                                        >
-                                            {/* Rank Badge */}
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: '0.75rem',
-                                                right: '0.75rem',
-                                                width: '3rem',
-                                                height: '3rem',
-                                                borderRadius: '9999px',
-                                                background: idx < 3
-                                                    ? ['#D4AF37', '#C0C0C0', '#CD7F32'][idx]
-                                                    : 'rgba(212, 175, 55, 0.2)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                fontSize: '1.25rem',
-                                                fontWeight: '700',
-                                                color: idx < 3 ? '#0B0B0D' : '#D4AF37',
-                                                zIndex: 2,
-                                                border: '2px solid rgba(255,255,255,0.3)'
-                                            }}>
-                                                #{idx + 1}
-                                            </div>
-
-                                            {/* Image */}
-                                            <img
-                                                src={movie.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400'}
-                                                alt={movie.title}
+                                    {topMovies.slice(0, 5).map((movie, idx) => {
+                                        const max = Math.max(...topMovies.map((m) => m.watchCount), 1);
+                                        const width = Math.max(12, Math.round((movie.watchCount / max) * 100));
+                                        return (
+                                            <div
+                                                key={movie.videoId}
                                                 style={{
-                                                    width: '100%',
-                                                    height: '100%',
-                                                    objectFit: 'cover'
-                                                }}
-                                            />
-
-                                            {/* Overlay */}
-                                            <div style={{
-                                                position: 'absolute',
-                                                inset: 0,
-                                                background: 'linear-gradient(to top, #0B0B0D 0%, transparent 60%)',
-                                                display: 'flex',
-                                                flexDirection: 'column',
-                                                justifyContent: 'flex-end',
-                                                padding: '1rem',
-                                                zIndex: 1
-                                            }}>
-                                                <h3 style={{
-                                                    fontSize: '0.875rem',
-                                                    fontWeight: '600',
-                                                    color: '#F3F4F6',
-                                                    marginBottom: '0.25rem',
+                                                    position: 'relative',
+                                                    borderRadius: '14px',
+                                                    border: '1px solid rgba(167, 171, 180, 0.12)',
+                                                    background: 'rgba(11, 11, 13, 0.9)',
+                                                    padding: '0.75rem 1rem',
                                                     overflow: 'hidden',
-                                                    textOverflow: 'ellipsis',
-                                                    whiteSpace: 'nowrap'
-                                                }}>
-                                                    {movie.title}
-                                                </h3>
-                                                <p style={{
-                                                    fontSize: '0.75rem',
-                                                    color: '#D4AF37',
-                                                    fontWeight: '600'
-                                                }}>
-                                                    Watched {movie.watchCount}x
-                                                </p>
+                                                }}
+                                            >
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    inset: 0,
+                                                    background: `linear-gradient(90deg, rgba(212, 175, 55, 0.25) 0%, rgba(212, 175, 55, 0.02) ${width}%, transparent ${width}%)`,
+                                                    pointerEvents: 'none',
+                                                }} />
+                                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                                                    <div style={{
+                                                        width: '34px',
+                                                        height: '34px',
+                                                        borderRadius: '10px',
+                                                        background: idx < 3
+                                                            ? ['#D4AF37', '#C0C0C0', '#CD7F32'][idx]
+                                                            : 'rgba(212, 175, 55, 0.15)',
+                                                        color: idx < 3 ? '#0B0B0D' : '#D4AF37',
+                                                        fontWeight: 800,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: '0.95rem'
+                                                    }}>
+                                                        {idx + 1}
+                                                    </div>
+                                                    <img
+                                                        src={movie.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400'}
+                                                        alt={movie.title}
+                                                        style={{
+                                                            width: 48,
+                                                            height: 64,
+                                                            borderRadius: 10,
+                                                            objectFit: 'cover',
+                                                            border: '1px solid rgba(255,255,255,0.1)'
+                                                        }}
+                                                    />
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{
+                                                            fontSize: '0.95rem',
+                                                            fontWeight: 700,
+                                                            color: '#F3F4F6',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                        }}>
+                                                            {movie.title}
+                                                        </div>
+                                                        <div style={{ fontSize: '0.8rem', color: '#A7ABB4', marginTop: '0.35rem' }}>
+                                                            Watched {movie.watchCount} {movie.watchCount === 1 ? 'time' : 'times'}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <div style={{

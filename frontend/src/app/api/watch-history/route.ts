@@ -21,7 +21,9 @@ export async function POST(request: NextRequest) {
         }
 
         // Calculate watched percentage
-        const completionPercent = totalDuration && watchedDuration ? (watchedDuration / totalDuration) * 100 : 0;
+        const safeWatched = Number.isFinite(Number(watchedDuration)) ? Number(watchedDuration) : null;
+        const safeTotal = Number.isFinite(Number(totalDuration)) ? Number(totalDuration) : null;
+        const completionPercent = safeTotal && safeWatched ? (safeWatched / safeTotal) * 100 : 0;
         const isCompleted = completionPercent >= 90;
 
         // Upsert watch history (update if exists, create if not)
@@ -37,14 +39,14 @@ export async function POST(request: NextRequest) {
                 videoId,
                 videoTitle: title || 'Unknown',
                 videoPoster: poster,
-                duration: watchedDuration,
-                totalDuration,
+                duration: safeWatched,
+                totalDuration: safeTotal,
                 completionPercent,
                 isCompleted
             },
             update: {
-                duration: watchedDuration,
-                totalDuration,
+                duration: safeWatched,
+                totalDuration: safeTotal,
                 completionPercent,
                 isCompleted,
                 watchedAt: new Date()
@@ -52,19 +54,23 @@ export async function POST(request: NextRequest) {
         });
 
         // Also log analytics event
-        await prisma.analyticsEvent.create({
-            data: {
-                userId,
-                eventType: isCompleted ? 'watch_completed' : 'watch_started',
-                videoId,
-                videoTitle: title,
-                metadata: {
-                    completionPercent,
-                    totalDuration,
-                    watchedDuration
+        try {
+            await prisma.analyticsEvent.create({
+                data: {
+                    userId,
+                    eventType: isCompleted ? 'watch_completed' : 'watch_started',
+                    videoId,
+                    videoTitle: title,
+                    metadata: JSON.stringify({
+                        completionPercent,
+                        totalDuration: safeTotal,
+                        watchedDuration: safeWatched
+                    })
                 }
-            }
-        });
+            });
+        } catch (error) {
+            console.warn('Analytics event failed:', error);
+        }
 
         return NextResponse.json({ success: true, watchHistory });
     } catch (error) {
@@ -122,8 +128,19 @@ export async function GET(request: NextRequest) {
             })
         ]);
 
+        const sanitizedHistory = watchHistory.map((entry: any) => {
+            if (!entry.video) return entry;
+            return {
+                ...entry,
+                video: {
+                    ...entry.video,
+                    fileSize: entry.video.fileSize ? entry.video.fileSize.toString() : null
+                }
+            };
+        });
+
         return NextResponse.json({
-            watchHistory,
+            watchHistory: sanitizedHistory,
             pagination: {
                 page,
                 limit,

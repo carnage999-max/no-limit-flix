@@ -20,6 +20,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     const playerRef = useRef<any>(null);
     const lastReportRef = useRef<{ time: number; sentAt: number }>({ time: 0, sentAt: 0 });
     const trackingCleanupRef = useRef<null | (() => void)>(null);
+    const controlsCleanupRef = useRef<null | (() => void)>(null);
     const [error, setError] = useState<string | null>(null);
     const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
@@ -76,6 +77,9 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
 
             videoElement.classList.add('vjs-big-play-centered');
             videoElement.classList.add('vjs-no-limit-theme');
+            videoElement.classList.add('vjs-default-skin');
+            videoElement.setAttribute('playsinline', 'playsinline');
+            videoElement.setAttribute('webkit-playsinline', 'webkit-playsinline');
             videoRef.current.appendChild(videoElement);
 
             const sourceType = playbackUrl.endsWith('.m3u8') ? 'application/x-mpegURL' : 'video/mp4';
@@ -85,19 +89,50 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 controls: true,
                 responsive: true,
                 fluid: true,
+                inactivityTimeout: 0,
+                userActions: {
+                    doubleClick: false,
+                },
                 sources: [{
                     src: playbackUrl,
                     type: sourceType
                 }],
                 poster: poster,
                 playbackRates: [0.5, 1, 1.25, 1.5, 2],
+                playsinline: true,
                 html5: {
                     nativeVideoTracks: false,
                     nativeAudioTracks: false,
-                    nativeTextTracks: false
+                    nativeTextTracks: false,
+                    nativeControlsForTouch: true
                 }
             }, () => {
                 onReady && onReady(player);
+            });
+
+            // Ensure controls are visible on hover/click
+            const keepControlsVisible = () => {
+                if (!player) return;
+                player.userActive(true);
+                player.controls(true);
+                player.controlBar?.show();
+            };
+
+            player.ready(() => {
+                keepControlsVisible();
+                const rootEl = player.el();
+                if (rootEl) {
+                    rootEl.addEventListener('mousemove', keepControlsVisible);
+                    rootEl.addEventListener('mouseenter', keepControlsVisible);
+                    rootEl.addEventListener('click', keepControlsVisible);
+                    rootEl.addEventListener('touchstart', keepControlsVisible);
+                    controlsCleanupRef.current = () => {
+                        rootEl.removeEventListener('mousemove', keepControlsVisible);
+                        rootEl.removeEventListener('mouseenter', keepControlsVisible);
+                        rootEl.removeEventListener('click', keepControlsVisible);
+                        rootEl.removeEventListener('touchstart', keepControlsVisible);
+                    };
+                }
             });
 
             const sendWatchProgress = async (force = false, completed = false) => {
@@ -193,6 +228,8 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 console.error('[VideoPlayer] VideoJS Error:', err);
                 setError(`This video format may not be supported by your browser. Try opening with VLC or the mobile app.`);
             });
+            player.on('play', keepControlsVisible);
+            player.on('pause', keepControlsVisible);
 
         }
     }, [playbackUrl, isLoading, videoRef]);
@@ -204,6 +241,10 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
             if (trackingCleanupRef.current) {
                 trackingCleanupRef.current();
                 trackingCleanupRef.current = null;
+            }
+            if (controlsCleanupRef.current) {
+                controlsCleanupRef.current();
+                controlsCleanupRef.current = null;
             }
             if (player && !player.isDisposed()) {
                 player.dispose();
@@ -267,9 +308,29 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     color: #EAB308 !important;
                 }
                 .video-js .vjs-control-bar {
+                    display: flex !important;
                     background-color: rgba(11, 11, 13, 0.8) !important;
                     backdrop-filter: blur(10px);
                     height: 60px !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    transform: translateY(0) !important;
+                    pointer-events: auto !important;
+                }
+                .video-js.vjs-user-inactive .vjs-control-bar {
+                    display: flex !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                    transform: translateY(0) !important;
+                    pointer-events: auto !important;
+                }
+                .video-js.vjs-controls-disabled .vjs-control-bar {
+                    display: flex !important;
+                    opacity: 1 !important;
+                    visibility: visible !important;
+                }
+                .video-js .vjs-control-bar .vjs-control {
+                    pointer-events: auto !important;
                 }
                 .video-js .vjs-slider {
                     background-color: rgba(255, 255, 255, 0.1) !important;
