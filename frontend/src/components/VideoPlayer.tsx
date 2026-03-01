@@ -348,6 +348,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: '0.75rem',
+                                flexWrap: 'nowrap',
                             }}
                         >
                             <button
@@ -377,6 +378,33 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                             >
                                 {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const player = playerRef.current;
+                                    if (!player) return;
+                                    const next = Math.max(0, (player.currentTime?.() || 0) - 10);
+                                    player.currentTime(next);
+                                    setCurrentTime(next);
+                                }}
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '999px',
+                                    border: '1px solid rgba(212, 175, 55, 0.4)',
+                                    background: 'rgba(11, 11, 13, 0.7)',
+                                    color: '#D4AF37',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                }}
+                                aria-label="Back 10 seconds"
+                            >
+                                -10
+                            </button>
                             <input
                                 type="range"
                                 min={0}
@@ -391,9 +419,39 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                                 }}
                                 style={{
                                     flex: 1,
+                                    minWidth: '80px',
+                                    height: '4px',
                                     accentColor: '#D4AF37',
                                 }}
+                                className="nlf-range"
                             />
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const player = playerRef.current;
+                                    if (!player) return;
+                                    const next = Math.min(duration || 0, (player.currentTime?.() || 0) + 10);
+                                    player.currentTime(next);
+                                    setCurrentTime(next);
+                                }}
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '999px',
+                                    border: '1px solid rgba(212, 175, 55, 0.4)',
+                                    background: 'rgba(11, 11, 13, 0.7)',
+                                    color: '#D4AF37',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                }}
+                                aria-label="Forward 10 seconds"
+                            >
+                                +10
+                            </button>
                             <span style={{ color: '#F3F4F6', fontSize: '0.75rem', minWidth: '60px', textAlign: 'right' }}>
                                 {duration ? `${Math.floor(currentTime / 60)}:${String(Math.floor(currentTime % 60)).padStart(2, '0')}` : '0:00'}
                             </span>
@@ -412,6 +470,28 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 }
                 .video-js .vjs-control-bar {
                     display: none !important;
+                }
+                .nlf-range {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    background: rgba(255, 255, 255, 0.15);
+                    border-radius: 999px;
+                }
+                .nlf-range::-webkit-slider-thumb {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #D4AF37;
+                    border: 2px solid rgba(11, 11, 13, 0.6);
+                }
+                .nlf-range::-moz-range-thumb {
+                    width: 14px;
+                    height: 14px;
+                    border-radius: 50%;
+                    background: #D4AF37;
+                    border: 2px solid rgba(11, 11, 13, 0.6);
                 }
                 .video-js .vjs-big-play-button {
                     display: none !important;
