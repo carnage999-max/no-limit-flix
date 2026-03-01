@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import videojs from 'video.js';
 import HlsJs from 'hls.js';
-import { AlertTriangle, Smartphone, Monitor } from 'lucide-react';
+import { AlertTriangle, Smartphone, Monitor, Play, Pause } from 'lucide-react';
 import 'video.js/dist/video-js.css';
 
 interface VideoPlayerProps {
@@ -21,6 +21,9 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     const lastReportRef = useRef<{ time: number; sentAt: number }>({ time: 0, sentAt: 0 });
     const trackingCleanupRef = useRef<null | (() => void)>(null);
     const controlsCleanupRef = useRef<null | (() => void)>(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [duration, setDuration] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
@@ -120,6 +123,9 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
 
             player.ready(() => {
                 keepControlsVisible();
+                setDuration(player.duration?.() || 0);
+                setCurrentTime(player.currentTime?.() || 0);
+                setIsPlaying(!player.paused());
                 const rootEl = player.el();
                 if (rootEl) {
                     rootEl.addEventListener('mousemove', keepControlsVisible);
@@ -230,6 +236,15 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
             });
             player.on('play', keepControlsVisible);
             player.on('pause', keepControlsVisible);
+            player.on('play', () => setIsPlaying(true));
+            player.on('pause', () => setIsPlaying(false));
+            player.on('timeupdate', () => {
+                setCurrentTime(player.currentTime?.() || 0);
+                setDuration(player.duration?.() || 0);
+            });
+            player.on('loadedmetadata', () => {
+                setDuration(player.duration?.() || 0);
+            });
 
         }
     }, [playbackUrl, isLoading, videoRef]);
@@ -282,7 +297,109 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     </div>
                 </div>
             ) : (
-                <div ref={videoRef} />
+                <div className="relative">
+                    <div ref={videoRef} />
+                    <div
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'flex-end',
+                            pointerEvents: 'none',
+                        }}
+                    >
+                        {!isPlaying && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const player = playerRef.current;
+                                    if (!player) return;
+                                    player.play();
+                                }}
+                                style={{
+                                    pointerEvents: 'auto',
+                                    position: 'absolute',
+                                    inset: 0,
+                                    margin: 'auto',
+                                    width: '64px',
+                                    height: '64px',
+                                    borderRadius: '50%',
+                                    border: '1px solid rgba(212, 175, 55, 0.6)',
+                                    background: 'rgba(11, 11, 13, 0.65)',
+                                    color: '#D4AF37',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                                }}
+                                aria-label="Play"
+                            >
+                                <Play className="w-6 h-6" />
+                            </button>
+                        )}
+                        <div
+                            style={{
+                                pointerEvents: 'auto',
+                                width: '100%',
+                                padding: '0.75rem',
+                                background: 'linear-gradient(180deg, rgba(11,11,13,0) 0%, rgba(11,11,13,0.75) 70%)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                            }}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    const player = playerRef.current;
+                                    if (!player) return;
+                                    if (player.paused()) {
+                                        player.play();
+                                    } else {
+                                        player.pause();
+                                    }
+                                }}
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '999px',
+                                    border: '1px solid rgba(212, 175, 55, 0.4)',
+                                    background: 'rgba(11, 11, 13, 0.7)',
+                                    color: '#D4AF37',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                }}
+                                aria-label={isPlaying ? 'Pause' : 'Play'}
+                            >
+                                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                            </button>
+                            <input
+                                type="range"
+                                min={0}
+                                max={duration || 0}
+                                value={Math.min(currentTime, duration || 0)}
+                                onChange={(e) => {
+                                    const player = playerRef.current;
+                                    if (!player) return;
+                                    const next = Number(e.target.value);
+                                    player.currentTime(next);
+                                    setCurrentTime(next);
+                                }}
+                                style={{
+                                    flex: 1,
+                                    accentColor: '#D4AF37',
+                                }}
+                            />
+                            <span style={{ color: '#F3F4F6', fontSize: '0.75rem', minWidth: '60px', textAlign: 'right' }}>
+                                {duration ? `${Math.floor(currentTime / 60)}:${String(Math.floor(currentTime % 60)).padStart(2, '0')}` : '0:00'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
             )}
             <style jsx global>{`
                 .vjs-no-limit-theme {
@@ -293,44 +410,17 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     overflow: hidden;
                     font-family: inherit;
                 }
-                .video-js .vjs-big-play-button {
-                    background-color: rgba(234, 179, 8, 0.1) !important;
-                    border: 2px solid #EAB308 !important;
-                    border-radius: 50% !important;
-                    width: 80px !important;
-                    height: 80px !important;
-                    line-height: 80px !important;
-                    margin-top: -40px !important;
-                    margin-left: -40px !important;
+                .video-js .vjs-control-bar {
+                    display: none !important;
                 }
-                .video-js .vjs-big-play-button .vjs-icon-placeholder:before {
-                    font-size: 40px !important;
-                    color: #EAB308 !important;
+                .video-js .vjs-big-play-button {
+                    display: none !important;
+                }
+                .video-js .vjs-big-play-button {
+                    display: none !important;
                 }
                 .video-js .vjs-control-bar {
-                    display: flex !important;
-                    background-color: rgba(11, 11, 13, 0.8) !important;
-                    backdrop-filter: blur(10px);
-                    height: 60px !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    transform: translateY(0) !important;
-                    pointer-events: auto !important;
-                }
-                .video-js.vjs-user-inactive .vjs-control-bar {
-                    display: flex !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                    transform: translateY(0) !important;
-                    pointer-events: auto !important;
-                }
-                .video-js.vjs-controls-disabled .vjs-control-bar {
-                    display: flex !important;
-                    opacity: 1 !important;
-                    visibility: visible !important;
-                }
-                .video-js .vjs-control-bar .vjs-control {
-                    pointer-events: auto !important;
+                    display: none !important;
                 }
                 .video-js .vjs-slider {
                     background-color: rgba(255, 255, 255, 0.1) !important;
