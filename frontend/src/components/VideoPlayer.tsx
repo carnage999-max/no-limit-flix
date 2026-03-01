@@ -24,6 +24,8 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
     const [duration, setDuration] = useState(0);
+    const [useNativeControls, setUseNativeControls] = useState(false);
+    const fullscreenAttemptedRef = useRef(false);
     const [error, setError] = useState<string | null>(null);
     const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
@@ -87,6 +89,10 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
 
             const sourceType = playbackUrl.endsWith('.m3u8') ? 'application/x-mpegURL' : 'video/mp4';
 
+            const prefersNativeControls = typeof window !== 'undefined'
+                && (window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0);
+            setUseNativeControls(prefersNativeControls);
+
             const player = playerRef.current = videojs(videoElement, {
                 autoplay: true,
                 controls: true,
@@ -107,7 +113,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     nativeVideoTracks: false,
                     nativeAudioTracks: false,
                     nativeTextTracks: false,
-                    nativeControlsForTouch: false
+                    nativeControlsForTouch: prefersNativeControls
                 }
             }, () => {
                 onReady && onReady(player);
@@ -132,7 +138,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                     techEl.setAttribute('webkit-playsinline', 'webkit-playsinline');
                     techEl.setAttribute('x5-playsinline', 'x5-playsinline');
                     (techEl as any).playsInline = true;
-                    techEl.controls = false;
+                    techEl.controls = prefersNativeControls;
                 }
                 const rootEl = player.el();
                 if (rootEl) {
@@ -246,6 +252,22 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
             player.on('pause', keepControlsVisible);
             player.on('play', () => setIsPlaying(true));
             player.on('pause', () => setIsPlaying(false));
+            player.on('play', () => {
+                if (!prefersNativeControls) return;
+                if (fullscreenAttemptedRef.current) return;
+                fullscreenAttemptedRef.current = true;
+                const techEl = player.tech_?.el?.() as HTMLVideoElement | undefined;
+                if (techEl?.webkitEnterFullscreen) {
+                    techEl.webkitEnterFullscreen();
+                    return;
+                }
+                const rootEl = player.el();
+                if (rootEl?.requestFullscreen) {
+                    rootEl.requestFullscreen().catch(() => {});
+                } else if (techEl?.requestFullscreen) {
+                    techEl.requestFullscreen().catch(() => {});
+                }
+            });
             player.on('timeupdate', () => {
                 setCurrentTime(player.currentTime?.() || 0);
                 setDuration(player.duration?.() || 0);
@@ -307,165 +329,167 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
             ) : (
                 <div className="relative">
                     <div ref={videoRef} style={{ position: 'relative', zIndex: 1 }} />
-                    <div
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'flex-end',
-                            pointerEvents: 'none',
-                            zIndex: 5,
-                        }}
-                    >
-                        {!isPlaying && (
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const player = playerRef.current;
-                                    if (!player) return;
-                                    player.play();
-                                }}
-                                style={{
-                                    pointerEvents: 'auto',
-                                    position: 'absolute',
-                                    inset: 0,
-                                    margin: 'auto',
-                                    width: '64px',
-                                    height: '64px',
-                                    borderRadius: '50%',
-                                    border: '1px solid rgba(212, 175, 55, 0.6)',
-                                    background: 'rgba(11, 11, 13, 0.65)',
-                                    color: '#D4AF37',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
-                                }}
-                                aria-label="Play"
-                            >
-                                <Play className="w-6 h-6" />
-                            </button>
-                        )}
+                    {!useNativeControls && (
                         <div
                             style={{
-                                pointerEvents: 'auto',
-                                width: '100%',
-                                padding: '0.75rem',
-                                background: 'linear-gradient(180deg, rgba(11,11,13,0) 0%, rgba(11,11,13,0.75) 70%)',
+                                position: 'absolute',
+                                inset: 0,
                                 display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.75rem',
-                                flexWrap: 'nowrap',
+                                flexDirection: 'column',
+                                justifyContent: 'flex-end',
+                                pointerEvents: 'none',
+                                zIndex: 5,
                             }}
                         >
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const player = playerRef.current;
-                                    if (!player) return;
-                                    if (player.paused()) {
+                            {!isPlaying && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const player = playerRef.current;
+                                        if (!player) return;
                                         player.play();
-                                    } else {
-                                        player.pause();
-                                    }
-                                }}
+                                    }}
+                                    style={{
+                                        pointerEvents: 'auto',
+                                        position: 'absolute',
+                                        inset: 0,
+                                        margin: 'auto',
+                                        width: '64px',
+                                        height: '64px',
+                                        borderRadius: '50%',
+                                        border: '1px solid rgba(212, 175, 55, 0.6)',
+                                        background: 'rgba(11, 11, 13, 0.65)',
+                                        color: '#D4AF37',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                                    }}
+                                    aria-label="Play"
+                                >
+                                    <Play className="w-6 h-6" />
+                                </button>
+                            )}
+                            <div
                                 style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '999px',
-                                    border: '1px solid rgba(212, 175, 55, 0.4)',
-                                    background: 'rgba(11, 11, 13, 0.7)',
-                                    color: '#D4AF37',
+                                    pointerEvents: 'auto',
+                                    width: '100%',
+                                    padding: '0.75rem',
+                                    background: 'linear-gradient(180deg, rgba(11,11,13,0) 0%, rgba(11,11,13,0.75) 70%)',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
+                                    gap: '0.75rem',
+                                    flexWrap: 'nowrap',
                                 }}
-                                aria-label={isPlaying ? 'Pause' : 'Play'}
                             >
-                                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const player = playerRef.current;
-                                    if (!player) return;
-                                    const next = Math.max(0, (player.currentTime?.() || 0) - 10);
-                                    player.currentTime(next);
-                                    setCurrentTime(next);
-                                }}
-                                style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '999px',
-                                    border: '1px solid rgba(212, 175, 55, 0.4)',
-                                    background: 'rgba(11, 11, 13, 0.7)',
-                                    color: '#D4AF37',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 700,
-                                }}
-                                aria-label="Back 10 seconds"
-                            >
-                                -10
-                            </button>
-                            <input
-                                type="range"
-                                min={0}
-                                max={duration || 0}
-                                value={Math.min(currentTime, duration || 0)}
-                                onChange={(e) => {
-                                    const player = playerRef.current;
-                                    if (!player) return;
-                                    const next = Number(e.target.value);
-                                    player.currentTime(next);
-                                    setCurrentTime(next);
-                                }}
-                                style={{
-                                    flex: 1,
-                                    minWidth: '80px',
-                                    height: '4px',
-                                    accentColor: '#D4AF37',
-                                }}
-                                className="nlf-range"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    const player = playerRef.current;
-                                    if (!player) return;
-                                    const next = Math.min(duration || 0, (player.currentTime?.() || 0) + 10);
-                                    player.currentTime(next);
-                                    setCurrentTime(next);
-                                }}
-                                style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '999px',
-                                    border: '1px solid rgba(212, 175, 55, 0.4)',
-                                    background: 'rgba(11, 11, 13, 0.7)',
-                                    color: '#D4AF37',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    cursor: 'pointer',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 700,
-                                }}
-                                aria-label="Forward 10 seconds"
-                            >
-                                +10
-                            </button>
-                            <span style={{ color: '#F3F4F6', fontSize: '0.75rem', minWidth: '60px', textAlign: 'right' }}>
-                                {duration ? `${Math.floor(currentTime / 60)}:${String(Math.floor(currentTime % 60)).padStart(2, '0')}` : '0:00'}
-                            </span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const player = playerRef.current;
+                                        if (!player) return;
+                                        if (player.paused()) {
+                                            player.play();
+                                        } else {
+                                            player.pause();
+                                        }
+                                    }}
+                                    style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '999px',
+                                        border: '1px solid rgba(212, 175, 55, 0.4)',
+                                        background: 'rgba(11, 11, 13, 0.7)',
+                                        color: '#D4AF37',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                    }}
+                                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                                >
+                                    {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const player = playerRef.current;
+                                        if (!player) return;
+                                        const next = Math.max(0, (player.currentTime?.() || 0) - 10);
+                                        player.currentTime(next);
+                                        setCurrentTime(next);
+                                    }}
+                                    style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '999px',
+                                        border: '1px solid rgba(212, 175, 55, 0.4)',
+                                        background: 'rgba(11, 11, 13, 0.7)',
+                                        color: '#D4AF37',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700,
+                                    }}
+                                    aria-label="Back 10 seconds"
+                                >
+                                    -10
+                                </button>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={duration || 0}
+                                    value={Math.min(currentTime, duration || 0)}
+                                    onChange={(e) => {
+                                        const player = playerRef.current;
+                                        if (!player) return;
+                                        const next = Number(e.target.value);
+                                        player.currentTime(next);
+                                        setCurrentTime(next);
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        minWidth: '80px',
+                                        height: '4px',
+                                        accentColor: '#D4AF37',
+                                    }}
+                                    className="nlf-range"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const player = playerRef.current;
+                                        if (!player) return;
+                                        const next = Math.min(duration || 0, (player.currentTime?.() || 0) + 10);
+                                        player.currentTime(next);
+                                        setCurrentTime(next);
+                                    }}
+                                    style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '999px',
+                                        border: '1px solid rgba(212, 175, 55, 0.4)',
+                                        background: 'rgba(11, 11, 13, 0.7)',
+                                        color: '#D4AF37',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: 'pointer',
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700,
+                                    }}
+                                    aria-label="Forward 10 seconds"
+                                >
+                                    +10
+                                </button>
+                                <span style={{ color: '#F3F4F6', fontSize: '0.75rem', minWidth: '60px', textAlign: 'right' }}>
+                                    {duration ? `${Math.floor(currentTime / 60)}:${String(Math.floor(currentTime % 60)).padStart(2, '0')}` : '0:00'}
+                                </span>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
             <style jsx global>{`
