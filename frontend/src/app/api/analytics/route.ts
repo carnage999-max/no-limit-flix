@@ -16,106 +16,106 @@ export async function GET(request: NextRequest) {
                 { status: 401 }
             );
         }
+        if (sessionUser?.role !== 'admin') {
+            return NextResponse.json(
+                { error: 'Forbidden' },
+                { status: 403 }
+            );
+        }
 
         if (type === 'watch_stats') {
-            // Get user's watch statistics
-            const watchHistory = await prisma.watchHistory.findMany({
-                where: { userId },
-                orderBy: { watchedAt: 'desc' }
-            });
+            const [totalWatched, completedWatches, durationAggregate, topGenresRaw] = await Promise.all([
+                prisma.watchHistory.count(),
+                prisma.watchHistory.count({ where: { isCompleted: true } }),
+                prisma.watchHistory.aggregate({ _sum: { duration: true } }),
+                prisma.$queryRaw`
+                    SELECT v.genre, COUNT(*)::int AS count
+                    FROM "WatchHistory" w
+                    JOIN "Video" v ON v.id = w."videoId"
+                    WHERE v.genre IS NOT NULL
+                    GROUP BY v.genre
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 5
+                `
+            ]);
 
-            const totalWatched = watchHistory.length;
-            const completedWatches = watchHistory.filter(w => w.isCompleted).length;
-            const totalMinutesWatched = watchHistory.reduce((sum, w) => {
-                return sum + ((w.duration || 0) / 60);
-            }, 0);
-
-            const topGenres: Record<string, number> = {};
-            for (const watch of watchHistory) {
-                const video = await prisma.video.findUnique({
-                    where: { id: watch.videoId },
-                    select: { genre: true }
-                });
-                if (video?.genre) {
-                    topGenres[video.genre] = (topGenres[video.genre] || 0) + 1;
-                }
-            }
+            const totalMinutesWatched = Math.round(((durationAggregate?._sum?.duration || 0) / 60));
+            const topGenres = Array.isArray(topGenresRaw)
+                ? topGenresRaw.map((row: any) => ({ genre: row.genre, count: Number(row.count) }))
+                : [];
 
             return NextResponse.json({
                 totalWatched,
                 completedWatches,
-                totalMinutesWatched: Math.round(totalMinutesWatched),
+                totalMinutesWatched,
                 completionRate: totalWatched > 0 ? Math.round((completedWatches / totalWatched) * 100) : 0,
-                topGenres: Object.entries(topGenres)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 5)
-                    .map(([genre, count]) => ({ genre, count }))
+                topGenres
             });
         } else if (type === 'top_movies') {
-            // Get top watched movies
             const page = parseInt(searchParams.get('page') || '1');
             const limit = parseInt(searchParams.get('limit') || '10');
             const skip = (page - 1) * limit;
 
-            const topMovies = await prisma.watchHistory.findMany({
-                where: { userId },
-                orderBy: { watchedAt: 'desc' },
+            const topMovieCounts = await prisma.watchHistory.groupBy({
+                by: ['videoId'],
+                _count: { videoId: true },
+                orderBy: { _count: { videoId: 'desc' } },
                 skip,
-                take: limit,
-                distinct: ['videoId']
+                take: limit
             });
 
-            const moviesWithDetails = await Promise.all(
-                topMovies.map(async (movie) => {
-                    // Count how many times this video was watched
-                    const watchCount = await prisma.watchHistory.count({
-                        where: {
-                            userId,
-                            videoId: movie.videoId
-                        }
-                    });
+            const ids = topMovieCounts.map((row) => row.videoId);
+            const videos = await prisma.video.findMany({
+                where: { id: { in: ids } },
+                select: { id: true, title: true, thumbnailUrl: true, genre: true }
+            });
+            const videoMap = new Map(videos.map((video) => [video.id, video]));
 
-                    const video = await prisma.video.findUnique({
-                        where: { id: movie.videoId }
-                    });
-
-                    return {
-                        videoId: movie.videoId,
-                        title: video?.title || movie.videoTitle,
-                        thumbnailUrl: video?.thumbnailUrl || movie.videoPoster,
-                        watchCount,
-                        genre: video?.genre
-                    };
-                })
-            );
+            const moviesWithDetails = topMovieCounts.map((row) => {
+                const video = videoMap.get(row.videoId);
+                return {
+                    videoId: row.videoId,
+                    title: video?.title || 'Untitled',
+                    thumbnailUrl: video?.thumbnailUrl || null,
+                    watchCount: row._count.videoId,
+                    genre: video?.genre || null
+                };
+            });
 
             return NextResponse.json({
                 topMovies: moviesWithDetails
             });
         } else if (type === 'user_activity') {
-            // Get user activity for analytics dashboard
-            const last30Days = new Date();
-            last30Days.setDate(last30Days.getDate() - 30);
+            const rangeDays = 14;
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - (rangeDays - 1));
+            startDate.setHours(0, 0, 0, 0);
 
-            const events = await prisma.analyticsEvent.findMany({
-                where: {
-                    userId,
-                    createdAt: { gte: last30Days }
-                },
-                orderBy: { createdAt: 'asc' }
-            });
+            const activityRaw = await prisma.$queryRaw`
+                SELECT DATE_TRUNC('day', "createdAt") AS day, COUNT(*)::int AS watches
+                FROM "WatchHistory"
+                WHERE "createdAt" >= ${startDate}
+                GROUP BY day
+                ORDER BY day ASC
+            `;
 
-            // Group by date
-            const activityByDate: Record<string, number> = {};
-            for (const event of events) {
-                const dateStr = event.createdAt.toLocaleDateString();
-                activityByDate[dateStr] = (activityByDate[dateStr] || 0) + 1;
+            const activityMap = new Map<string, number>();
+            if (Array.isArray(activityRaw)) {
+                activityRaw.forEach((row: any) => {
+                    const key = new Date(row.day).toISOString().slice(0, 10);
+                    activityMap.set(key, Number(row.watches));
+                });
             }
 
-            const activityData = Object.entries(activityByDate).map(([date, watches]) => ({
-                date,
-                watches
-            }));
+            const activityData = Array.from({ length: rangeDays }).map((_, idx) => {
+                const day = new Date(startDate);
+                day.setDate(startDate.getDate() + idx);
+                const key = day.toISOString().slice(0, 10);
+                return {
+                    date: key,
+                    watches: activityMap.get(key) || 0
+                };
+            });
 
             return NextResponse.json({ activityData });
         }

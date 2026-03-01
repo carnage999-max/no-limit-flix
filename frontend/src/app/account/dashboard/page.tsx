@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Film, BarChart3 } from 'lucide-react';
+import { Film, BarChart3, Heart, TrendingUp } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 
 interface WatchStat {
@@ -31,8 +31,8 @@ export default function AnalyticsDashboard() {
     const { user, loading: sessionLoading } = useSession();
     const [stats, setStats] = useState<any>(null);
     const [topMovies, setTopMovies] = useState<TopMovie[]>([]);
+    const [activityData, setActivityData] = useState<Array<{ date: string; watches: number }>>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
     const [page, setPage] = useState(1);
 
     useEffect(() => {
@@ -51,9 +51,10 @@ export default function AnalyticsDashboard() {
     const fetchAnalytics = async () => {
         try {
             setLoading(true);
-            const [statsRes, moviesRes] = await Promise.all([
+            const [statsRes, moviesRes, activityRes] = await Promise.all([
                 fetch(`/api/analytics?type=watch_stats`),
-                fetch(`/api/analytics?type=top_movies&page=${page}&limit=10`)
+                fetch(`/api/analytics?type=top_movies&page=${page}&limit=10`),
+                fetch(`/api/analytics?type=user_activity`)
             ]);
 
             if (statsRes.ok) {
@@ -64,6 +65,10 @@ export default function AnalyticsDashboard() {
             if (moviesRes.ok) {
                 const moviesData = await moviesRes.json();
                 setTopMovies(moviesData.topMovies);
+            }
+            if (activityRes.ok) {
+                const activity = await activityRes.json();
+                setActivityData(activity.activityData || []);
             }
         } catch (error) {
             console.error('Failed to fetch analytics:', error);
@@ -106,13 +111,13 @@ export default function AnalyticsDashboard() {
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent'
                         }}>
-                            Your Analytics
+                            Platform Analytics
                         </h1>
                         <p style={{
                             color: '#A7ABB4',
                             fontSize: '1rem'
                         }}>
-                            Track your viewing habits and discover insights
+                            Global viewership trends across the entire audience
                         </p>
                     </div>
                     <Link
@@ -136,7 +141,10 @@ export default function AnalyticsDashboard() {
                             (e.currentTarget as HTMLElement).style.background = 'rgba(212, 175, 55, 0.1)';
                         }}
                     >
-                        ❤️ Favorites
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <Heart className="w-4 h-4" />
+                            Favorites
+                        </span>
                     </Link>
                 </div>
             </div>
@@ -174,7 +182,7 @@ export default function AnalyticsDashboard() {
                             gap: '1.5rem',
                             marginTop: '2rem',
                             marginBottom: '3rem'
-                        }}>
+                        }} className="analytics-grid">
                             {/* Total Watched */}
                             <div style={{
                                 padding: '2rem',
@@ -190,7 +198,7 @@ export default function AnalyticsDashboard() {
                                     letterSpacing: '0.05em',
                                     marginBottom: '0.75rem'
                                 }}>
-                                    Videos Watched
+                                    Total Views
                                 </p>
                                 <div style={{
                                     fontSize: '3rem',
@@ -204,7 +212,7 @@ export default function AnalyticsDashboard() {
                                     fontSize: '0.75rem',
                                     color: '#A7ABB4'
                                 }}>
-                                    Total titles watched
+                                    Overall watch sessions
                                 </p>
                             </div>
 
@@ -223,7 +231,7 @@ export default function AnalyticsDashboard() {
                                     letterSpacing: '0.05em',
                                     marginBottom: '0.75rem'
                                 }}>
-                                    Completed Watches
+                                    Completed Views
                                 </p>
                                 <div style={{
                                     fontSize: '3rem',
@@ -308,6 +316,61 @@ export default function AnalyticsDashboard() {
                                 </p>
                             </div>
                         </div>
+
+                        {activityData.length > 0 && (
+                            <div style={{ marginBottom: '3rem' }}>
+                                <h2 style={{
+                                    fontSize: '1.75rem',
+                                    fontWeight: '700',
+                                    color: '#F3F4F6',
+                                    marginBottom: '1.5rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '0.75rem'
+                                }}>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <TrendingUp className="w-5 h-5" />
+                                        Watch Activity (Last 14 Days)
+                                    </span>
+                                </h2>
+                                <div style={{
+                                    padding: '1.5rem',
+                                    borderRadius: '1rem',
+                                    background: 'rgba(167, 171, 180, 0.04)',
+                                    border: '1px solid rgba(167, 171, 180, 0.1)'
+                                }}>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: `repeat(${activityData.length}, minmax(0, 1fr))`,
+                                        gap: '0.5rem',
+                                        alignItems: 'flex-end',
+                                        height: '160px'
+                                    }}>
+                                        {activityData.map((point) => {
+                                            const max = Math.max(...activityData.map((d) => d.watches), 1);
+                                            const height = Math.max(8, Math.round((point.watches / max) * 140));
+                                            return (
+                                                <div key={point.date} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+                                                    <div
+                                                        style={{
+                                                            width: '100%',
+                                                            borderRadius: '12px',
+                                                            background: 'linear-gradient(180deg, rgba(212, 175, 55, 0.9) 0%, rgba(212, 175, 55, 0.3) 100%)',
+                                                            height: `${height}px`,
+                                                            transition: 'height 0.3s ease'
+                                                        }}
+                                                        title={`${point.watches} watches`}
+                                                    />
+                                                    <span style={{ fontSize: '0.65rem', color: '#A7ABB4' }}>
+                                                        {point.date.slice(5)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Top Movies Section */}
                         <div style={{
@@ -431,7 +494,7 @@ export default function AnalyticsDashboard() {
                                         color: '#A7ABB4',
                                         fontSize: '1rem'
                                     }}>
-                                        Start watching to see your top titles here
+                                        Data will appear once users start watching
                                     </p>
                                 </div>
                             )}
@@ -520,6 +583,19 @@ export default function AnalyticsDashboard() {
                     </div>
                 )}
             </div>
+
+            <style>{`
+                @media (max-width: 900px) {
+                    .analytics-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+                @media (max-width: 420px) {
+                    .analytics-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                    }
+                }
+            `}</style>
         </main>
     );
 }
