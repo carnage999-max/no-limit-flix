@@ -7,8 +7,9 @@ const prisma = new PrismaClient();
 export async function GET(request: NextRequest) {
     try {
         // Check admin session
-        const adminSession = request.headers.get('cookie')?.includes('adminSession');
-        if (!adminSession) {
+        const adminPassword = process.env.ADMIN_PASSWORD;
+        const session = request.cookies.get('admin_session')?.value;
+        if (!adminPassword || session !== adminPassword) {
             return NextResponse.json(
                 { error: 'Unauthorized' },
                 { status: 401 }

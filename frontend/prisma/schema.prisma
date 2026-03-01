@@ -47,6 +47,8 @@ model Video {
   resolution      String?  // e.g., 4K, 1080p
   genre           String?
   rating          String?  // e.g., PG, 18+
+  averageRating   Float?   // e.g., 7.6 (IMDb/OMDb average rating)
+  ratingCount     Int?     // number of votes if available
   fileSize        BigInt?
   mimeType        String?
   
@@ -82,10 +84,28 @@ model User {
   favorites         Favorite[]
   analyticsEvents   AnalyticsEvent[]
   deletionRequests  AccountDeletionRequest[]
+  sessions          UserSession[]
 
   @@index([email])
   @@index([username])
   @@index([role])
+}
+
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  sessionId   String   @unique
+  userAgent   String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+  revokedAt   DateTime?
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([revokedAt])
 }
 
 model WatchHistory {

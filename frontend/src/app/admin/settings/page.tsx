@@ -51,13 +51,7 @@ export default function AdminSettingsPage() {
     const [deletionError, setDeletionError] = useState('');
     const pageSize = 10;
 
-    // Check if admin session exists
     useEffect(() => {
-        const adminSession = localStorage.getItem('adminSession');
-        if (!adminSession) {
-            router.push('/admin');
-            return;
-        }
         fetchUsers(1);
         fetchDeletionRequests();
     }, [router]);
@@ -67,6 +61,10 @@ export default function AdminSettingsPage() {
             setDeletionLoading(true);
             setDeletionError('');
             const response = await fetch('/api/admin/deletion-requests');
+            if (response.status === 401) {
+                router.push('/admin?redirect=/admin/settings');
+                return;
+            }
             if (!response.ok) {
                 throw new Error('Failed to fetch deletion requests');
             }
@@ -106,6 +104,10 @@ export default function AdminSettingsPage() {
                 search: searchQuery
             });
             const response = await fetch(`/api/admin/users?${queryParams}`);
+            if (response.status === 401) {
+                router.push('/admin?redirect=/admin/settings');
+                return;
+            }
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }

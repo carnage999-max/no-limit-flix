@@ -20,11 +20,16 @@ export default function TitleTile({ movie }: TitleTileProps) {
     const { user } = useSession();
     const [isFav, setIsFav] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [posterSrc, setPosterSrc] = useState(movie.poster || '/poster-placeholder.svg');
 
     useEffect(() => {
         const movieId = movie.assetId || movie.id || movie.tmdb_id;
         setIsFav(isFavorite(movieId));
     }, [movie, isFavorite]);
+
+    useEffect(() => {
+        setPosterSrc(movie.poster || '/poster-placeholder.svg');
+    }, [movie.poster]);
 
     // Determine if this is a series based on the explanation field (contains "episodes")
     const isSeries = movie.explanation?.toLowerCase().includes('episodes');
@@ -117,7 +122,7 @@ export default function TitleTile({ movie }: TitleTileProps) {
                     }}
                 >
                     <img
-                        src={movie.poster}
+                        src={posterSrc}
                         alt={movie.title}
                         style={{
                             width: '100%',
@@ -126,6 +131,11 @@ export default function TitleTile({ movie }: TitleTileProps) {
                             maxWidth: '100%',
                             maxHeight: '100%',
                             display: 'block',
+                        }}
+                        onError={(e) => {
+                            const target = e.currentTarget;
+                            target.onerror = null;
+                            target.src = '/poster-placeholder.svg';
                         }}
                     />
 

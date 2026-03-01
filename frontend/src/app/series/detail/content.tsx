@@ -67,6 +67,10 @@ export default function SeriesDetailContent() {
     const filteredEpisodes = selectedSeason !== null 
         ? episodes.filter((ep: any) => ep.seasonNumber === selectedSeason)
         : episodes;
+    const averageRating = series?.averageRating
+        ?? (typeof series?.rating === 'number' ? series.rating : null)
+        ?? (typeof tmdbData?.rating === 'number' ? tmdbData.rating : null);
+    const maturityRating = typeof series?.rating === 'string' ? series.rating : null;
 
     if (loading) {
         return (
@@ -175,7 +179,7 @@ export default function SeriesDetailContent() {
                                         {series.genre}
                                     </span>
                                 )}
-                                {series.rating && (
+                                {averageRating && (
                                     <span style={{
                                         padding: '0.4rem 0.75rem',
                                         borderRadius: '9999px',
@@ -185,7 +189,20 @@ export default function SeriesDetailContent() {
                                         textTransform: 'uppercase',
                                         letterSpacing: '0.05em'
                                     }}>
-                                        {series.rating}
+                                        Rating {averageRating.toFixed(1)}
+                                    </span>
+                                )}
+                                {maturityRating && (
+                                    <span style={{
+                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '9999px',
+                                        color: '#A7ABB4',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '600',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em'
+                                    }}>
+                                        Rated {maturityRating}
                                     </span>
                                 )}
                             </div>
@@ -212,16 +229,18 @@ export default function SeriesDetailContent() {
                                 <div style={{ fontSize: '1rem', color: '#F3F4F6', lineHeight: '1.6' }}>
                                     {series.description || `${episodes.length} episodes${seasons.length > 1 ? ` across ${seasons.length} seasons` : ''}`}
                                 </div>
-                                {tmdbData && (
+                                {(tmdbData || averageRating) && (
                                     <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(167, 171, 180, 0.1)' }}>
                                         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-                                            <div>
-                                                <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
-                                                <div style={{ fontSize: '1.25rem', color: '#D4AF37', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    <Star className="w-4 h-4" />
-                                                    {tmdbData.rating.toFixed(1)}/10
+                                            {averageRating && (
+                                                <div>
+                                                    <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
+                                                    <div style={{ fontSize: '1.25rem', color: '#D4AF37', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                        <Star className="w-4 h-4" />
+                                                        {averageRating.toFixed(1)}/10
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
                                             {tmdbData.trailerUrl && (
                                                 <button
                                                     onClick={() => setIsTrailerOpen(true)}

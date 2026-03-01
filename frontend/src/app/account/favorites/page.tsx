@@ -7,6 +7,8 @@ import { ArrowLeft, ArrowRight, Trash2, Heart } from 'lucide-react';
 import { CardViewToggle } from '@/components';
 import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
+import { useToast } from '@/components/Toast';
+import { safeBtoa } from '@/lib/base64';
 
 interface Favorite {
     id: string;
@@ -14,19 +16,22 @@ interface Favorite {
     tmdbId?: string | null;
     videoTitle?: string;
     videoPoster?: string;
-    video?: {
-        id: string;
-        title: string;
-        thumbnailUrl?: string;
-        genre?: string;
-        description?: string;
-        duration?: number;
-        releaseYear?: number;
-        tmdbId?: string;
-        sourceProvider?: string;
-        sourcePageUrl?: string;
-        sourceRights?: string;
-        sourceLicenseUrl?: string;
+        video?: {
+            id: string;
+            title: string;
+            thumbnailUrl?: string;
+            genre?: string;
+            description?: string;
+            duration?: number;
+            releaseYear?: number;
+            rating?: string;
+            averageRating?: number | null;
+            ratingCount?: number | null;
+            tmdbId?: string;
+            sourceProvider?: string;
+            sourcePageUrl?: string;
+            sourceRights?: string;
+            sourceLicenseUrl?: string;
     } | null;
     addedAt: string;
 }
@@ -40,6 +45,7 @@ export default function FavoritesPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const { viewSize } = useCardView();
     const { user, loading: sessionLoading } = useSession();
+    const { showToast } = useToast();
 
     const gridStyle = {
         display: 'grid',
@@ -87,7 +93,7 @@ export default function FavoritesPage() {
         const tmdbId = favorite.tmdbId || video?.tmdbId;
 
         if (hasInternalAsset) {
-            const encodedData = btoa(JSON.stringify({
+            const encodedData = safeBtoa(JSON.stringify({
                 id: video?.id || favorite.videoId,
                 title: video?.title || favorite.videoTitle || 'Untitled',
                 poster: video?.thumbnailUrl || favorite.videoPoster,
@@ -95,6 +101,10 @@ export default function FavoritesPage() {
                 runtime: video?.duration ? Math.floor(video.duration / 60) : 0,
                 genres: video?.genre ? [video.genre] : [],
                 explanation: video?.description || '',
+                description: video?.description || '',
+                rating: video?.rating || null,
+                averageRating: video?.averageRating ?? null,
+                ratingCount: video?.ratingCount ?? null,
                 playable: true,
                 assetId: video?.id || favorite.videoId,
                 tmdbId: video?.tmdbId || favorite.tmdbId,
@@ -128,9 +138,13 @@ export default function FavoritesPage() {
 
             if (res.ok) {
                 setFavorites(favorites.filter(f => f.videoId !== videoId && f.tmdbId !== tmdbId));
+                showToast('Removed from favorites', 'success');
+            } else {
+                showToast('Failed to remove favorite', 'error');
             }
         } catch (error) {
             console.error('Failed to remove favorite:', error);
+            showToast('Failed to remove favorite', 'error');
         }
     };
 
@@ -207,7 +221,7 @@ export default function FavoritesPage() {
                         <div style={gridStyle} className={gridClassName}>
                             {favorites.map((favorite) => {
                                 const displayTitle = favorite.video?.title || favorite.videoTitle || 'Untitled';
-                                const displayPoster = favorite.video?.thumbnailUrl || favorite.videoPoster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+                                const displayPoster = favorite.video?.thumbnailUrl || favorite.videoPoster || '/poster-placeholder.svg';
                                 const displayGenre = favorite.video?.genre;
                                 const href = buildFavoriteLink(favorite);
                                 return (
@@ -244,6 +258,11 @@ export default function FavoritesPage() {
                                             maxWidth: '100%',
                                             maxHeight: '100%',
                                             display: 'block',
+                                        }}
+                                        onError={(e) => {
+                                            const target = e.currentTarget;
+                                            target.onerror = null;
+                                            target.src = '/poster-placeholder.svg';
                                         }}
                                     />
 

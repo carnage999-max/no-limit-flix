@@ -33,7 +33,7 @@ const timingSafeEqual = (a: string, b: string) => {
     return result === 0;
 };
 
-export async function verifySessionTokenEdge(token?: string | null): Promise<{ userId: string; role?: string; expiresAt: number } | null> {
+export async function verifySessionTokenEdge(token?: string | null): Promise<{ userId: string; role?: string; expiresAt: number; sessionId?: string } | null> {
     if (!token) return null;
     const secret = getAuthSecret();
     if (!secret) return null;

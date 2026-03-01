@@ -31,6 +31,8 @@ export async function GET(request: Request) {
                 releaseYear: true,
                 genre: true,
                 rating: true,
+                averageRating: true,
+                ratingCount: true,
                 resolution: true,
                 tmdbId: true,
                 sourceType: true,

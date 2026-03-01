@@ -2,11 +2,9 @@
 
 import { useState } from 'react';
 import { Mail, MessageSquare, Trash2, CheckCircle2 } from 'lucide-react';
-import { useSession } from '@/context/SessionContext';
 
 export default function DeleteAccountPage() {
-    const { user } = useSession();
-    const [email, setEmail] = useState(user?.email || '');
+    const [email, setEmail] = useState('');
     const [reason, setReason] = useState('');
     const [status, setStatus] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);

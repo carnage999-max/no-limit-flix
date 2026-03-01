@@ -12,13 +12,26 @@ export async function PUT(request: NextRequest) {
         const body = await request.json();
         const { username, email, avatar } = body;
 
+        const updateData: { username?: string; email?: string; avatar?: string | null } = {};
+        if (typeof username === 'string' && username.trim()) {
+            updateData.username = username;
+        }
+        if (typeof email === 'string' && email.trim()) {
+            updateData.email = email;
+        }
+        if (avatar === null) {
+            updateData.avatar = null;
+        } else if (typeof avatar === 'string') {
+            updateData.avatar = avatar || undefined;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return NextResponse.json({ user: sessionUser });
+        }
+
         const updated = await prisma.user.update({
             where: { id: sessionUser.id },
-            data: {
-                username: username || undefined,
-                email: email || undefined,
-                avatar: avatar || undefined,
-            },
+            data: updateData,
             select: {
                 id: true,
                 email: true,

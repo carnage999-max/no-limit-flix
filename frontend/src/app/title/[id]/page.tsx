@@ -8,8 +8,9 @@ import VideoPlayer from '@/components/VideoPlayer';
 import { getMovieDetails } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import type { MoviePick } from '@/types';
-import { CheckCircle2, ExternalLink, Play, Smartphone } from 'lucide-react';
+import { ExternalLink, Play, Smartphone } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
+import { safeAtob } from '@/lib/base64';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -37,7 +38,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                 const movieData = searchParams.get('data');
                 if (movieData) {
                     try {
-                        const decodedData = JSON.parse(atob(movieData));
+                        const decodedData = JSON.parse(safeAtob(movieData));
                         setMovie(decodedData as MoviePick);
                         
                         // Fetch TMDB data if tmdb_id is available
@@ -97,6 +98,29 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
 
     if (!movie) {
         notFound();
+    }
+
+    const descriptionText = movie.description || tmdbData?.overview || '';
+    const numericMovieRating = typeof movie.rating === 'number' ? movie.rating : null;
+    const averageRating = movie.averageRating ?? numericMovieRating ?? (typeof tmdbData?.rating === 'number' ? tmdbData.rating : null);
+    const maturityRating = typeof movie.rating === 'string' ? movie.rating : null;
+    const tagItems: string[] = [];
+    if (movie.genres && movie.genres.length > 0) {
+        tagItems.push(...movie.genres.slice(0, 4));
+    }
+    if (averageRating) {
+        const ratingLabel = `Rating ${averageRating.toFixed(1)}`;
+        tagItems.push(ratingLabel);
+    }
+    if (maturityRating) {
+        const ratingLabel = `Rated ${maturityRating}`;
+        tagItems.push(ratingLabel);
+    }
+    if (movie.year) {
+        tagItems.push(`Year ${movie.year}`);
+    }
+    if (movie.runtime) {
+        tagItems.push(`${movie.runtime} min`);
     }
 
     return (
@@ -203,8 +227,32 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 {movie.year} <span style={{ color: 'rgba(255,255,255,0.1)', margin: '0 10px' }}>•</span> {movie.runtime} min
                             </p>
 
-                            {/* TMDB Rating and Info */}
-                            {tmdbData && tmdbData.rating && (
+                            {movie.playable && movie.assetId && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '2rem' }}>
+                                    <Link
+                                        href={`/watch/${movie.assetId}`}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                            padding: '0.85rem 1.75rem',
+                                            borderRadius: '999px',
+                                            background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
+                                            color: '#0B0B0D',
+                                            fontWeight: '700',
+                                            textDecoration: 'none',
+                                            fontSize: '0.95rem',
+                                            boxShadow: '0 12px 30px rgba(212, 175, 55, 0.25)',
+                                        }}
+                                    >
+                                        <Play className="w-4 h-4" />
+                                        Watch now
+                                    </Link>
+                                </div>
+                            )}
+
+                            {/* Rating and Info */}
+                            {averageRating && (
                                 <div style={{
                                     display: 'flex',
                                     gap: '1.5rem',
@@ -215,9 +263,9 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 }}>
                                     <div>
                                         <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.25rem' }}>RATING</div>
-                                        <div style={{ fontSize: '1.5rem', color: '#D4AF37', fontWeight: '700' }}>{tmdbData.rating?.toFixed(1)}/10</div>
+                                        <div style={{ fontSize: '1.5rem', color: '#D4AF37', fontWeight: '700' }}>{averageRating.toFixed(1)}/10</div>
                                     </div>
-                                    {tmdbData.trailerUrl && (
+                                    {tmdbData?.trailerUrl && (
                                         <button
                                             onClick={() => setIsTrailerOpen(true)}
                                             style={{
@@ -246,6 +294,41 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                             </span>
                                         </button>
                                     )}
+                                </div>
+                            )}
+
+                            {descriptionText && (
+                                <div
+                                    style={{
+                                        padding: '2rem',
+                                        borderRadius: '1.25rem',
+                                        background: 'rgba(167, 171, 180, 0.04)',
+                                        border: '1px solid rgba(167, 171, 180, 0.08)',
+                                        marginBottom: '2.5rem',
+                                    }}
+                                >
+                                    <h3
+                                        style={{
+                                            fontSize: '0.75rem',
+                                            fontWeight: '800',
+                                            color: '#A7ABB4',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.2em',
+                                            marginBottom: '1rem',
+                                        }}
+                                    >
+                                        About this title
+                                    </h3>
+                                    <p
+                                        style={{
+                                            fontSize: '1.05rem',
+                                            color: '#F3F4F6',
+                                            lineHeight: '1.7',
+                                            marginBottom: 0,
+                                        }}
+                                    >
+                                        {descriptionText}
+                                    </p>
                                 </div>
                             )}
 
@@ -282,19 +365,25 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                 >
                                     Why you might like this
                                 </h3>
-                                <p
-                                    style={{
-                                        fontSize: '1.125rem',
-                                        color: '#F3F4F6',
-                                        lineHeight: '1.7',
-                                        marginBottom: '1.5rem'
-                                    }}
-                                >
-                                    {movie.explanation}
-                                </p>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', opacity: 0.6 }}>
-                                    <span style={{ fontSize: '12px', color: '#A7ABB4', fontWeight: '500' }}>Stability Verified</span>
-                                    <CheckCircle2 className="w-4 h-4" style={{ color: '#4ADE80' }} />
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    {(tagItems.length ? tagItems : ['Curated for your taste']).map((tag) => (
+                                        <span
+                                            key={tag}
+                                            style={{
+                                                padding: '0.4rem 0.75rem',
+                                                borderRadius: '999px',
+                                                background: 'rgba(212, 175, 55, 0.12)',
+                                                border: '1px solid rgba(212, 175, 55, 0.35)',
+                                                color: '#D4AF37',
+                                                fontSize: '0.78rem',
+                                                fontWeight: 700,
+                                                letterSpacing: '0.05em',
+                                                textTransform: 'uppercase',
+                                            }}
+                                        >
+                                            {tag}
+                                        </span>
+                                    ))}
                                 </div>
                             </div>
 

@@ -59,8 +59,8 @@ export async function POST(request: NextRequest) {
                 videoId,
                 videoTitle: title,
                 metadata: {
-                    watchedPercent,
-                    duration,
+                    completionPercent,
+                    totalDuration,
                     watchedDuration
                 }
             }
@@ -99,12 +99,12 @@ export async function GET(request: NextRequest) {
             prisma.watchHistory.findMany({
                 where: {
                     userId,
-                    title: search ? {
+                    videoTitle: search ? {
                         contains: search,
                         mode: 'insensitive'
                     } : undefined
                 },
-                orderBy: { startedAt: 'desc' },
+                orderBy: { watchedAt: 'desc' },
                 skip,
                 take: limit,
                 include: {
@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
             prisma.watchHistory.count({
                 where: {
                     userId,
-                    title: search ? {
+                    videoTitle: search ? {
                         contains: search,
                         mode: 'insensitive'
                     } : undefined

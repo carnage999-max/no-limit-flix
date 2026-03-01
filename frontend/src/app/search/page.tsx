@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search, XCircle, ChevronRight, Film } from 'lucide-react';
+import { safeBtoa } from '@/lib/base64';
 
 interface TmdbResult {
     id: string;
@@ -18,14 +19,18 @@ interface LibraryResult {
     genre?: string | null;
     duration?: number | null;
     releaseYear?: number | null;
+    rating?: string | null;
+    averageRating?: number | null;
+    ratingCount?: number | null;
     tmdbId?: string | null;
     sourceProvider?: string | null;
     sourcePageUrl?: string | null;
     sourceRights?: string | null;
     sourceLicenseUrl?: string | null;
+    description?: string | null;
 }
 
-const DEFAULT_POSTER = 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+const DEFAULT_POSTER = '/poster-placeholder.svg';
 
 export default function SearchPage() {
     const [query, setQuery] = useState('');
@@ -86,14 +91,18 @@ export default function SearchPage() {
     }, [query, performSearch]);
 
     const buildLibraryLink = (item: LibraryResult) => {
-        const encodedData = btoa(JSON.stringify({
+        const encodedData = safeBtoa(JSON.stringify({
             id: item.id,
             title: item.title || item.seriesTitle || 'Untitled',
             poster: item.thumbnailUrl || DEFAULT_POSTER,
             year: item.releaseYear || new Date().getFullYear(),
             runtime: item.duration ? Math.floor(item.duration / 60) : 0,
             genres: item.genre ? [item.genre] : [],
-            explanation: 'Available in your library',
+            explanation: item.description || '',
+            description: item.description || '',
+            rating: item.rating || null,
+            averageRating: item.averageRating ?? null,
+            ratingCount: item.ratingCount ?? null,
             playable: true,
             assetId: item.id,
             tmdbId: item.tmdbId,
@@ -115,7 +124,7 @@ export default function SearchPage() {
                     <Search size={56} color="#A7ABB4" style={{ opacity: 0.4 }} />
                     <h3 style={{ marginTop: '1.5rem', fontSize: '1.25rem', color: '#F3F4F6' }}>Search for Movies</h3>
                     <p style={{ color: '#A7ABB4', marginTop: '0.75rem' }}>
-                        Start typing to find films from TMDB and your internal library.
+                        Start typing to find films from our catalog and your internal library.
                     </p>
                 </div>
             );
@@ -209,7 +218,7 @@ export default function SearchPage() {
                     <section style={{ marginBottom: '2.5rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem' }}>
                             <h2 style={{ fontSize: '0.85rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#D4AF37', margin: 0 }}>
-                                From Your Library
+                                Ready to Watch Now
                             </h2>
                             {tmdbResults.length === 0 && query.length >= 2 && !loading && (
                                 <span style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>
@@ -238,6 +247,11 @@ export default function SearchPage() {
                                         src={item.thumbnailUrl || DEFAULT_POSTER}
                                         alt={item.title}
                                         style={{ width: 48, height: 64, borderRadius: 8, objectFit: 'cover' }}
+                                        onError={(e) => {
+                                            const target = e.currentTarget;
+                                            target.onerror = null;
+                                            target.src = DEFAULT_POSTER;
+                                        }}
                                     />
                                     <div style={{ flex: 1 }}>
                                         <p style={{ fontSize: '1rem', fontWeight: 600, color: '#F3F4F6', margin: 0 }}>
@@ -247,7 +261,24 @@ export default function SearchPage() {
                                             {item.releaseYear || ''} {item.genre ? `· ${item.genre}` : ''}
                                         </p>
                                     </div>
-                                    <ChevronRight size={18} color="#A7ABB4" />
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <span
+                                            style={{
+                                                padding: '0.3rem 0.6rem',
+                                                borderRadius: '999px',
+                                                background: 'rgba(212, 175, 55, 0.18)',
+                                                border: '1px solid rgba(212, 175, 55, 0.4)',
+                                                color: '#D4AF37',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 700,
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.08em',
+                                            }}
+                                        >
+                                            Watch now
+                                        </span>
+                                        <ChevronRight size={18} color="#A7ABB4" />
+                                    </div>
                                 </Link>
                             ))}
                         </div>
@@ -257,7 +288,7 @@ export default function SearchPage() {
                 {tmdbResults.length > 0 && (
                     <section style={{ marginBottom: '2.5rem' }}>
                         <h2 style={{ fontSize: '0.85rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#A7ABB4', marginBottom: '1rem' }}>
-                            From the Catalog
+                            Curated Picks
                         </h2>
                         <div style={{ display: 'grid', gap: '0.75rem' }}>
                             {tmdbResults.map((item) => (

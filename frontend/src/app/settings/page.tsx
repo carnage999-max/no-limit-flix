@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Info, ShieldCheck, FileText, ChevronRight, LogOut, UserX } from 'lucide-react';
+import { Info, ShieldCheck, FileText, ChevronRight, LogOut, UserX, Monitor, History } from 'lucide-react';
 import { ConfirmModal } from '@/components';
 import { useSession } from '@/context/SessionContext';
 
@@ -30,6 +30,18 @@ const menuItems = [
         subtitle: 'Request account deletion',
         href: '/delete-account',
         icon: UserX,
+    },
+    {
+        title: 'Devices',
+        subtitle: 'Manage where you are signed in',
+        href: '/devices',
+        icon: Monitor,
+    },
+    {
+        title: 'Watch History',
+        subtitle: 'See what you watched across devices',
+        href: '/watch-history',
+        icon: History,
     },
 ];
 
@@ -94,7 +106,7 @@ export default function SettingsPage() {
                         color: '#A7ABB4',
                         marginBottom: '1rem',
                     }}>
-                        App
+                        Resources
                     </h2>
 
                     <div style={{ display: 'grid', gap: '0.75rem' }}>

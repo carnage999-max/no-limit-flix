@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword, verifyPassword, createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE } from '@/lib/auth';
+import crypto from 'crypto';
+import { hashPassword, verifyPassword, createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, verifySessionToken } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
@@ -38,11 +39,25 @@ export async function POST(request: NextRequest) {
                 }
             });
 
+            const sessionId = crypto.randomUUID();
+            const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+                || request.headers.get('x-real-ip')
+                || undefined;
+            await prisma.userSession.create({
+                data: {
+                    userId: user.id,
+                    sessionId,
+                    userAgent: request.headers.get('user-agent') || undefined,
+                    ipAddress,
+                }
+            });
+
             // Generate session token
             const token = createSessionToken({
                 userId: user.id,
                 role: user.role,
-                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000
+                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000,
+                sessionId,
             });
 
             // Set session cookie
@@ -78,11 +93,25 @@ export async function POST(request: NextRequest) {
                 );
             }
 
+            const sessionId = crypto.randomUUID();
+            const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+                || request.headers.get('x-real-ip')
+                || undefined;
+            await prisma.userSession.create({
+                data: {
+                    userId: user.id,
+                    sessionId,
+                    userAgent: request.headers.get('user-agent') || undefined,
+                    ipAddress,
+                }
+            });
+
             // Generate session token
             const token = createSessionToken({
                 userId: user.id,
                 role: user.role,
-                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000
+                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000,
+                sessionId,
             });
 
             const response = NextResponse.json({
@@ -106,6 +135,15 @@ export async function POST(request: NextRequest) {
 
             return response;
         } else if (action === 'logout') {
+            const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+            const payload = verifySessionToken(token);
+            if (payload?.sessionId) {
+                await prisma.userSession.updateMany({
+                    where: { sessionId: payload.sessionId },
+                    data: { revokedAt: new Date() }
+                });
+            }
+
             const response = NextResponse.json({ success: true });
             response.cookies.delete(SESSION_COOKIE_NAME);
             return response;

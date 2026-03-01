@@ -13,6 +13,22 @@ export async function middleware(request: NextRequest) {
             redirectUrl.searchParams.set('redirect', `${pathname}${search}`);
             return NextResponse.redirect(redirectUrl);
         }
+        try {
+            const verifyUrl = new URL('/api/auth/session', request.url);
+            const verifyRes = await fetch(verifyUrl, {
+                headers: { cookie: request.headers.get('cookie') || '' },
+                cache: 'no-store',
+            });
+            if (!verifyRes.ok) {
+                const redirectUrl = new URL('/auth', request.url);
+                redirectUrl.searchParams.set('redirect', `${pathname}${search}`);
+                return NextResponse.redirect(redirectUrl);
+            }
+        } catch {
+            const redirectUrl = new URL('/auth', request.url);
+            redirectUrl.searchParams.set('redirect', `${pathname}${search}`);
+            return NextResponse.redirect(redirectUrl);
+        }
     }
 
     return NextResponse.next();

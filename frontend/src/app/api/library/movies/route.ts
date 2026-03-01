@@ -25,6 +25,8 @@ export async function GET() {
                 releaseYear: true,
                 genre: true,
                 rating: true,
+                averageRating: true,
+                ratingCount: true,
                 resolution: true,
                 tmdbId: true,         // optional link to global catalog
                 sourceType: true,

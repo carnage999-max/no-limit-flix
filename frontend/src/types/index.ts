@@ -13,6 +13,10 @@ export interface Movie {
 
 export interface MoviePick extends Movie {
     explanation: string;
+    description?: string;
+    rating?: string | number; // maturity rating (e.g., PG)
+    averageRating?: number | null; // average rating (e.g., 7.6)
+    ratingCount?: number | null;
     trailerUrl?: string;
     watchProviders: WatchProvider[];
     permanence?: 'Permanent Core' | 'Long-Term' | 'Licensed';

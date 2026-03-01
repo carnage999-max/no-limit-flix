@@ -51,10 +51,10 @@ function AuthContent() {
                 setSuccessMessage(isLogin ? 'Login successful! Redirecting...' : 'Account created! Redirecting...');
                 await refresh();
                 setTimeout(() => {
-                    const redirectUrl = searchParams.get('redirect');
-                    router.push(redirectUrl || '/');
+                    const redirectUrl = searchParams.get('redirect') || '/';
+                    router.push(`/welcome?redirect=${encodeURIComponent(redirectUrl)}`);
                     router.refresh();
-                }, 1500);
+                }, 1200);
             } else {
                 setError(data.error || 'An error occurred');
             }

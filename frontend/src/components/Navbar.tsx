@@ -125,28 +125,28 @@ export default function Navbar() {
                         style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '0.5rem',
-                            padding: '0.5rem 1rem',
-                            borderRadius: '0.5rem',
-                            background: 'rgba(212, 175, 55, 0.1)',
-                            border: '1px solid rgba(212, 175, 55, 0.2)',
-                            color: '#D4AF37',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
+                            borderRadius: '0.65rem',
+                            background: 'rgba(212, 175, 55, 0.18)',
+                            border: '1px solid rgba(212, 175, 55, 0.45)',
+                            color: '#F6D365',
                             textDecoration: 'none',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
                             transition: 'all 0.2s',
                         }}
                         onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.15)';
-                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)';
+                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.28)';
+                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.65)';
                         }}
                         onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.1)';
-                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.2)';
+                            e.currentTarget.style.background = 'rgba(212, 175, 55, 0.18)';
+                            e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.45)';
                         }}
+                        aria-label="Analytics dashboard"
+                        title="Analytics"
                     >
-                        <BarChart3 size={18} />
-                        Analytics
+                        <BarChart3 size={20} />
                     </Link>
                 )}
                 {userRole && (
@@ -186,6 +186,11 @@ export default function Navbar() {
                                         height: '100%',
                                         borderRadius: '0.5rem',
                                         objectFit: 'cover',
+                                    }}
+                                    onError={(e) => {
+                                        const target = e.currentTarget;
+                                        target.onerror = null;
+                                        target.src = '/avatar-placeholder.svg';
                                     }}
                                 />
                             ) : (
@@ -245,6 +250,11 @@ export default function Navbar() {
                                                 src={user.avatar}
                                                 alt={user.username || 'Profile'}
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                onError={(e) => {
+                                                    const target = e.currentTarget;
+                                                    target.onerror = null;
+                                                    target.src = '/avatar-placeholder.svg';
+                                                }}
                                             />
                                         ) : (
                                             <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>

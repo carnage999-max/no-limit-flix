@@ -34,6 +34,8 @@ async function upsertVideo(payload) {
             "resolution",
             "genre",
             "rating",
+            "averageRating",
+            "ratingCount",
             "seriesTitle",
             "seasonNumber",
             "episodeNumber",
@@ -53,7 +55,8 @@ async function upsertVideo(payload) {
         ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-            $21, $22, $23, $24, $25, $26, $27, $28, $29, $30::jsonb, $31, $32
+            $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
+            $31, $32::jsonb, $33, $34
         )
         ON CONFLICT ("archiveIdentifier") DO UPDATE SET
             "title" = EXCLUDED."title",
@@ -71,6 +74,8 @@ async function upsertVideo(payload) {
             "resolution" = EXCLUDED."resolution",
             "genre" = EXCLUDED."genre",
             "rating" = EXCLUDED."rating",
+            "averageRating" = EXCLUDED."averageRating",
+            "ratingCount" = EXCLUDED."ratingCount",
             "seriesTitle" = EXCLUDED."seriesTitle",
             "seasonNumber" = EXCLUDED."seasonNumber",
             "episodeNumber" = EXCLUDED."episodeNumber",
@@ -105,6 +110,8 @@ async function upsertVideo(payload) {
         payload.resolution,
         payload.genre,
         payload.rating,
+        payload.averageRating,
+        payload.ratingCount,
         payload.seriesTitle,
         payload.seasonNumber,
         payload.episodeNumber,
@@ -146,8 +153,10 @@ module.exports = {
                  "releaseYear" = COALESCE($4, "releaseYear"),
                  "genre" = COALESCE($5, "genre"),
                  "rating" = COALESCE($6, "rating"),
+                 "averageRating" = COALESCE($7, "averageRating"),
+                 "ratingCount" = COALESCE($8, "ratingCount"),
                  "updatedAt" = NOW()
-             WHERE "id" = $7`,
+             WHERE "id" = $9`,
             [
                 payload.thumbnailUrl || null,
                 payload.tmdbId || null,
@@ -155,6 +164,8 @@ module.exports = {
                 payload.releaseYear || null,
                 payload.genre || null,
                 payload.rating || null,
+                payload.averageRating ?? null,
+                payload.ratingCount ?? null,
                 id
             ]
         );

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar, AppBanner, MobileTabBar } from "@/components";
@@ -57,7 +58,9 @@ export default function RootLayout({
                 <Navbar />
                 <AppBanner />
                 {children}
-                <MobileTabBar />
+                <Suspense fallback={null}>
+                  <MobileTabBar />
+                </Suspense>
                 <ToastContainer />
               </FavoritesProvider>
             </SearchProvider>

@@ -158,6 +158,8 @@ const resolveOmdbDetails = async ({ title, type }) => {
         genre: data.Genre || null,
         rated: data.Rated || null,
         plot: data.Plot || null,
+        imdbRating: data.imdbRating || null,
+        imdbVotes: data.imdbVotes || null,
         imdbId: data.imdbID || null,
         poster: data.Poster && data.Poster !== 'N/A' ? data.Poster : null,
     };

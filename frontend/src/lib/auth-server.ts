@@ -7,6 +7,21 @@ export async function getSessionUser(request: NextRequest) {
     const payload = verifySessionToken(token);
     if (!payload) return null;
 
+    if (payload.sessionId) {
+        const session = await prisma.userSession.findFirst({
+            where: {
+                sessionId: payload.sessionId,
+                revokedAt: null,
+            },
+            select: { id: true }
+        });
+        if (!session) return null;
+        await prisma.userSession.updateMany({
+            where: { sessionId: payload.sessionId },
+            data: { lastUsedAt: new Date() }
+        });
+    }
+
     const user = await prisma.user.findUnique({
         where: { id: payload.userId },
         select: {

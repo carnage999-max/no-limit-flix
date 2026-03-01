@@ -48,9 +48,12 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
     }, [seriesTitle]);
 
     const seasons = [...new Set(episodes.map((ep: any) => ep.seasonNumber))].sort((a, b) => a - b);
-    const filteredEpisodes = selectedSeason !== null 
+    const filteredEpisodes = selectedSeason !== null
         ? episodes.filter((ep: any) => ep.seasonNumber === selectedSeason)
         : episodes;
+    const averageRating = series?.averageRating
+        ?? (typeof series?.rating === 'number' ? series.rating : null);
+    const maturityRating = typeof series?.rating === 'string' ? series.rating : null;
 
     if (loading) {
         return (
@@ -153,7 +156,7 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                                         {series.genre}
                                     </span>
                                 )}
-                                {series.rating && (
+                                {averageRating && (
                                     <span style={{
                                         padding: '0.4rem 0.75rem',
                                         borderRadius: '9999px',
@@ -163,7 +166,20 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                                         textTransform: 'uppercase',
                                         letterSpacing: '0.05em'
                                     }}>
-                                        {series.rating}
+                                        Rating {averageRating.toFixed(1)}
+                                    </span>
+                                )}
+                                {maturityRating && (
+                                    <span style={{
+                                        padding: '0.4rem 0.75rem',
+                                        borderRadius: '9999px',
+                                        color: '#A7ABB4',
+                                        fontSize: '0.75rem',
+                                        fontWeight: '600',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.05em'
+                                    }}>
+                                        Rated {maturityRating}
                                     </span>
                                 )}
                             </div>

@@ -114,6 +114,20 @@ const normalizeRating = (metadata) => {
     return raw ? raw.trim() : 'NR';
 };
 
+const parseAverageRating = (value) => {
+    if (!value || value === 'N/A') return null;
+    const numeric = Number.parseFloat(String(value));
+    return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseRatingCount = (value) => {
+    if (!value || value === 'N/A') return null;
+    const cleaned = String(value).replace(/[^0-9]/g, '');
+    if (!cleaned) return null;
+    const numeric = Number.parseInt(cleaned, 10);
+    return Number.isFinite(numeric) ? numeric : null;
+};
+
 const normalizeMimeType = (file) => {
     if (file?.mime) return String(file.mime);
     const name = (file?.name || '').toLowerCase();
@@ -346,6 +360,8 @@ app.post('/reconcile', async (req, res) => {
                         resolution,
                         genre,
                         rating: omdbDetails?.rated || normalizeRating(metadata),
+                        averageRating: parseAverageRating(omdbDetails?.imdbRating),
+                        ratingCount: parseRatingCount(omdbDetails?.imdbVotes),
                         seriesTitle: null,
                         seasonNumber: null,
                         episodeNumber: null,
@@ -490,7 +506,9 @@ app.post('/refresh-posters', async (req, res) => {
                         description: omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null,
                         releaseYear: omdbYear || null,
                         genre: omdbDetails?.genre || null,
-                        rating: omdbDetails?.rated || null
+                        rating: omdbDetails?.rated || null,
+                        averageRating: parseAverageRating(omdbDetails?.imdbRating),
+                        ratingCount: parseRatingCount(omdbDetails?.imdbVotes)
                     };
 
                     if (!posterMatch && !omdbDetails) {
@@ -690,6 +708,8 @@ app.post('/import', async (req, res) => {
                     ?? (isBundleItem ? parseYear(bestFile.name) : null);
                 const genre = omdbDetails?.genre || (isBundleGeneric ? null : normalizeGenre(metadata));
                 const rating = omdbDetails?.rated || normalizeRating(metadata);
+                const averageRating = parseAverageRating(omdbDetails?.imdbRating);
+                const ratingCount = parseRatingCount(omdbDetails?.imdbVotes);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
                 const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
 
@@ -752,6 +772,8 @@ app.post('/import', async (req, res) => {
                     resolution,
                     genre,
                     rating,
+                    averageRating,
+                    ratingCount,
                     seriesTitle,
                     seasonNumber,
                     episodeNumber,

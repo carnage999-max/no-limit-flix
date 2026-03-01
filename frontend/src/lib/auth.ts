@@ -37,7 +37,7 @@ const base64UrlDecode = (input: string) => {
     return Buffer.from(padded, 'base64').toString('utf-8');
 };
 
-export function createSessionToken(payload: { userId: string; role?: string; expiresAt: number }) {
+export function createSessionToken(payload: { userId: string; role?: string; expiresAt: number; sessionId: string }) {
     const body = base64UrlEncode(JSON.stringify(payload));
     const signature = crypto
         .createHmac('sha256', getAuthSecret())
@@ -49,7 +49,7 @@ export function createSessionToken(payload: { userId: string; role?: string; exp
     return `${body}.${signature}`;
 }
 
-export function verifySessionToken(token?: string | null): { userId: string; role?: string; expiresAt: number } | null {
+export function verifySessionToken(token?: string | null): { userId: string; role?: string; expiresAt: number; sessionId?: string } | null {
     if (!token) return null;
     const [body, signature] = token.split('.');
     if (!body || !signature) return null;

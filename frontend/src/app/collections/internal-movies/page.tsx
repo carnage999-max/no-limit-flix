@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CardViewToggle } from '@/components';
 import { useCardView } from '@/context/CardViewContext';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, SlidersHorizontal, X } from 'lucide-react';
+import { safeBtoa } from '@/lib/base64';
 
 interface MovieItem {
     id: string;
@@ -15,6 +16,8 @@ interface MovieItem {
     duration?: number;
     releaseYear?: number;
     rating?: string;
+    averageRating?: number | null;
+    ratingCount?: number | null;
     tmdbId?: string;
     sourceProvider?: string;
     sourcePageUrl?: string;
@@ -26,7 +29,34 @@ export default function InternalMoviesPage() {
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [showScrollTop, setShowScrollTop] = useState(false);
+    const [filterOpen, setFilterOpen] = useState(false);
+    const [genreFilter, setGenreFilter] = useState('all');
+    const [yearFilter, setYearFilter] = useState('all');
     const { viewSize } = useCardView();
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('nlf_internal_movie_filters');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.genre) setGenreFilter(parsed.genre);
+                if (parsed?.year) setYearFilter(parsed.year);
+            }
+        } catch {
+            // ignore storage errors
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('nlf_internal_movie_filters', JSON.stringify({
+                genre: genreFilter,
+                year: yearFilter,
+            }));
+        } catch {
+            // ignore storage errors
+        }
+    }, [genreFilter, yearFilter]);
 
     const gridStyle = {
         display: 'grid',
@@ -42,7 +72,7 @@ export default function InternalMoviesPage() {
 
     const getMovieLink = (movie: MovieItem) => {
         // Encode movie data to pass to title page
-        const encodedData = btoa(JSON.stringify({
+        const encodedData = safeBtoa(JSON.stringify({
             id: movie.id,
             title: movie.title,
             poster: movie.thumbnailUrl,
@@ -50,6 +80,10 @@ export default function InternalMoviesPage() {
             runtime: movie.duration,
             genres: [movie.genre || 'Movie'],
             explanation: movie.description || '',
+            description: movie.description || '',
+            rating: movie.rating || null,
+            averageRating: movie.averageRating ?? null,
+            ratingCount: movie.ratingCount ?? null,
             playable: true,
             assetId: movie.id,
             tmdbId: movie.tmdbId,
@@ -62,6 +96,37 @@ export default function InternalMoviesPage() {
         return `/title/${movie.id}?data=${encodedData}`;
     };
 
+    const getGenresForMovie = (movie: MovieItem) => {
+        if (!movie.genre) return [];
+        return movie.genre
+            .split(',')
+            .map((genre) => genre.trim())
+            .filter(Boolean);
+    };
+
+    const genreOptions = Array.from(
+        new Set(
+            movies.flatMap((movie) => getGenresForMovie(movie))
+        )
+    ).sort((a, b) => a.localeCompare(b));
+
+    const yearOptions = Array.from(
+        new Set(
+            movies.map((movie) => movie.releaseYear).filter(Boolean) as number[]
+        )
+    ).sort((a, b) => b - a);
+
+    const filteredMovies = movies.filter((movie) => {
+        if (genreFilter !== 'all') {
+            const genres = getGenresForMovie(movie);
+            if (!genres.includes(genreFilter)) return false;
+        }
+        if (yearFilter !== 'all') {
+            if (movie.releaseYear !== Number(yearFilter)) return false;
+        }
+        return true;
+    });
+
     useEffect(() => {
         const fetchMovies = async () => {
             try {
@@ -71,12 +136,14 @@ export default function InternalMoviesPage() {
                     const moviesData = (data.movies || []).map((video: any) => ({
                         id: video.id,
                         title: video.title,
-                        thumbnailUrl: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+                        thumbnailUrl: video.thumbnailUrl || '/poster-placeholder.svg',
                         genre: video.genre,
                         description: video.description,
                         duration: Math.floor((video.duration || 0) / 60),
                         releaseYear: video.releaseYear,
                         rating: video.rating,
+                        averageRating: video.averageRating ?? null,
+                        ratingCount: video.ratingCount ?? null,
                         tmdbId: video.tmdbId || video.tmdb_id,
                         sourceProvider: video.sourceProvider,
                         sourcePageUrl: video.sourcePageUrl,
@@ -139,9 +206,9 @@ export default function InternalMoviesPage() {
                                 }} />
                             ))}
                         </div>
-                    ) : movies.length > 0 ? (
+                    ) : filteredMovies.length > 0 ? (
                         <div style={gridStyle} className={gridClassName}>
-                            {movies.map((movie) => (
+                            {filteredMovies.map((movie) => (
                                 <Link
                                     key={movie.id}
                                     href={getMovieLink(movie)}
@@ -181,6 +248,11 @@ export default function InternalMoviesPage() {
                                                     maxWidth: '100%',
                                                     maxHeight: '100%',
                                                     display: 'block',
+                                                }}
+                                                onError={(e) => {
+                                                    const target = e.currentTarget;
+                                                    target.onerror = null;
+                                                    target.src = '/poster-placeholder.svg';
                                                 }}
                                             />
                                         </div>
@@ -225,10 +297,138 @@ export default function InternalMoviesPage() {
                         </div>
                     ) : (
                         <div style={{ textAlign: 'center', paddingTop: '4rem', paddingBottom: '4rem' }}>
-                            <p style={{ color: '#A7ABB4' }}>No movies available</p>
+                            <p style={{ color: '#A7ABB4' }}>
+                                {movies.length === 0 ? 'No movies available' : 'No movies match your filters'}
+                            </p>
                         </div>
                     )}
                 </div>
+                {movies.length > 0 && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setFilterOpen((prev) => !prev)}
+                            style={{
+                                position: 'fixed',
+                                right: '1.5rem',
+                                bottom: '12rem',
+                                width: '3.25rem',
+                                height: '3.25rem',
+                                borderRadius: '999px',
+                                border: '1px solid rgba(212, 175, 55, 0.4)',
+                                background: 'rgba(11, 11, 13, 0.9)',
+                                color: '#D4AF37',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
+                                zIndex: 50
+                            }}
+                            aria-label="Filter library"
+                        >
+                            <SlidersHorizontal className="w-4 h-4" />
+                        </button>
+                        {filterOpen && (
+                            <div
+                                style={{
+                                    position: 'fixed',
+                                    right: '1.5rem',
+                                    bottom: '16rem',
+                                    width: '260px',
+                                    background: 'rgba(11, 11, 13, 0.98)',
+                                    border: '1px solid rgba(167, 171, 180, 0.15)',
+                                    borderRadius: '16px',
+                                    padding: '1rem',
+                                    zIndex: 50,
+                                    boxShadow: '0 20px 40px rgba(0,0,0,0.55)',
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.8rem', color: '#D4AF37', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                                        Filters
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFilterOpen(false)}
+                                        style={{
+                                            border: 'none',
+                                            background: 'transparent',
+                                            color: '#A7ABB4',
+                                            cursor: 'pointer',
+                                            padding: 0
+                                        }}
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <label style={{ display: 'grid', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#A7ABB4' }}>Genre</span>
+                                    <select
+                                        value={genreFilter}
+                                        onChange={(e) => setGenreFilter(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.5rem 0.6rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid rgba(167, 171, 180, 0.2)',
+                                            background: 'rgba(167, 171, 180, 0.08)',
+                                            color: '#F3F4F6',
+                                        }}
+                                    >
+                                        <option value="all">All genres</option>
+                                        {genreOptions.map((genre) => (
+                                            <option key={genre} value={genre}>
+                                                {genre}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label style={{ display: 'grid', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                                    <span style={{ fontSize: '0.75rem', color: '#A7ABB4' }}>Year</span>
+                                    <select
+                                        value={yearFilter}
+                                        onChange={(e) => setYearFilter(e.target.value)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.5rem 0.6rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid rgba(167, 171, 180, 0.2)',
+                                            background: 'rgba(167, 171, 180, 0.08)',
+                                            color: '#F3F4F6',
+                                        }}
+                                    >
+                                        <option value="all">All years</option>
+                                        {yearOptions.map((year) => (
+                                            <option key={year} value={year}>
+                                                {year}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setGenreFilter('all');
+                                        setYearFilter('all');
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.55rem 0.75rem',
+                                        borderRadius: '10px',
+                                        border: '1px solid rgba(212, 175, 55, 0.4)',
+                                        background: 'rgba(212, 175, 55, 0.15)',
+                                        color: '#D4AF37',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Clear filters
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
                 {showScrollTop && (
                     <button
                         type="button"

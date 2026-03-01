@@ -28,7 +28,9 @@ import {
     Search,
     Clapperboard,
     User,
-    ArrowRight
+    ArrowRight,
+    SlidersHorizontal,
+    X
 } from 'lucide-react';
 
 const MOOD_OPTIONS = [
@@ -87,7 +89,34 @@ export default function HomePage() {
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
+    const [watchFilterOpen, setWatchFilterOpen] = useState(false);
+    const [watchGenreFilter, setWatchGenreFilter] = useState('all');
+    const [watchYearFilter, setWatchYearFilter] = useState('all');
     const { user, loading: sessionLoading } = useSession();
+
+    useEffect(() => {
+        try {
+            const stored = localStorage.getItem('nlf_watch_filters');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.genre) setWatchGenreFilter(parsed.genre);
+                if (parsed?.year) setWatchYearFilter(parsed.year);
+            }
+        } catch {
+            // ignore storage errors
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            localStorage.setItem('nlf_watch_filters', JSON.stringify({
+                genre: watchGenreFilter,
+                year: watchYearFilter,
+            }));
+        } catch {
+            // ignore storage errors
+        }
+    }, [watchGenreFilter, watchYearFilter]);
 
     const cardGridStyle: React.CSSProperties = {
         display: 'grid',
@@ -260,14 +289,18 @@ export default function HomePage() {
             if (moviesRes.ok) {
                 const moviesData = await moviesRes.json();
                 console.log('Movies data:', moviesData);
-                const movies = pickRandomItems(moviesData.movies || [], 10).map((video: any) => ({
-                    id: video.id,
-                    title: video.title,
-                    year: video.releaseYear || new Date().getFullYear(),
-                    runtime: Math.floor((video.duration || 0) / 60),
-                    poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+                    const movies = pickRandomItems(moviesData.movies || [], 10).map((video: any) => ({
+                        id: video.id,
+                        title: video.title,
+                        year: video.releaseYear || new Date().getFullYear(),
+                        runtime: Math.floor((video.duration || 0) / 60),
+                        poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
                         genres: video.genre ? [video.genre] : [],
                         explanation: video.description || '',
+                        description: video.description || '',
+                        rating: video.rating || null,
+                        averageRating: video.averageRating ?? null,
+                        ratingCount: video.ratingCount ?? null,
                         watchProviders: [],
                         permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
                         playable: true,
@@ -284,19 +317,23 @@ export default function HomePage() {
             if (tvRes.ok) {
                 const tvData = await tvRes.json();
                 console.log('TV data:', tvData);
-                const series = pickRandomItems(tvData.series || [], 10).map((tv: any) => ({
-                    id: tv.seriesTitle || tv.id,
-                    title: tv.seriesTitle,
-                    year: tv.releaseYear || new Date().getFullYear(),
-                    runtime: 45,
-                    poster: tv.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400',
-                    genres: tv.genre ? [tv.genre] : [],
-                    explanation: `${tv.episodeCount || 0} episodes`,
-                    watchProviders: [],
-                    permanence: 'Permanent Core' as const,
-                    playable: true,
-                    assetId: tv.id,
-                    cloudfrontUrl: tv.thumbnailUrl,
+                    const series = pickRandomItems(tvData.series || [], 10).map((tv: any) => ({
+                        id: tv.seriesTitle || tv.id,
+                        title: tv.seriesTitle,
+                        year: tv.releaseYear || new Date().getFullYear(),
+                        runtime: 45,
+                        poster: tv.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400',
+                        genres: tv.genre ? [tv.genre] : [],
+                        explanation: `${tv.episodeCount || 0} episodes`,
+                        description: tv.description || '',
+                        rating: tv.rating || null,
+                        averageRating: tv.averageRating ?? null,
+                        ratingCount: tv.ratingCount ?? null,
+                        watchProviders: [],
+                        permanence: 'Permanent Core' as const,
+                        playable: true,
+                        assetId: tv.id,
+                        cloudfrontUrl: tv.thumbnailUrl,
                 }));
                 setHostedSeries(series);
             }
@@ -322,6 +359,42 @@ export default function HomePage() {
         tabUpdateSource.current = 'ui';
         setActiveTab(tab);
     };
+
+    const normalizeGenres = (genres: string[] | undefined) => {
+        if (!genres) return [];
+        return genres
+            .flatMap((genre) => genre.split(','))
+            .map((genre) => genre.trim())
+            .filter(Boolean);
+    };
+
+    const watchGenreOptions = Array.from(
+        new Set(
+            [...hostedMovies, ...hostedSeries].flatMap((item) => normalizeGenres(item.genres))
+        )
+    ).sort((a, b) => a.localeCompare(b));
+
+    const watchYearOptions = Array.from(
+        new Set(
+            [...hostedMovies, ...hostedSeries]
+                .map((item) => item.year)
+                .filter(Boolean)
+        )
+    ).sort((a, b) => (b as number) - (a as number));
+
+    const applyWatchFilters = (item: MoviePick) => {
+        if (watchGenreFilter !== 'all') {
+            const genres = normalizeGenres(item.genres);
+            if (!genres.includes(watchGenreFilter)) return false;
+        }
+        if (watchYearFilter !== 'all') {
+            if (item.year !== Number(watchYearFilter)) return false;
+        }
+        return true;
+    };
+
+    const filteredHostedMovies = hostedMovies.filter(applyWatchFilters);
+    const filteredHostedSeries = hostedSeries.filter(applyWatchFilters);
 
     const handleSearchModeChange = (mode: 'vibe' | 'title' | 'actor') => {
         searchUpdateSource.current = 'ui';
@@ -382,7 +455,11 @@ export default function HomePage() {
                 runtime: Math.floor((video.duration || 0) / 60),
                 poster: video.thumbnailUrl || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
                 genres: video.genre ? [video.genre] : [],
-                explanation: 'Available in your library',
+                explanation: video.description || '',
+                description: video.description || '',
+                rating: video.rating || null,
+                averageRating: video.averageRating ?? null,
+                ratingCount: video.ratingCount ?? null,
                 watchProviders: [],
                 permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
                 playable: true,
@@ -787,7 +864,7 @@ export default function HomePage() {
                             </div>
                         ) : (
                             <>
-                                {hostedMovies.length > 0 && (
+                                {filteredHostedMovies.length > 0 && (
                                     <div style={{ marginBottom: '4rem' }}>
                                         <div
                                             style={{
@@ -829,7 +906,7 @@ export default function HomePage() {
                                             </a>
                                         </div>
                                         <div style={cardGridStyle} className={gridClassName}>
-                                            {hostedMovies.map((movie) => (
+                                            {filteredHostedMovies.map((movie) => (
                                                 <div
                                                     key={movie.id}
                                                     style={{
@@ -853,7 +930,7 @@ export default function HomePage() {
                                     </div>
                                 )}
 
-                                {hostedSeries.length > 0 && (
+                                {filteredHostedSeries.length > 0 && (
                                     <div style={{ marginBottom: '4rem' }}>
                                         <div
                                             style={{
@@ -895,7 +972,7 @@ export default function HomePage() {
                                             </a>
                                         </div>
                                         <div style={{ ...cardGridStyle, marginBottom: '3rem' }} className={gridClassName}>
-                                            {hostedSeries.map((series) => (
+                                            {filteredHostedSeries.map((series) => (
                                                 <div
                                                     key={series.id}
                                                     style={{
@@ -971,7 +1048,7 @@ export default function HomePage() {
                                     <ArrowRight className="w-5 h-5" style={{ color: '#A7ABB4' }} />
                                 </div>
 
-                                {hostedMovies.length === 0 && hostedSeries.length === 0 && (
+                                {filteredHostedMovies.length === 0 && filteredHostedSeries.length === 0 && (
                                     <div
                                         style={{
                                             textAlign: 'center',
@@ -979,8 +1056,16 @@ export default function HomePage() {
                                             color: '#A7ABB4',
                                         }}
                                     >
-                                        <p style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>No content available yet.</p>
-                                        <p style={{ fontSize: '0.95rem' }}>Check back soon or use AI Discovery to find movies from our global catalog!</p>
+                                        <p style={{ fontSize: '1.125rem', marginBottom: '1rem' }}>
+                                            {hostedMovies.length === 0 && hostedSeries.length === 0
+                                                ? 'No content available yet.'
+                                                : 'No titles match your filters.'}
+                                        </p>
+                                        <p style={{ fontSize: '0.95rem' }}>
+                                            {hostedMovies.length === 0 && hostedSeries.length === 0
+                                                ? 'Check back soon or use AI Discovery to find movies from our global catalog!'
+                                                : 'Try adjusting the genre or year filters.'}
+                                        </p>
                                     </div>
                                 )}
                             </>
@@ -988,6 +1073,132 @@ export default function HomePage() {
                             </>
                         )}
                     </div>
+                    {(hostedMovies.length > 0 || hostedSeries.length > 0) && (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => setWatchFilterOpen((prev) => !prev)}
+                                style={{
+                                    position: 'fixed',
+                                    right: '1.5rem',
+                                    bottom: '12rem',
+                                    width: '3.25rem',
+                                    height: '3.25rem',
+                                    borderRadius: '999px',
+                                    border: '1px solid rgba(212, 175, 55, 0.4)',
+                                    background: 'rgba(11, 11, 13, 0.9)',
+                                    color: '#D4AF37',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
+                                    zIndex: 50
+                                }}
+                                aria-label="Filter watch library"
+                            >
+                                <SlidersHorizontal className="w-4 h-4" />
+                            </button>
+                            {watchFilterOpen && (
+                                <div
+                                    style={{
+                                        position: 'fixed',
+                                        right: '1.5rem',
+                                        bottom: '16rem',
+                                        width: '260px',
+                                        background: 'rgba(11, 11, 13, 0.98)',
+                                        border: '1px solid rgba(167, 171, 180, 0.15)',
+                                        borderRadius: '16px',
+                                        padding: '1rem',
+                                        zIndex: 50,
+                                        boxShadow: '0 20px 40px rgba(0,0,0,0.55)',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                                        <span style={{ fontSize: '0.8rem', color: '#D4AF37', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                                            Filters
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setWatchFilterOpen(false)}
+                                            style={{
+                                                border: 'none',
+                                                background: 'transparent',
+                                                color: '#A7ABB4',
+                                                cursor: 'pointer',
+                                                padding: 0
+                                            }}
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    <label style={{ display: 'grid', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#A7ABB4' }}>Genre</span>
+                                        <select
+                                            value={watchGenreFilter}
+                                            onChange={(e) => setWatchGenreFilter(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.5rem 0.6rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                                background: 'rgba(167, 171, 180, 0.08)',
+                                                color: '#F3F4F6',
+                                            }}
+                                        >
+                                            <option value="all">All genres</option>
+                                            {watchGenreOptions.map((genre) => (
+                                                <option key={genre} value={genre}>
+                                                    {genre}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label style={{ display: 'grid', gap: '0.35rem', marginBottom: '0.75rem' }}>
+                                        <span style={{ fontSize: '0.75rem', color: '#A7ABB4' }}>Year</span>
+                                        <select
+                                            value={watchYearFilter}
+                                            onChange={(e) => setWatchYearFilter(e.target.value)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.5rem 0.6rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                                background: 'rgba(167, 171, 180, 0.08)',
+                                                color: '#F3F4F6',
+                                            }}
+                                        >
+                                            <option value="all">All years</option>
+                                            {watchYearOptions.map((year) => (
+                                                <option key={year} value={year}>
+                                                    {year}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setWatchGenreFilter('all');
+                                            setWatchYearFilter('all');
+                                        }}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.55rem 0.75rem',
+                                            borderRadius: '10px',
+                                            border: '1px solid rgba(212, 175, 55, 0.4)',
+                                            background: 'rgba(212, 175, 55, 0.15)',
+                                            color: '#D4AF37',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        Clear filters
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    )}
                 </section>
             )}
 

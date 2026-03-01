@@ -69,6 +69,8 @@ export async function getMovieDetails(id: string) {
         poster: getImageUrl(data.poster_path),
         backdrop: getImageUrl(data.backdrop_path, 'original'),
         explanation: data.overview,
+        rating: data.vote_average || 0,
+        ratingCount: data.vote_count || 0,
         trailerUrl: trailer ? `https://www.youtube.com/watch?v=${trailer.key}` : '',
         watchProviders: usProviders.map((p: any) => ({
             name: p.provider_name,

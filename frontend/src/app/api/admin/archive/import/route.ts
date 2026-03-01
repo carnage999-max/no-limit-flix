@@ -128,6 +128,20 @@ const normalizeRating = (metadata: any) => {
     return raw ? raw.trim() : 'NR';
 };
 
+const parseAverageRating = (value?: string | null) => {
+    if (!value || value === 'N/A') return null;
+    const numeric = Number.parseFloat(String(value));
+    return Number.isFinite(numeric) ? numeric : null;
+};
+
+const parseRatingCount = (value?: string | null) => {
+    if (!value || value === 'N/A') return null;
+    const cleaned = String(value).replace(/[^0-9]/g, '');
+    if (!cleaned) return null;
+    const numeric = Number.parseInt(cleaned, 10);
+    return Number.isFinite(numeric) ? numeric : null;
+};
+
 const normalizeMimeType = (file: any) => {
     if (file?.mime) return String(file.mime);
     const name = (file?.name || '').toLowerCase();
@@ -383,6 +397,8 @@ const resolveOmdbDetails = async (title: string | null, type: 'movie' | 'series'
         genre: data.Genre || null,
         rated: data.Rated || null,
         plot: data.Plot || null,
+        imdbRating: data.imdbRating || null,
+        imdbVotes: data.imdbVotes || null,
         imdbId: data.imdbID || null,
         poster: data.Poster && data.Poster !== 'N/A' ? data.Poster : null
     };
@@ -689,6 +705,8 @@ export async function POST(request: NextRequest) {
                     ?? (isBundleItem ? parseYear(bestFile.name) : null);
                 const genre = omdbDetails?.genre || (isBundleGeneric ? null : normalizeGenre(metadata));
                 const rating = omdbDetails?.rated || normalizeRating(metadata);
+                const averageRating = parseAverageRating(omdbDetails?.imdbRating);
+                const ratingCount = parseRatingCount(omdbDetails?.imdbVotes);
                 const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
                 const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
 
@@ -753,6 +771,8 @@ export async function POST(request: NextRequest) {
                             resolution,
                             genre,
                             rating,
+                            averageRating,
+                            ratingCount,
                             seriesTitle,
                             seasonNumber,
                             episodeNumber,
@@ -782,6 +802,8 @@ export async function POST(request: NextRequest) {
                             resolution,
                             genre,
                             rating,
+                            averageRating,
+                            ratingCount,
                             seriesTitle,
                             seasonNumber,
                             episodeNumber,
