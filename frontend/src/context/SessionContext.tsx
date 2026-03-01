@@ -7,6 +7,7 @@ interface SessionUser {
     email: string;
     username: string;
     avatar?: string | null;
+    showWelcomeScreen?: boolean;
     role: string;
 }
 

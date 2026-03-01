@@ -88,6 +88,7 @@ export default function HomePage() {
     const lastTitleQuery = useRef<string>('');
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
+    const [continueWatching, setContinueWatching] = useState<MoviePick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
     const [watchFilterOpen, setWatchFilterOpen] = useState(false);
     const [watchGenreFilter, setWatchGenreFilter] = useState('all');
@@ -272,6 +273,7 @@ export default function HomePage() {
         if (!user) {
             setHostedMovies([]);
             setHostedSeries([]);
+            setContinueWatching([]);
             setIsWatchLoading(false);
             return;
         }
@@ -283,9 +285,10 @@ export default function HomePage() {
             setIsWatchLoading(true);
             console.log('Fetching hosted content...');
             
-            const [moviesRes, tvRes] = await Promise.all([
+            const [moviesRes, tvRes, historyRes] = await Promise.all([
                 fetch('/api/library/movies'),
-                fetch('/api/library/tv')
+                fetch('/api/library/tv'),
+                fetch('/api/watch-history?page=1&limit=10')
             ]);
 
             console.log('Movies response status:', moviesRes.status);
@@ -341,6 +344,43 @@ export default function HomePage() {
                         cloudfrontUrl: tv.thumbnailUrl,
                 }));
                 setHostedSeries(series);
+            }
+
+            if (historyRes.ok) {
+                const historyData = await historyRes.json();
+                const entries = historyData.watchHistory || [];
+                const historyItems = entries.map((entry: any) => {
+                    const video = entry.video || {};
+                    const progress = typeof entry.completionPercent === 'number'
+                        ? entry.completionPercent
+                        : (entry.totalDuration && entry.duration)
+                            ? Math.min(100, Math.round((entry.duration / entry.totalDuration) * 100))
+                            : 0;
+                    return {
+                        id: video.id || entry.videoId,
+                        title: video.title || entry.videoTitle,
+                        year: video.releaseYear || new Date().getFullYear(),
+                        runtime: Math.floor((video.duration || 0) / 60),
+                        poster: video.thumbnailUrl || entry.videoPoster || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+                        genres: video.genre ? [video.genre] : [],
+                        explanation: video.description || '',
+                        description: video.description || '',
+                        rating: video.rating || null,
+                        averageRating: video.averageRating ?? null,
+                        ratingCount: video.ratingCount ?? null,
+                        watchProviders: [],
+                        permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
+                        playable: true,
+                        assetId: video.id || entry.videoId,
+                        cloudfrontUrl: video.s3Url,
+                        sourceProvider: video.sourceProvider,
+                        sourcePageUrl: video.sourcePageUrl,
+                        sourceRights: video.sourceRights,
+                        sourceLicenseUrl: video.sourceLicenseUrl,
+                        progressPercent: progress,
+                    };
+                });
+                setContinueWatching(historyItems);
             }
         } catch (error) {
             console.error('Failed to fetch hosted content:', error);
@@ -844,6 +884,70 @@ export default function HomePage() {
                                 >
                                     <CardViewToggle />
                                 </div>
+
+                                {continueWatching.length > 0 && (
+                                    <div style={{ marginBottom: '4rem' }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                marginBottom: '2rem',
+                                            }}
+                                        >
+                                            <h3
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    fontWeight: '700',
+                                                    margin: 0,
+                                                    textTransform: 'uppercase',
+                                                    letterSpacing: '0.1em',
+                                                    color: '#A7ABB4',
+                                                }}
+                                            >
+                                                CONTINUE WATCHING
+                                            </h3>
+                                            <a
+                                                href="/watch-history"
+                                                style={{
+                                                    fontSize: '0.875rem',
+                                                    color: '#D4AF37',
+                                                    textDecoration: 'none',
+                                                    fontWeight: '600',
+                                                    transition: 'color 0.2s',
+                                                    cursor: 'pointer',
+                                                }}
+                                                onMouseEnter={(e) => (e.currentTarget.style.color = '#F6D365')}
+                                                onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
+                                            >
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                    View history
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </span>
+                                            </a>
+                                        </div>
+                                        <div style={cardGridStyle} className={gridClassName}>
+                                            {continueWatching.map((movie: any) => (
+                                                <div
+                                                    key={movie.id}
+                                                    style={{
+                                                        ...cardTileStyle,
+                                                        cursor: 'pointer',
+                                                        transition: 'transform 0.2s',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+                                                    }}
+                                                >
+                                                    <TitleTile movie={movie} progressPercent={movie.progressPercent} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Movies Section */}
                                 {isWatchLoading ? (

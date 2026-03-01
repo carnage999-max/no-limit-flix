@@ -80,10 +80,14 @@ function WelcomeContent() {
 
     useEffect(() => {
         if (!user) return;
+        if (user.showWelcomeScreen === false) {
+            router.push(searchParams.get('redirect') || '/');
+            return;
+        }
         const redirect = searchParams.get('redirect') || '/';
         const timer = setTimeout(() => {
             router.push(redirect);
-        }, 2200);
+        }, 4200);
         return () => clearTimeout(timer);
     }, [user, router, searchParams]);
 
@@ -101,21 +105,34 @@ function WelcomeContent() {
             padding: '2rem',
             textAlign: 'center',
         }}>
-            <div style={{ maxWidth: '720px' }}>
+            <div style={{ maxWidth: '720px', width: '100%' }}>
                 <h1 style={{
-                    fontSize: 'clamp(2.2rem, 6vw, 4rem)',
+                    fontSize: 'clamp(2rem, 6vw, 3.4rem)',
                     fontWeight: 800,
                     color: '#F3F4F6',
                     letterSpacing: '-0.03em',
-                    marginBottom: '1rem',
+                    marginBottom: '0.5rem',
                     textTransform: 'uppercase',
                     display: 'inline-block',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    borderRight: '3px solid rgba(212, 175, 55, 0.6)',
-                    width: 'fit-content',
-                }} className="welcome-type">
-                    Welcome back,{' '}
+                }}>
+                    Welcome back
+                </h1>
+                <div
+                    className="welcome-type"
+                    style={{
+                        fontSize: 'clamp(2.4rem, 8vw, 4.5rem)',
+                        fontWeight: 900,
+                        letterSpacing: '-0.03em',
+                        marginBottom: '1.25rem',
+                        textTransform: 'uppercase',
+                        borderRight: '3px solid rgba(212, 175, 55, 0.6)',
+                        display: 'inline-block',
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                    }}
+                >
                     <span style={{
                         background: 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)',
                         WebkitBackgroundClip: 'text',
@@ -124,7 +141,7 @@ function WelcomeContent() {
                     }}>
                         {displayName}
                     </span>
-                </h1>
+                </div>
                 <p style={{
                     fontSize: '1rem',
                     color: '#A7ABB4',
@@ -151,7 +168,7 @@ function WelcomeContent() {
             </div>
             <style>{`
                 .welcome-type {
-                    animation: typing 1.1s steps(22, end) forwards, blink 0.7s step-end infinite;
+                    animation: typing 1.6s steps(26, end) forwards, blink 0.7s step-end infinite;
                 }
                 @keyframes typing {
                     from { width: 0; }

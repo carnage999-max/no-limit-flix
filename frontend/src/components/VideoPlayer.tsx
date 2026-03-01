@@ -11,11 +11,15 @@ interface VideoPlayerProps {
     assetId?: string;  // Asset ID for fetching signed auth
     poster?: string;
     onReady?: (player: any) => void;
+    title?: string;
+    enableWatchTracking?: boolean;
 }
 
-export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlayerProps) {
+export default function VideoPlayer({ src, assetId, poster, onReady, title, enableWatchTracking = true }: VideoPlayerProps) {
     const videoRef = useRef<HTMLDivElement>(null);
     const playerRef = useRef<any>(null);
+    const lastReportRef = useRef<{ time: number; sentAt: number }>({ time: 0, sentAt: 0 });
+    const trackingCleanupRef = useRef<null | (() => void)>(null);
     const [error, setError] = useState<string | null>(null);
     const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
@@ -96,6 +100,66 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
                 onReady && onReady(player);
             });
 
+            const sendWatchProgress = async (force = false, completed = false) => {
+                if (!enableWatchTracking || !assetId) return;
+                const duration = player.duration?.() || 0;
+                const current = player.currentTime?.() || 0;
+                if (!duration || !Number.isFinite(duration)) return;
+
+                const now = Date.now();
+                const last = lastReportRef.current;
+                const delta = Math.abs(current - last.time);
+                const timeSince = now - last.sentAt;
+
+                if (!force && delta < 15 && timeSince < 15000) {
+                    return;
+                }
+
+                lastReportRef.current = { time: current, sentAt: now };
+
+                try {
+                    await fetch('/api/watch-history', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            videoId: assetId,
+                            watchedDuration: Math.floor(current),
+                            totalDuration: Math.floor(duration),
+                            title,
+                            poster
+                        }),
+                    });
+                } catch {
+                    // ignore tracking failures
+                }
+            };
+
+            const handleTimeUpdate = () => sendWatchProgress(false, false);
+            const handlePlay = () => sendWatchProgress(true, false);
+            const handlePause = () => sendWatchProgress(true, false);
+            const handleEnded = () => sendWatchProgress(true, true);
+            const handleVisibility = () => {
+                if (document.hidden) {
+                    sendWatchProgress(true, false);
+                }
+            };
+
+            if (enableWatchTracking && assetId) {
+                player.on('timeupdate', handleTimeUpdate);
+                player.on('play', handlePlay);
+                player.on('pause', handlePause);
+                player.on('ended', handleEnded);
+                document.addEventListener('visibilitychange', handleVisibility);
+
+                trackingCleanupRef.current = () => {
+                    player.off('timeupdate', handleTimeUpdate);
+                    player.off('play', handlePlay);
+                    player.off('pause', handlePause);
+                    player.off('ended', handleEnded);
+                    document.removeEventListener('visibilitychange', handleVisibility);
+                };
+            }
+
             // Setup HLS.js for better codec support - wait for player to be ready
             player.ready(() => {
                 const videoElement_ = player.tech_.el() as HTMLVideoElement;
@@ -129,6 +193,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
                 console.error('[VideoPlayer] VideoJS Error:', err);
                 setError(`This video format may not be supported by your browser. Try opening with VLC or the mobile app.`);
             });
+
         }
     }, [playbackUrl, isLoading, videoRef]);
 
@@ -136,6 +201,10 @@ export default function VideoPlayer({ src, assetId, poster, onReady }: VideoPlay
     useEffect(() => {
         const player = playerRef.current;
         return () => {
+            if (trackingCleanupRef.current) {
+                trackingCleanupRef.current();
+                trackingCleanupRef.current = null;
+            }
             if (player && !player.isDisposed()) {
                 player.dispose();
                 playerRef.current = null;

@@ -198,6 +198,7 @@ export default function WatchPage() {
                                     assetId={assetId}
                                     src={streamUrl}
                                     poster={video.thumbnailUrl || movieDetails?.backdrop}
+                                    title={video.title}
                                 />
                             </div>
                         </div>

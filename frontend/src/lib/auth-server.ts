@@ -29,6 +29,7 @@ export async function getSessionUser(request: NextRequest) {
             email: true,
             username: true,
             avatar: true,
+            showWelcomeScreen: true,
             role: true,
         }
     });

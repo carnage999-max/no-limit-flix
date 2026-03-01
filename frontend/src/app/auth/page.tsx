@@ -52,9 +52,14 @@ function AuthContent() {
                 await refresh();
                 setTimeout(() => {
                     const redirectUrl = searchParams.get('redirect') || '/';
-                    router.push(`/welcome?redirect=${encodeURIComponent(redirectUrl)}`);
+                    const showWelcome = data?.user?.showWelcomeScreen ?? true;
+                    if (showWelcome) {
+                        router.push(`/welcome?redirect=${encodeURIComponent(redirectUrl)}`);
+                    } else {
+                        router.push(redirectUrl);
+                    }
                     router.refresh();
-                }, 1200);
+                }, 150);
             } else {
                 setError(data.error || 'An error occurred');
             }

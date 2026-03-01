@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Info, ShieldCheck, FileText, ChevronRight, LogOut, UserX, Monitor, History } from 'lucide-react';
 import { ConfirmModal } from '@/components';
 import { useSession } from '@/context/SessionContext';
@@ -49,6 +49,14 @@ export default function SettingsPage() {
     const currentYear = new Date().getFullYear();
     const { user } = useSession();
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [showWelcomeScreen, setShowWelcomeScreen] = useState<boolean | null>(null);
+    const [savingWelcome, setSavingWelcome] = useState(false);
+
+    useEffect(() => {
+        if (typeof user?.showWelcomeScreen === 'boolean') {
+            setShowWelcomeScreen(user.showWelcomeScreen);
+        }
+    }, [user]);
     const handleLogout = async () => {
         try {
             await fetch('/api/auth', {
@@ -193,6 +201,68 @@ export default function SettingsPage() {
                         }}>
                             Account
                         </h2>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '1rem',
+                            padding: '1rem 1.25rem',
+                            borderRadius: '14px',
+                            border: '1px solid rgba(167, 171, 180, 0.08)',
+                            background: 'rgba(167, 171, 180, 0.04)',
+                            marginBottom: '1rem',
+                        }}>
+                            <div>
+                                <div style={{ color: '#F3F4F6', fontWeight: 600 }}>Welcome screen on login</div>
+                                <div style={{ color: '#A7ABB4', fontSize: '0.85rem', marginTop: '0.25rem' }}>
+                                    Show the greeting screen after you sign in
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={savingWelcome || showWelcomeScreen === null}
+                                onClick={async () => {
+                                    if (showWelcomeScreen === null) return;
+                                    const nextValue = !showWelcomeScreen;
+                                    setShowWelcomeScreen(nextValue);
+                                    setSavingWelcome(true);
+                                    try {
+                                        const res = await fetch('/api/account/profile', {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ showWelcomeScreen: nextValue })
+                                        });
+                                        if (!res.ok) {
+                                            setShowWelcomeScreen(!nextValue);
+                                        }
+                                    } finally {
+                                        setSavingWelcome(false);
+                                    }
+                                }}
+                                style={{
+                                    width: '54px',
+                                    height: '32px',
+                                    borderRadius: '999px',
+                                    border: '1px solid rgba(212, 175, 55, 0.4)',
+                                    background: showWelcomeScreen ? 'rgba(212, 175, 55, 0.25)' : 'rgba(167, 171, 180, 0.15)',
+                                    position: 'relative',
+                                    cursor: 'pointer',
+                                }}
+                                aria-pressed={Boolean(showWelcomeScreen)}
+                                aria-label="Toggle welcome screen"
+                            >
+                                <span style={{
+                                    position: 'absolute',
+                                    top: '3px',
+                                    left: showWelcomeScreen ? '26px' : '4px',
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '50%',
+                                    background: showWelcomeScreen ? '#D4AF37' : '#A7ABB4',
+                                    transition: 'left 0.2s ease',
+                                }} />
+                            </button>
+                        </div>
                         <button
                             type="button"
                             onClick={() => setShowLogoutConfirm(true)}

@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
                     email: user.email,
                     username: user.username,
                     avatar: user.avatar,
+                    showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role
                 }
             });
@@ -121,6 +122,7 @@ export async function POST(request: NextRequest) {
                     email: user.email,
                     username: user.username,
                     avatar: user.avatar,
+                    showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role
                 }
             });

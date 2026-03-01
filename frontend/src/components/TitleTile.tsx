@@ -11,9 +11,10 @@ import { useToast } from './Toast';
 
 interface TitleTileProps {
     movie: MoviePick;
+    progressPercent?: number;
 }
 
-export default function TitleTile({ movie }: TitleTileProps) {
+export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
     const { isFavorite, toggleFavorite } = useFavorites();
     const { showToast } = useToast();
     const { viewSize } = useCardView();
@@ -138,6 +139,31 @@ export default function TitleTile({ movie }: TitleTileProps) {
                             target.src = '/poster-placeholder.svg';
                         }}
                     />
+
+                    {typeof progressPercent === 'number' && progressPercent > 0 && (
+                        <div
+                            style={{
+                                position: 'absolute',
+                                left: '0.75rem',
+                                right: '0.75rem',
+                                bottom: '0.75rem',
+                                height: '6px',
+                                borderRadius: '999px',
+                                background: 'rgba(11, 11, 13, 0.7)',
+                                border: '1px solid rgba(255, 255, 255, 0.15)',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    height: '100%',
+                                    width: `${Math.min(100, Math.max(0, progressPercent))}%`,
+                                    background: 'linear-gradient(90deg, #F6D365 0%, #D4AF37 100%)',
+                                    transition: 'width 0.2s ease',
+                                }}
+                            />
+                        </div>
+                    )}
 
                     {/* Favorite Button - visible if user is authenticated */}
                     {user && (

@@ -10,9 +10,9 @@ export async function PUT(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { username, email, avatar } = body;
+        const { username, email, avatar, showWelcomeScreen } = body;
 
-        const updateData: { username?: string; email?: string; avatar?: string | null } = {};
+        const updateData: { username?: string; email?: string; avatar?: string | null; showWelcomeScreen?: boolean } = {};
         if (typeof username === 'string' && username.trim()) {
             updateData.username = username;
         }
@@ -23,6 +23,9 @@ export async function PUT(request: NextRequest) {
             updateData.avatar = null;
         } else if (typeof avatar === 'string') {
             updateData.avatar = avatar || undefined;
+        }
+        if (typeof showWelcomeScreen === 'boolean') {
+            updateData.showWelcomeScreen = showWelcomeScreen;
         }
 
         if (Object.keys(updateData).length === 0) {
@@ -37,6 +40,7 @@ export async function PUT(request: NextRequest) {
                 email: true,
                 username: true,
                 avatar: true,
+                showWelcomeScreen: true,
                 role: true,
             }
         });

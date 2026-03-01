@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
             startDate.setHours(0, 0, 0, 0);
 
             const activityRaw = await prisma.$queryRaw`
-                SELECT DATE_TRUNC('day', "createdAt") AS day, COUNT(*)::int AS watches
+                SELECT DATE_TRUNC('day', "watchedAt") AS day, COUNT(*)::int AS watches
                 FROM "WatchHistory"
-                WHERE "createdAt" >= ${startDate}
+                WHERE "watchedAt" >= ${startDate}
                 GROUP BY day
                 ORDER BY day ASC
             `;

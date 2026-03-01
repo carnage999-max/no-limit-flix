@@ -400,7 +400,9 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                     >
                                         <VideoPlayer
                                             src={movie.cloudfrontUrl}
+                                            assetId={movie.assetId}
                                             poster={movie.poster}
+                                            title={movie.title}
                                         />
                                     </div>
                                 </div>
