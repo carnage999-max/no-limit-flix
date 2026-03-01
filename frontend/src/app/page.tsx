@@ -166,6 +166,11 @@ export default function HomePage() {
     }, []);
 
     useEffect(() => {
+        if (tabUpdateSource.current === 'ui' || searchUpdateSource.current === 'ui') {
+            tabUpdateSource.current = null;
+            searchUpdateSource.current = null;
+            return;
+        }
         const params = new URLSearchParams(urlSearch);
         const tabParam = params.get('tab');
         const nextTab = tabParam === 'discovery' ? 'discovery' : 'watch';
