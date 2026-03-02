@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
+import { sendEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
     try {
@@ -21,6 +22,22 @@ export async function POST(request: NextRequest) {
                 status: 'pending',
             }
         });
+
+        try {
+            await sendEmail({
+                to: email,
+                subject: 'Account deletion request received',
+                html: `
+                    <div style="font-family: Arial, sans-serif; color: #111;">
+                      <h2>We received your request</h2>
+                      <p>Your account deletion request is now in review.</p>
+                      <p>If you did not request this, please contact support immediately.</p>
+                    </div>
+                `,
+            });
+        } catch (err) {
+            console.warn('Deletion request email failed', err);
+        }
 
         return NextResponse.json({ success: true, request: requestRow });
     } catch (error) {

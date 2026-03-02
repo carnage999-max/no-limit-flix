@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
 import { hashPassword, verifyPassword, createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, verifySessionToken } from '@/lib/auth';
+import { parseUserAgent, lookupLocation } from '@/lib/device';
+import { sendEmail } from '@/lib/email';
 
 const prisma = new PrismaClient();
 
@@ -15,18 +17,66 @@ export async function POST(request: NextRequest) {
             ? deviceName.trim()
             : null;
 
-        const upsertSession = async (userId: string, role: string) => {
+        const upsertSession = async (userId: string, role: string, userEmail: string) => {
             const sessionId = crypto.randomUUID();
             const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
                 || request.headers.get('x-real-ip')
                 || undefined;
             const userAgent = request.headers.get('user-agent') || undefined;
+            const derivedDeviceId = !normalizedDeviceId && userAgent
+                ? crypto.createHash('sha256').update(`${userAgent}-${ipAddress || ''}`).digest('hex').slice(0, 32)
+                : null;
+            const effectiveDeviceId = normalizedDeviceId || derivedDeviceId;
+            const uaInfo = parseUserAgent(userAgent);
+            const effectiveDeviceName = normalizedDeviceName || uaInfo.deviceLabel;
 
-            if (normalizedDeviceId) {
+            const maxDevicesDefault = Number(process.env.MAX_ACTIVE_DEVICES || 5);
+            const userRecord = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { maxDevices: true, primaryDeviceId: true }
+            });
+            const maxDevices = userRecord?.maxDevices ?? maxDevicesDefault;
+            const primaryDeviceId = userRecord?.primaryDeviceId || null;
+
+            const activeSessions = await prisma.userSession.findMany({
+                where: { userId, revokedAt: null },
+                select: { deviceId: true }
+            });
+            const activeDeviceIds = new Set(activeSessions.map((s) => s.deviceId).filter(Boolean) as string[]);
+            const isExistingActive = effectiveDeviceId ? activeDeviceIds.has(effectiveDeviceId) : false;
+
+            if (!isExistingActive && activeDeviceIds.size >= maxDevices) {
+                const location = await lookupLocation(ipAddress);
+                const locationText = location
+                    ? [location.city, location.region, location.country].filter(Boolean).join(', ')
+                    : 'Unknown location';
+                try {
+                    await sendEmail({
+                        to: userEmail,
+                        subject: 'New device sign-in blocked',
+                        html: `
+                            <div style="font-family: Arial, sans-serif; color: #111;">
+                              <h2>New device sign-in blocked</h2>
+                              <p>We blocked a sign-in because your account has reached the maximum number of active devices.</p>
+                              <p><strong>Device:</strong> ${effectiveDeviceName}</p>
+                              <p><strong>IP:</strong> ${ipAddress || 'Unknown'}</p>
+                              <p><strong>Location:</strong> ${locationText}</p>
+                              <p>If this was you, log out of another device and try again.</p>
+                            </div>
+                        `,
+                    });
+                } catch (err) {
+                    console.warn('Device limit email failed', err);
+                }
+                throw new Error('MAX_DEVICES_REACHED');
+            }
+
+            let isNewDevice = false;
+            if (effectiveDeviceId) {
                 const existing = await prisma.userSession.findFirst({
                     where: {
                         userId,
-                        deviceId: normalizedDeviceId,
+                        deviceId: effectiveDeviceId,
                     }
                 });
                 if (existing) {
@@ -38,31 +88,65 @@ export async function POST(request: NextRequest) {
                             ipAddress,
                             revokedAt: null,
                             lastUsedAt: new Date(),
-                            deviceName: normalizedDeviceName || existing.deviceName,
+                            deviceName: effectiveDeviceName || existing.deviceName,
                         }
                     });
                 } else {
+                    isNewDevice = true;
                     await prisma.userSession.create({
                         data: {
                             userId,
                             sessionId,
-                            deviceId: normalizedDeviceId,
-                            deviceName: normalizedDeviceName || undefined,
+                            deviceId: effectiveDeviceId,
+                            deviceName: effectiveDeviceName || undefined,
                             userAgent,
                             ipAddress,
                         }
                     });
                 }
             } else {
+                isNewDevice = true;
                 await prisma.userSession.create({
                     data: {
                         userId,
                         sessionId,
-                        deviceName: normalizedDeviceName || undefined,
+                        deviceName: effectiveDeviceName || undefined,
                         userAgent,
                         ipAddress,
                     }
                 });
+            }
+
+            if (!primaryDeviceId && effectiveDeviceId) {
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { primaryDeviceId: effectiveDeviceId }
+                });
+            }
+
+            if (isNewDevice && effectiveDeviceId && primaryDeviceId && effectiveDeviceId !== primaryDeviceId) {
+                const location = await lookupLocation(ipAddress);
+                const locationText = location
+                    ? [location.city, location.region, location.country].filter(Boolean).join(', ')
+                    : 'Unknown location';
+                try {
+                    await sendEmail({
+                        to: userEmail,
+                        subject: 'New device signed in',
+                        html: `
+                            <div style="font-family: Arial, sans-serif; color: #111;">
+                              <h2>New device signed in</h2>
+                              <p>We noticed a new device sign-in to your account.</p>
+                              <p><strong>Device:</strong> ${effectiveDeviceName}</p>
+                              <p><strong>IP:</strong> ${ipAddress || 'Unknown'}</p>
+                              <p><strong>Location:</strong> ${locationText}</p>
+                              <p>If this wasn’t you, please log out of all devices immediately.</p>
+                            </div>
+                        `,
+                    });
+                } catch (err) {
+                    console.warn('Device login email failed', err);
+                }
             }
 
             return createSessionToken({
@@ -103,7 +187,34 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            const token = await upsertSession(user.id, user.role);
+            try {
+                await sendEmail({
+                    to: user.email,
+                    subject: 'Welcome to No Limit Flix',
+                    html: `
+                        <div style="font-family: Arial, sans-serif; color: #111;">
+                          <h2>Welcome to No Limit Flix</h2>
+                          <p>Your account has been created successfully.</p>
+                          <p>You can now sign in and start exploring the catalog.</p>
+                        </div>
+                    `,
+                });
+            } catch (err) {
+                console.warn('Signup email failed', err);
+            }
+
+            let token: string;
+            try {
+                token = await upsertSession(user.id, user.role, user.email);
+            } catch (err: any) {
+                if (err?.message === 'MAX_DEVICES_REACHED') {
+                    return NextResponse.json(
+                        { error: 'Maximum active devices reached. Log out another device to continue.' },
+                        { status: 403 }
+                    );
+                }
+                throw err;
+            }
 
             // Set session cookie
             const response = NextResponse.json({
@@ -140,7 +251,18 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const token = await upsertSession(user.id, user.role);
+            let token: string;
+            try {
+                token = await upsertSession(user.id, user.role, user.email);
+            } catch (err: any) {
+                if (err?.message === 'MAX_DEVICES_REACHED') {
+                    return NextResponse.json(
+                        { error: 'Maximum active devices reached. Log out another device to continue.' },
+                        { status: 403 }
+                    );
+                }
+                throw err;
+            }
 
             const response = NextResponse.json({
                 success: true,

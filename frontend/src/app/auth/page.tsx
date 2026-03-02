@@ -34,6 +34,26 @@ function AuthContent() {
         setSuccessMessage('');
 
         try {
+            const getDeviceInfo = () => {
+                if (typeof window === 'undefined') return {};
+                const storageKey = 'nlf_device_id';
+                let deviceId = window.localStorage.getItem(storageKey);
+                if (!deviceId && window.crypto?.randomUUID) {
+                    deviceId = window.crypto.randomUUID();
+                    window.localStorage.setItem(storageKey, deviceId);
+                }
+                const ua = window.navigator.userAgent || '';
+                let browser = 'Browser';
+                if (ua.includes('Edg/')) browser = 'Edge';
+                else if (ua.includes('Chrome')) browser = 'Chrome';
+                else if (ua.includes('Safari')) browser = 'Safari';
+                else if (ua.includes('Firefox')) browser = 'Firefox';
+                const platform = window.navigator.platform || 'Web';
+                const deviceName = `${platform} ${browser}`.trim();
+                return { deviceId, deviceName };
+            };
+
+            const deviceInfo = getDeviceInfo();
             const response = await fetch('/api/auth', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -41,7 +61,8 @@ function AuthContent() {
                     action: isLogin ? 'login' : 'signup',
                     email,
                     password,
-                    username: !isLogin ? username : undefined
+                    username: !isLogin ? username : undefined,
+                    ...deviceInfo,
                 })
             });
 

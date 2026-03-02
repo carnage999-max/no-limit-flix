@@ -76,6 +76,8 @@ model User {
   password          String
   avatar            String?
   showWelcomeScreen Boolean  @default(true)
+  maxDevices        Int      @default(5)
+  primaryDeviceId   String?
   role              String   @default("user") // "user" or "admin"
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt

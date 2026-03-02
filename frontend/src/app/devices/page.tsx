@@ -9,11 +9,14 @@ import { useToast } from '@/components/Toast';
 interface DeviceSession {
     id: string;
     sessionId: string;
+    deviceId?: string | null;
+    deviceName?: string | null;
     userAgent?: string | null;
     ipAddress?: string | null;
     createdAt: string;
     lastUsedAt: string;
     isCurrent: boolean;
+    isPrimary?: boolean;
     device?: {
         browser: string;
         os: string;
@@ -50,18 +53,25 @@ export default function DevicesPage() {
     const { user, loading: sessionLoading } = useSession();
     const { showToast } = useToast();
     const [sessions, setSessions] = useState<DeviceSession[]>([]);
+    const [history, setHistory] = useState<DeviceSession[]>([]);
+    const [primaryDeviceId, setPrimaryDeviceId] = useState<string | null>(null);
+    const [maxDevices, setMaxDevices] = useState<number | null>(null);
+    const [showHistory, setShowHistory] = useState(false);
     const [loading, setLoading] = useState(true);
     const [loggingOutAll, setLoggingOutAll] = useState(false);
 
     const fetchSessions = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/account/sessions');
+            const response = await fetch('/api/account/sessions?includeHistory=1');
             const data = await response.json();
             if (!response.ok) {
                 throw new Error(data?.error || 'Failed to fetch devices');
             }
             setSessions(data.sessions || []);
+            setHistory(data.history || []);
+            setPrimaryDeviceId(data.primaryDeviceId || null);
+            setMaxDevices(typeof data.maxDevices === 'number' ? data.maxDevices : null);
         } catch (error: any) {
             showToast(error.message || 'Failed to fetch devices', 'error');
         } finally {
@@ -117,6 +127,26 @@ export default function DevicesPage() {
         }
     };
 
+    const handleSetPrimary = async (deviceId?: string | null) => {
+        if (!deviceId) return;
+        try {
+            const response = await fetch('/api/account/sessions', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ deviceId })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data?.error || 'Failed to set primary device');
+            }
+            setPrimaryDeviceId(deviceId);
+            showToast('Primary device updated', 'success');
+            await fetchSessions();
+        } catch (error: any) {
+            showToast(error.message || 'Failed to set primary device', 'error');
+        }
+    };
+
     if (sessionLoading) return null;
 
     return (
@@ -127,7 +157,10 @@ export default function DevicesPage() {
                         <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 700, color: '#F3F4F6', marginBottom: '0.5rem' }}>
                             Devices
                         </h1>
-                        <p style={{ color: '#A7ABB4' }}>See where you&apos;re signed in.</p>
+                        <p style={{ color: '#A7ABB4' }}>
+                            See where you&apos;re signed in.
+                            {maxDevices ? ` (${sessions.length}/${maxDevices} active)` : ''}
+                        </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <button
@@ -214,10 +247,15 @@ export default function DevicesPage() {
                                     </div>
                                     <div style={{ flex: 1, minWidth: '220px' }}>
                                         <div style={{ fontWeight: 700, color: '#F3F4F6' }}>
-                                            {getDeviceLabel(session)}
+                                            {session.deviceName || getDeviceLabel(session)}
                                             {session.isCurrent && (
                                                 <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#D4AF37', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
                                                     Current
+                                                </span>
+                                            )}
+                                            {primaryDeviceId && session.deviceId === primaryDeviceId && (
+                                                <span style={{ marginLeft: '0.5rem', fontSize: '0.75rem', color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                                                    Primary
                                                 </span>
                                             )}
                                         </div>
@@ -246,9 +284,72 @@ export default function DevicesPage() {
                                     >
                                         Log out this device
                                     </button>
+                                    {session.deviceId && session.deviceId !== primaryDeviceId && (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSetPrimary(session.deviceId)}
+                                            style={{
+                                                padding: '0.55rem 0.9rem',
+                                                borderRadius: '10px',
+                                                border: '1px solid rgba(96, 165, 250, 0.35)',
+                                                background: 'rgba(96, 165, 250, 0.12)',
+                                                color: '#93C5FD',
+                                                cursor: 'pointer',
+                                                fontWeight: 600,
+                                            }}
+                                        >
+                                            Set as primary
+                                        </button>
+                                    )}
                                 </div>
                             );
                         })
+                    )}
+                    {history.length > 0 && (
+                        <div style={{ marginTop: '1.5rem' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowHistory((prev) => !prev)}
+                                style={{
+                                    padding: '0.6rem 1rem',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(167, 171, 180, 0.2)',
+                                    background: 'rgba(167, 171, 180, 0.08)',
+                                    color: '#F3F4F6',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.5rem',
+                                }}
+                            >
+                                {showHistory ? 'Hide' : 'View'} device history
+                            </button>
+                            {showHistory && (
+                                <div style={{ marginTop: '1rem', display: 'grid', gap: '0.75rem' }}>
+                                    {history.map((session) => (
+                                        <div
+                                            key={`history-${session.id}`}
+                                            style={{
+                                                padding: '0.9rem',
+                                                borderRadius: '14px',
+                                                background: 'rgba(11, 11, 13, 0.7)',
+                                                border: '1px solid rgba(167, 171, 180, 0.12)',
+                                                color: '#A7ABB4',
+                                                fontSize: '0.85rem',
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 600, color: '#F3F4F6' }}>
+                                                {session.deviceName || getDeviceLabel(session)}
+                                            </div>
+                                            <div style={{ marginTop: '0.25rem' }}>
+                                                Last active {new Date(session.lastUsedAt).toLocaleString()}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
             </div>

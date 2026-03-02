@@ -19,14 +19,21 @@ export const DevicesScreen = ({ navigation }: any) => {
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
+  const [primaryDeviceId, setPrimaryDeviceId] = useState<string | null>(null);
+  const [maxDevices, setMaxDevices] = useState<number | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmSession, setConfirmSession] = useState<{ sessionId: string; isCurrent: boolean } | null>(null);
 
   const loadSessions = async () => {
     setLoading(true);
     try {
-      const data = await apiClient.getSessions();
+      const data = await apiClient.getSessions(true);
       setSessions(data.sessions || []);
+      setHistory(data.history || []);
+      setPrimaryDeviceId(data.primaryDeviceId || null);
+      setMaxDevices(typeof data.maxDevices === 'number' ? data.maxDevices : null);
     } catch (error: any) {
       showToast({ message: error?.message || 'Failed to load devices.', type: 'error' });
     } finally {
@@ -55,6 +62,9 @@ export const DevicesScreen = ({ navigation }: any) => {
         <Text style={styles.title}>Devices</Text>
         <View style={styles.headerSpacer} />
       </View>
+      {maxDevices ? (
+        <Text style={styles.subTitle}>{sessions.length}/{maxDevices} active devices</Text>
+      ) : null}
 
       {loading ? (
         <View style={styles.center}>
@@ -71,6 +81,9 @@ export const DevicesScreen = ({ navigation }: any) => {
                     : (session?.device?.deviceLabel || 'Device')}
                 </Text>
                 {session.isCurrent ? <Text style={styles.currentTag}>This device</Text> : null}
+                {session.deviceId && primaryDeviceId === session.deviceId ? (
+                  <Text style={styles.primaryTag}>Primary</Text>
+                ) : null}
               </View>
               <Text style={styles.metaText}>
                 {session?.location?.city || 'Unknown city'} · {session?.location?.country || 'Unknown country'}
@@ -84,6 +97,23 @@ export const DevicesScreen = ({ navigation }: any) => {
               >
                 <Text style={styles.logoutText}>Log out this device</Text>
               </TouchableOpacity>
+              {session.deviceId && session.deviceId !== primaryDeviceId ? (
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={async () => {
+                    try {
+                      await apiClient.setPrimaryDevice(session.deviceId);
+                      setPrimaryDeviceId(session.deviceId);
+                      showToast({ message: 'Primary device updated.', type: 'success' });
+                      await loadSessions();
+                    } catch (error: any) {
+                      showToast({ message: error?.message || 'Failed to set primary device.', type: 'error' });
+                    }
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Set as primary</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           ))}
           {sessions.length === 0 && (
@@ -102,6 +132,29 @@ export const DevicesScreen = ({ navigation }: any) => {
               <Text style={styles.logoutAllActionText}>Log out all devices</Text>
             </TouchableOpacity>
           </View>
+
+          {history.length > 0 && (
+            <View style={styles.historySection}>
+              <TouchableOpacity onPress={() => setShowHistory((prev) => !prev)} style={styles.historyToggle}>
+                <Text style={styles.historyToggleText}>{showHistory ? 'Hide' : 'View'} device history</Text>
+                <Ionicons name={showHistory ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
+              </TouchableOpacity>
+              {showHistory && (
+                <View style={styles.historyList}>
+                  {history.map((session) => (
+                    <View key={`history-${session.id}`} style={styles.historyCard}>
+                      <Text style={styles.historyLabel}>
+                        {session.deviceName || session?.device?.deviceLabel || 'Device'}
+                      </Text>
+                      <Text style={styles.metaText}>
+                        Last active {new Date(session.lastUsedAt || session.createdAt).toLocaleString()}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
         </ScrollView>
       )}
       <ConfirmDialog
@@ -163,6 +216,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingBottom: 20,
   },
+  subTitle: {
+    color: COLORS.silver,
+    fontSize: 12,
+    paddingHorizontal: SPACING.xl,
+    marginBottom: 8,
+  },
   backButton: {
     width: 32,
     height: 32,
@@ -207,6 +266,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
+  primaryTag: {
+    color: '#93C5FD',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
   metaText: {
     color: COLORS.silver,
     fontSize: 12,
@@ -217,6 +282,14 @@ const styles = StyleSheet.create({
   },
   logoutText: {
     color: COLORS.accent.red,
+    fontWeight: '700',
+  },
+  primaryButton: {
+    marginTop: 4,
+    paddingVertical: 8,
+  },
+  primaryButtonText: {
+    color: '#93C5FD',
     fontWeight: '700',
   },
   center: {
@@ -263,5 +336,33 @@ const styles = StyleSheet.create({
   logoutAllActionText: {
     color: COLORS.background,
     fontWeight: '800',
+  },
+  historySection: {
+    marginTop: 16,
+  },
+  historyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  historyToggleText: {
+    color: COLORS.silver,
+    fontWeight: '600',
+  },
+  historyList: {
+    marginTop: 8,
+    gap: 10,
+  },
+  historyCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(167,171,180,0.15)',
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+  },
+  historyLabel: {
+    color: COLORS.text,
+    fontWeight: '600',
   },
 });

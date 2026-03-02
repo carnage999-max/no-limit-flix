@@ -146,11 +146,24 @@ export const apiClient = {
     return data;
   },
 
-  getSessions: async () => {
-    const response = await authFetch(`${BASE_URL}/api/account/sessions`);
+  getSessions: async (includeHistory = false) => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions${includeHistory ? '?includeHistory=1' : ''}`);
     const data = await parseJson(response);
     if (!response.ok) {
       throw new Error(data?.error || 'Failed to fetch sessions');
+    }
+    return data;
+  },
+
+  setPrimaryDevice: async (deviceId: string) => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to set primary device');
     }
     return data;
   },
