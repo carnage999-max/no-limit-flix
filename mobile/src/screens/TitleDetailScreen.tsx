@@ -14,12 +14,14 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, TYPOGRAPHY, SPACING } from '../theme/tokens';
-import { ButtonPrimary, PermanenceBadge, TrailerPlayer } from '../components/index';
+import { ButtonPrimary, TrailerPlayer } from '../components/index';
 import { apiClient } from '../lib/api';
 import { MoviePick, WatchProvider } from '../types';
 import { useFavorites } from '../context/FavoritesContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { transformToCloudFront } from '../lib/utils';
+import { useToast } from '../context/ToastContext';
+import { useSession } from '../context/SessionContext';
 
 const { width, height } = Dimensions.get('window');
 const AUTOPLAY_KEY = '@nolimitflix_autoplay';
@@ -36,22 +38,35 @@ export const TitleDetailScreen = () => {
   const navigation = useNavigation<any>();
   const { id, movie: passedMovie } = route.params || {};
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { user } = useSession();
+  const { showToast } = useToast();
 
   const [movie, setMovie] = React.useState<MoviePick | null>(passedMovie || null);
   const [loading, setLoading] = React.useState(!movie?.explanation || !movie?.watchProviders);
   const [isPlayingTrailer, setIsPlayingTrailer] = React.useState(false);
 
   const videoId = getYoutubeId(movie?.trailerUrl);
-  const isFav = movie ? isFavorite(movie.id) : false;
+  const isFav = movie ? isFavorite(movie.id, movie.assetId) : false;
 
-  const handleToggleFavorite = () => {
-    if (movie) {
-      toggleFavorite(movie);
+  const handleToggleFavorite = async () => {
+    if (!movie) return;
+    if (!user) {
+      showToast({ message: 'Sign in to save favorites.', type: 'info' });
+      navigation.navigate('Auth', { tab: 'login' });
+      return;
+    }
+    try {
+      const added = await toggleFavorite(movie);
+      showToast({ message: added ? 'Added to favorites.' : 'Removed from favorites.', type: 'success' });
+    } catch (error: any) {
+      showToast({ message: error?.message || 'Favorite failed.', type: 'error' });
     }
   };
 
   React.useEffect(() => {
-    if ((!movie?.explanation || !movie?.watchProviders) && id) {
+    if (!id) return;
+    const hasDescription = !!((movie as any)?.description || (movie as any)?.overview);
+    if (!hasDescription || !movie?.watchProviders) {
       loadMovieDetails();
     }
   }, [id]);
@@ -105,9 +120,45 @@ export const TitleDetailScreen = () => {
 
   const backdropUri = transformToCloudFront(movie.backdrop || movie.poster);
 
-  // CRITICAL: Ensure we use the direct asset cloudfrontUrl if available, 
-  // or fallback to the movie's cloudfrontUrl.
-  const playableUrl = movie.cloudfrontUrl ? transformToCloudFront(movie.cloudfrontUrl) : '';
+  const assetPlayback = movie.assets?.find((asset: any) => asset?.playbackUrl) || null;
+  const playableUrl = assetPlayback?.playbackUrl
+    ? transformToCloudFront(assetPlayback.playbackUrl)
+    : movie.cloudfrontUrl
+    ? transformToCloudFront(movie.cloudfrontUrl)
+    : '';
+  const playableAssetId = assetPlayback?.id || movie.assetId;
+  const description = (movie as any).description || (movie as any).overview || '';
+  const numericRating = typeof (movie as any).averageRating === 'number'
+    ? (movie as any).averageRating
+    : typeof (movie as any).rating === 'number'
+      ? (movie as any).rating
+      : null;
+  const maturityRating = typeof (movie as any).rating === 'string' ? (movie as any).rating : null;
+  const rawGenres = Array.isArray(movie.genres) ? movie.genres : [];
+  const fallbackGenre = (movie as any).genre;
+  const normalizedGenres = rawGenres
+    .flatMap((genre) => genre.split(','))
+    .map((genre) => genre.trim())
+    .filter(Boolean);
+  if (normalizedGenres.length === 0 && typeof fallbackGenre === 'string') {
+    normalizedGenres.push(
+      ...fallbackGenre
+        .split(',')
+        .map((genre: string) => genre.trim())
+        .filter(Boolean)
+    );
+  }
+  const tagItems: string[] = [];
+  if (normalizedGenres.length > 0) {
+    tagItems.push(...normalizedGenres.slice(0, 4));
+  }
+  if (numericRating) {
+    tagItems.push(`Rating ${numericRating.toFixed(1)}`);
+  }
+  if (maturityRating) {
+    tagItems.push(`Rated ${maturityRating}`);
+  }
+  // Keep tags focused on genres + ratings (no year/runtime)
 
   return (
     <View style={styles.container}>
@@ -133,14 +184,21 @@ export const TitleDetailScreen = () => {
           </View>
 
           <View style={styles.actionRow}>
-            {movie.playable && playableUrl ? (
+            {(movie.playable || !!playableUrl) && playableAssetId ? (
               <TouchableOpacity
                 style={styles.playButton}
-                onPress={() => navigation.navigate('Watch', {
-                  videoUrl: playableUrl,
-                  title: movie.title,
-                  assetId: movie.assetId
-                })}
+                onPress={() => {
+                  if (!user) {
+                    showToast({ message: 'Sign in to watch.', type: 'info' });
+                    navigation.navigate('Auth', { tab: 'login' });
+                    return;
+                  }
+                  navigation.navigate('Watch', {
+                    videoUrl: playableUrl,
+                    title: movie.title,
+                    assetId: playableAssetId
+                  });
+                }}
               >
                 <Ionicons name="play" size={24} color={COLORS.background} />
                 <Text style={styles.playButtonText}>Play Now</Text>
@@ -179,23 +237,45 @@ export const TitleDetailScreen = () => {
                 <Text style={styles.metaText}>{movie.year}</Text>
                 <Text style={styles.bullet}>•</Text>
                 <Text style={styles.metaText}>{movie.runtime}m</Text>
-                <Text style={styles.bullet}>•</Text>
-                <View style={styles.genresRow}>
-                  {(movie.genres || []).slice(0, 2).map((g, i) => (
-                    <Text key={i} style={styles.metaText}>{g}{i < 1 && (movie.genres?.length || 0) > 1 ? ', ' : ''}</Text>
-                  ))}
-                </View>
+                {normalizedGenres.length > 0 && (
+                  <>
+                    <Text style={styles.bullet}>•</Text>
+                    <View style={styles.genresRow}>
+                      {normalizedGenres.slice(0, 2).map((g, i) => (
+                        <Text key={i} style={styles.metaText}>
+                          {g}
+                          {i < 1 && normalizedGenres.length > 1 ? ', ' : ''}
+                        </Text>
+                      ))}
+                    </View>
+                  </>
+                )}
               </View>
             </View>
-            <PermanenceBadge type={movie.permanence || 'Permanent Core'} />
+            {maturityRating && (
+              <View style={styles.maturityBadge}>
+                <Text style={styles.maturityText}>{maturityRating}</Text>
+              </View>
+            )}
           </View>
 
-          {movie.explanation && (
+          {description ? (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Why this match?</Text>
-              <Text style={styles.explanationText}>{movie.explanation}</Text>
+              <Text style={styles.sectionTitle}>About</Text>
+              <Text style={styles.explanationText}>{description}</Text>
             </View>
-          )}
+          ) : null}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Why you might like this</Text>
+            <View style={styles.tagsRow}>
+              {(tagItems.length ? tagItems : ['Curated for your taste']).map((tag, index) => (
+                <View key={`${tag}-${index}`} style={styles.tagChip}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
           {isPlayingTrailer && videoId && (
             <View style={styles.section}>
@@ -368,6 +448,23 @@ const styles = StyleSheet.create({
   genresRow: {
     flexDirection: 'row',
   },
+  maturityBadge: {
+    minWidth: 44,
+    height: 44,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: COLORS.gold.mid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    marginLeft: 12,
+  },
+  maturityText: {
+    color: COLORS.gold.mid,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
   section: {
     marginBottom: 32,
   },
@@ -395,6 +492,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     opacity: 0.9,
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  tagChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 171, 180, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  tagText: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  ratingChip: {
+    borderColor: 'rgba(212, 175, 55, 0.5)',
   },
   providersGrid: {
     flexDirection: 'row',

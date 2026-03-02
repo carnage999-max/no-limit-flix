@@ -156,3 +156,20 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
+// Clear watch history for user
+export async function DELETE(request: NextRequest) {
+    try {
+        const sessionUser = await getSessionUser(request);
+        const userId = sessionUser?.id || null;
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        await prisma.watchHistory.deleteMany({ where: { userId } });
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error('Watch history clear error:', error);
+        return NextResponse.json({ error: 'Failed to clear watch history' }, { status: 500 });
+    }
+}

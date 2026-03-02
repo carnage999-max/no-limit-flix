@@ -106,7 +106,6 @@ export default function CollectionPage({ params }: { params: Promise<{ slug: str
                     ...movie,
                     explanation: 'Collection feature',
                     watchProviders: [],
-                    permanence: 'Permanent Core' as const,
                     playable: false,
                 }));
                 setMovies(moviePicks);

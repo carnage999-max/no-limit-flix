@@ -8,11 +8,15 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Keyboard,
+  ScrollView,
+  Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { apiClient } from '../lib/api';
+import { transformToCloudFront } from '../lib/utils';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface SearchResult {
   id: string;
@@ -24,27 +28,43 @@ export const SearchScreen = () => {
   const navigation = useNavigation<any>();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [internalResults, setInternalResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  const RECENT_KEY = '@nolimitflix_recent_searches';
 
   const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
+      setInternalResults([]);
       setLoading(false);
       return;
     }
 
     try {
       setLoading(true);
-      const data = await apiClient.searchMovies(searchQuery);
-      setResults(data);
+      const [internalData, catalogData] = await Promise.all([
+        apiClient.searchInternalLibrary(searchQuery, 12),
+        apiClient.searchMovies(searchQuery),
+      ]);
+      setInternalResults(internalData?.results || []);
+      setResults(catalogData || []);
+      const cleaned = searchQuery.trim();
+      if (cleaned.length >= 2) {
+        const next = [cleaned, ...recentSearches.filter((item) => item.toLowerCase() !== cleaned.toLowerCase())].slice(0, 8);
+        setRecentSearches(next);
+        await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next));
+      }
     } catch (error) {
       console.error('Search error:', error);
       setResults([]);
+      setInternalResults([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [recentSearches]);
 
   useEffect(() => {
     // Clear previous timeout
@@ -69,6 +89,23 @@ export const SearchScreen = () => {
       }
     };
   }, [query]);
+
+  useEffect(() => {
+    const loadRecent = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(RECENT_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setRecentSearches(parsed);
+          }
+        }
+      } catch {
+        setRecentSearches([]);
+      }
+    };
+    loadRecent();
+  }, []);
 
   const handleSelectMovie = (movieId: string) => {
     Keyboard.dismiss();
@@ -102,6 +139,32 @@ export const SearchScreen = () => {
           <Text style={styles.emptySubtitle}>
             Start typing to find your next favorite film
           </Text>
+          {recentSearches.length > 0 && (
+            <View style={styles.recentSection}>
+              <View style={styles.recentHeader}>
+                <Text style={styles.recentTitle}>Recent searches</Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    setRecentSearches([]);
+                    await AsyncStorage.removeItem(RECENT_KEY);
+                  }}
+                >
+                  <Text style={styles.recentClear}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.recentChips}>
+                {recentSearches.map((item) => (
+                  <TouchableOpacity
+                    key={`recent-${item}`}
+                    style={styles.recentChip}
+                    onPress={() => setQuery(item)}
+                  >
+                    <Text style={styles.recentChipText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
       );
     }
@@ -114,14 +177,11 @@ export const SearchScreen = () => {
       );
     }
 
-    if (results.length === 0) {
+    if (results.length === 0 && internalResults.length === 0) {
       return (
         <View style={styles.emptyState}>
           <Ionicons name="film-outline" size={64} color={COLORS.silver} style={{ opacity: 0.3 }} />
-          <Text style={styles.emptyTitle}>No Results Found</Text>
-          <Text style={styles.emptySubtitle}>
-            Try a different search term
-          </Text>
+          <Text style={styles.emptyTitle}>Couldn't find anything</Text>
         </View>
       );
     }
@@ -158,15 +218,71 @@ export const SearchScreen = () => {
           <Text style={styles.loadingText}>Searching...</Text>
         </View>
       )}
-
-      <FlatList
-        data={results}
-        renderItem={renderSearchResult}
-        keyExtractor={(item) => item.id}
+      <ScrollView
         contentContainerStyle={styles.resultsList}
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={renderEmptyState}
-      />
+      >
+        {renderEmptyState()}
+        {!!internalResults.length && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Ready to watch now</Text>
+            {internalResults.map((item: any) => {
+              const posterUrl = transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+              const videoUrl = transformToCloudFront(item.s3Url);
+              const genres = (item.genre || '')
+                .split(',')
+                .map((genre: string) => genre.trim())
+                .filter(Boolean);
+              const detailId = item.tmdbId ? item.tmdbId.toString() : item.id;
+              return (
+                <TouchableOpacity
+                  key={`internal-${detailId}`}
+                  style={styles.resultItem}
+                  onPress={() =>
+                    navigation.navigate('TitleDetail', {
+                      id: detailId,
+                      movie: {
+                        id: detailId,
+                        title: item.title,
+                        poster: posterUrl,
+                        playable: true,
+                        assetId: item.id,
+                        cloudfrontUrl: videoUrl,
+                        year: item.releaseYear,
+                        runtime: Math.floor((item.duration || 0) / 60),
+                        genres,
+                      },
+                    })
+                  }
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.resultContent}>
+                    <Image source={{ uri: posterUrl }} style={styles.resultPoster} />
+                    <View style={styles.resultText}>
+                      <Text style={styles.resultTitle} numberOfLines={1}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.resultYear}>{item.releaseYear || '—'}</Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={COLORS.silver} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {!!results.length && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Explore the catalog</Text>
+            {results.map((item) => (
+              <View key={`catalog-${item.id}`}>
+                {renderSearchResult({ item })}
+              </View>
+            ))}
+          </View>
+        )}
+      </ScrollView>
     </View>
   );
 };
@@ -220,6 +336,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     paddingBottom: 140,
   },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.gold.mid,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginTop: 12,
+    marginBottom: 10,
+  },
   resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -233,6 +361,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  resultPoster: {
+    width: 46,
+    height: 68,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  resultText: {
+    flex: 1,
+    gap: 4,
   },
   resultTitle: {
     flex: 1,
@@ -263,5 +401,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  recentSection: {
+    marginTop: 24,
+    width: '100%',
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recentTitle: {
+    color: COLORS.gold.mid,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  recentClear: {
+    color: COLORS.silver,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  recentChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  recentChip: {
+    borderWidth: 1,
+    borderColor: 'rgba(167, 171, 180, 0.2)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(167, 171, 180, 0.08)',
+  },
+  recentChipText: {
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

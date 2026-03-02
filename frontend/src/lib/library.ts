@@ -99,7 +99,6 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
                     cloudfrontUrl: asset.s3Url,
                     runtime: asset.duration ? Math.floor(asset.duration / 60) : movie.runtime,
                     year: asset.releaseYear || movie.year,
-                    permanence: internalAsset ? 'Permanent Core' : 'Licensed',
                     sourceProvider: asset.sourceProvider
                 };
             }

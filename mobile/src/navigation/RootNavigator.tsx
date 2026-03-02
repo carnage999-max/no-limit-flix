@@ -1,9 +1,7 @@
 import React from 'react';
-import { Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../theme/tokens';
 
 import { HomeScreen } from '../screens/HomeScreen';
@@ -17,8 +15,10 @@ import { WatchScreen } from '../screens/WatchScreen';
 import { InternalMoviesScreen } from '../screens/InternalMoviesScreen';
 import { InternalTvScreen } from '../screens/InternalTvScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
-
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AuthScreen } from '../screens/AuthScreen';
+import { ProfileScreen } from '../screens/ProfileScreen';
+import { DevicesScreen } from '../screens/DevicesScreen';
+import { WatchHistoryScreen } from '../screens/WatchHistoryScreen';
 
 import { CustomTabBar } from '../components/CustomTabBar';
 
@@ -57,6 +57,10 @@ export function RootNavigator() {
         <Stack.Screen name="Watch" component={WatchScreen} />
         <Stack.Screen name="InternalMovies" component={InternalMoviesScreen} />
         <Stack.Screen name="InternalTv" component={InternalTvScreen} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
+        <Stack.Screen name="Devices" component={DevicesScreen} />
+        <Stack.Screen name="WatchHistory" component={WatchHistoryScreen} />
+        <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

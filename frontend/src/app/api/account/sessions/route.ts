@@ -20,13 +20,23 @@ export async function GET(request: NextRequest) {
             orderBy: { lastUsedAt: 'desc' },
         });
 
+        const seenDevices = new Set<string>();
+        const activeSessions = sessions.filter((session) => {
+            if (!session.deviceId) return true;
+            if (seenDevices.has(session.deviceId)) return false;
+            seenDevices.add(session.deviceId);
+            return true;
+        });
+
         const enriched = await Promise.all(
-            sessions.map(async (session) => {
+            activeSessions.map(async (session) => {
                 const device = parseUserAgent(session.userAgent);
                 const location = await lookupLocation(session.ipAddress);
                 return {
                     id: session.id,
                     sessionId: session.sessionId,
+                    deviceId: session.deviceId,
+                    deviceName: session.deviceName,
                     userAgent: session.userAgent,
                     ipAddress: session.ipAddress,
                     createdAt: session.createdAt,

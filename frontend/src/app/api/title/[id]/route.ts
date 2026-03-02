@@ -30,6 +30,10 @@ export async function GET(
                     sourceLicenseUrl: true,
                     format: true,
                     fileSize: true,
+                    genre: true,
+                    rating: true,
+                    averageRating: true,
+                    ratingCount: true,
                 }
             });
 
@@ -47,6 +51,10 @@ export async function GET(
                 poster: video.thumbnailUrl,
                 year: video.releaseYear,
                 runtime: video.duration ? Math.round(video.duration / 60) : null,
+                genres: video.genre ? [video.genre] : [],
+                rating: video.rating,
+                averageRating: video.averageRating,
+                ratingCount: video.ratingCount,
                 assets: [
                     {
                         id: video.id,

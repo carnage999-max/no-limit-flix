@@ -16,6 +16,7 @@ import { TitleTile } from '../components/index';
 import { COLLECTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
 import { MoviePick } from '../types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -28,12 +29,14 @@ const FILTERS = {
 export const CollectionDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { id } = route.params || {};
   const collection = COLLECTIONS.find(c => c.slug === id) || COLLECTIONS[0];
 
   const [movies, setMovies] = useState<MoviePick[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewSize, setViewSize] = useState<'compact' | 'standard' | 'large'>('standard');
   const [activeFilters, setActiveFilters] = useState({
     length: 'Medium',
     intensity: 'Medium',
@@ -82,10 +85,18 @@ export const CollectionDetailScreen = () => {
     setActiveFilters(prev => ({ ...prev, [category]: value }));
   };
 
+  const getTileWidth = () => {
+    const horizontalPadding = SPACING.xl * 2;
+    const availableWidth = width - horizontalPadding;
+    if (viewSize === 'compact') return (availableWidth - (SPACING.sm * 2)) / 3;
+    if (viewSize === 'standard') return (availableWidth - SPACING.sm) / 2;
+    return availableWidth;
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView 
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 140 }]}
         refreshControl={
           <RefreshControl 
             refreshing={refreshing} 
@@ -105,6 +116,24 @@ export const CollectionDetailScreen = () => {
 
         <Text style={[styles.title, { color: collection.accentColor }]}>{collection.title}</Text>
         <Text style={styles.promiseText}>{collection.description}</Text>
+
+        <View style={styles.viewToggleRow}>
+          <TouchableOpacity
+            onPress={() => {
+              if (viewSize === 'standard') setViewSize('compact');
+              else if (viewSize === 'compact') setViewSize('large');
+              else setViewSize('standard');
+            }}
+            style={styles.viewToggle}
+          >
+            <Ionicons
+              name={viewSize === 'compact' ? 'grid-outline' : viewSize === 'standard' ? 'apps-outline' : 'list-outline'}
+              size={18}
+              color={collection.accentColor}
+            />
+            <Text style={[styles.viewToggleText, { color: collection.accentColor }]}>{viewSize.toUpperCase()}</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.filtersSection}>
           {Object.entries(FILTERS).map(([category, options]) => (
@@ -147,6 +176,7 @@ export const CollectionDetailScreen = () => {
               <TitleTile 
                 key={movie.id} 
                 movie={movie} 
+                width={getTileWidth()}
                 onPress={(movieId: string) => navigation.navigate('TitleDetail', { id: movieId, movie })}
               />
             ))}
@@ -203,6 +233,25 @@ const styles = StyleSheet.create({
   filtersSection: {
     marginBottom: 40,
     gap: 16,
+  },
+  viewToggleRow: {
+    alignItems: 'flex-start',
+    marginBottom: 20,
+  },
+  viewToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  viewToggleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   filterRow: {
     flexDirection: 'row',

@@ -5,6 +5,9 @@ import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { AnimatedSplashScreen } from './src/screens/AnimatedSplashScreen';
+import { SessionProvider, useSession } from './src/context/SessionContext';
+import { ToastProvider } from './src/context/ToastContext';
+import { WelcomeOverlay } from './src/components/WelcomeOverlay';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -48,14 +51,31 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider onLayout={onLayoutRootView}>
-        <FavoritesProvider>
-          <StatusBar style="light" />
-          <RootNavigator />
-          {!splashAnimationFinished && (
-            <AnimatedSplashScreen onAnimationFinish={() => setSplashAnimationFinished(true)} />
-          )}
-        </FavoritesProvider>
+        <SessionProvider>
+          <ToastProvider>
+            <FavoritesProvider>
+              <StatusBar style="light" />
+              <RootNavigator />
+              <WelcomeGate />
+              {!splashAnimationFinished && (
+                <AnimatedSplashScreen onAnimationFinish={() => setSplashAnimationFinished(true)} />
+              )}
+            </FavoritesProvider>
+          </ToastProvider>
+        </SessionProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const WelcomeGate = () => {
+  const { user, welcomeVisible, welcomeSubtitle, dismissWelcome } = useSession();
+  return (
+    <WelcomeOverlay
+      visible={welcomeVisible}
+      username={user?.username}
+      subtitle={welcomeSubtitle}
+      onFinish={dismissWelcome}
+    />
+  );
+};

@@ -2,8 +2,16 @@ import { NextRequest } from 'next/server';
 import prisma from '@/lib/db';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth';
 
+const getBearerToken = (request: NextRequest) => {
+    const header = request.headers.get('authorization') || request.headers.get('Authorization');
+    if (!header) return null;
+    const [scheme, value] = header.split(' ');
+    if (!scheme || scheme.toLowerCase() !== 'bearer') return null;
+    return value || null;
+};
+
 export async function getSessionUser(request: NextRequest) {
-    const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const token = getBearerToken(request) || request.cookies.get(SESSION_COOKIE_NAME)?.value;
     const payload = verifySessionToken(token);
     if (!payload) return null;
 

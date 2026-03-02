@@ -19,7 +19,6 @@ export interface MoviePick extends Movie {
     ratingCount?: number | null;
     trailerUrl?: string;
     watchProviders: WatchProvider[];
-    permanence?: 'Permanent Core' | 'Long-Term' | 'Licensed';
     // Phase 2 — playback enrichment
     playable?: boolean;        // true if title exists in our hosted library
     assetId?: string;          // DB Video.id when playable=true

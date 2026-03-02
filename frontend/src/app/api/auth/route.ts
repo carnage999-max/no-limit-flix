@@ -7,7 +7,71 @@ const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
     try {
-        const { action, email, password, username } = await request.json();
+        const { action, email, password, username, deviceId, deviceName } = await request.json();
+        const normalizedDeviceId = typeof deviceId === 'string' && deviceId.trim().length > 0
+            ? deviceId.trim()
+            : null;
+        const normalizedDeviceName = typeof deviceName === 'string' && deviceName.trim().length > 0
+            ? deviceName.trim()
+            : null;
+
+        const upsertSession = async (userId: string, role: string) => {
+            const sessionId = crypto.randomUUID();
+            const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+                || request.headers.get('x-real-ip')
+                || undefined;
+            const userAgent = request.headers.get('user-agent') || undefined;
+
+            if (normalizedDeviceId) {
+                const existing = await prisma.userSession.findFirst({
+                    where: {
+                        userId,
+                        deviceId: normalizedDeviceId,
+                    }
+                });
+                if (existing) {
+                    await prisma.userSession.update({
+                        where: { id: existing.id },
+                        data: {
+                            sessionId,
+                            userAgent,
+                            ipAddress,
+                            revokedAt: null,
+                            lastUsedAt: new Date(),
+                            deviceName: normalizedDeviceName || existing.deviceName,
+                        }
+                    });
+                } else {
+                    await prisma.userSession.create({
+                        data: {
+                            userId,
+                            sessionId,
+                            deviceId: normalizedDeviceId,
+                            deviceName: normalizedDeviceName || undefined,
+                            userAgent,
+                            ipAddress,
+                        }
+                    });
+                }
+            } else {
+                await prisma.userSession.create({
+                    data: {
+                        userId,
+                        sessionId,
+                        deviceName: normalizedDeviceName || undefined,
+                        userAgent,
+                        ipAddress,
+                    }
+                });
+            }
+
+            return createSessionToken({
+                userId,
+                role,
+                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000,
+                sessionId,
+            });
+        };
 
         if (action === 'signup') {
             // Check if user already exists
@@ -39,30 +103,12 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            const sessionId = crypto.randomUUID();
-            const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-                || request.headers.get('x-real-ip')
-                || undefined;
-            await prisma.userSession.create({
-                data: {
-                    userId: user.id,
-                    sessionId,
-                    userAgent: request.headers.get('user-agent') || undefined,
-                    ipAddress,
-                }
-            });
-
-            // Generate session token
-            const token = createSessionToken({
-                userId: user.id,
-                role: user.role,
-                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000,
-                sessionId,
-            });
+            const token = await upsertSession(user.id, user.role);
 
             // Set session cookie
             const response = NextResponse.json({
                 success: true,
+                token,
                 user: {
                     id: user.id,
                     email: user.email,
@@ -94,29 +140,11 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const sessionId = crypto.randomUUID();
-            const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-                || request.headers.get('x-real-ip')
-                || undefined;
-            await prisma.userSession.create({
-                data: {
-                    userId: user.id,
-                    sessionId,
-                    userAgent: request.headers.get('user-agent') || undefined,
-                    ipAddress,
-                }
-            });
-
-            // Generate session token
-            const token = createSessionToken({
-                userId: user.id,
-                role: user.role,
-                expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000,
-                sessionId,
-            });
+            const token = await upsertSession(user.id, user.role);
 
             const response = NextResponse.json({
                 success: true,
+                token,
                 user: {
                     id: user.id,
                     email: user.email,

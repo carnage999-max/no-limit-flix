@@ -3,8 +3,10 @@ import { TouchableOpacity, Image, Text, View, StyleSheet, Dimensions } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { MoviePick } from '../types';
 import { COLORS, SPACING } from '../theme/tokens';
-import { PermanenceBadge } from './PermanenceBadge';
 import { useFavorites } from '../context/FavoritesContext';
+import { useToast } from '../context/ToastContext';
+import { useSession } from '../context/SessionContext';
+import { useNavigation } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 const TILE_WIDTH = (width - SPACING.xl * 2 - SPACING.md) / 2;
@@ -14,15 +16,29 @@ interface TitleTileProps {
   onPress: (id: string, movie: MoviePick) => void;
   width?: number;
   key?: string | number;
+  showDescription?: boolean;
 }
 
-export const TitleTile = ({ movie, onPress, width: customWidth }: TitleTileProps) => {
+export const TitleTile = ({ movie, onPress, width: customWidth, showDescription }: TitleTileProps) => {
   const { isFavorite, toggleFavorite } = useFavorites();
-  const isFav = isFavorite(movie.id);
+  const { user } = useSession();
+  const { showToast } = useToast();
+  const navigation = useNavigation<any>();
+  const isFav = isFavorite(movie.id, movie.assetId);
 
-  const handleFavoritePress = (e: any) => {
+  const handleFavoritePress = async (e: any) => {
     e.stopPropagation();
-    toggleFavorite(movie);
+    if (!user) {
+      showToast({ message: 'Sign in to save favorites.', type: 'info' });
+      navigation.navigate('Auth', { tab: 'login' });
+      return;
+    }
+    try {
+      const added = await toggleFavorite(movie);
+      showToast({ message: added ? 'Added to favorites.' : 'Removed from favorites.', type: 'success' });
+    } catch (error: any) {
+      showToast({ message: error?.message || 'Favorite failed.', type: 'error' });
+    }
   };
 
   return (
@@ -33,9 +49,6 @@ export const TitleTile = ({ movie, onPress, width: customWidth }: TitleTileProps
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: movie.poster }} style={styles.poster} resizeMode="cover" />
-        <View style={styles.badgeOverlay}>
-          <PermanenceBadge type={movie.permanence} />
-        </View>
         <TouchableOpacity
           style={styles.favoriteButton}
           onPress={handleFavoritePress}
@@ -58,6 +71,11 @@ export const TitleTile = ({ movie, onPress, width: customWidth }: TitleTileProps
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{movie.title}</Text>
         <Text style={styles.meta}>{movie.year} • {movie.runtime}m</Text>
+        {showDescription && (movie.description || movie.explanation) ? (
+          <Text style={styles.description} numberOfLines={3}>
+            {movie.description || movie.explanation}
+          </Text>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -80,11 +98,6 @@ const styles = StyleSheet.create({
   poster: {
     width: '100%',
     height: '100%',
-  },
-  badgeOverlay: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
   },
   favoriteButton: {
     position: 'absolute',
@@ -110,6 +123,13 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontSize: 12,
     opacity: 0.8,
+  },
+  description: {
+    color: COLORS.silver,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+    opacity: 0.9,
   },
   playableTag: {
     position: 'absolute',

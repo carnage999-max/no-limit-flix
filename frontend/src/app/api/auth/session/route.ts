@@ -4,7 +4,9 @@ import { getSessionUser } from '@/lib/auth-server';
 
 export async function GET(request: NextRequest) {
     try {
-        const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+        const header = request.headers.get('authorization') || request.headers.get('Authorization');
+        const bearerToken = header?.startsWith('Bearer ') ? header.split(' ')[1] : null;
+        const token = bearerToken || request.cookies.get(SESSION_COOKIE_NAME)?.value;
         const payload = verifySessionToken(token);
         if (!payload) {
             return NextResponse.json({ authenticated: false }, { status: 401 });

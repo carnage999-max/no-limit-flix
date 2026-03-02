@@ -96,6 +96,8 @@ model UserSession {
   id          String   @id @default(cuid())
   userId      String
   sessionId   String   @unique
+  deviceId    String?
+  deviceName  String?
   userAgent   String?
   ipAddress   String?
   createdAt   DateTime @default(now())
@@ -105,6 +107,8 @@ model UserSession {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([deviceId])
+  @@unique([userId, deviceId])
   @@index([sessionId])
   @@index([revokedAt])
 }

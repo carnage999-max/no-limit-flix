@@ -2,7 +2,229 @@ import { AIPickRequest, AIPickResponse, RepickResponse } from '../types';
 
 export const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 
+let authToken: string | null = null;
+let deviceId: string | null = null;
+let deviceName: string | null = null;
+
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
+};
+
+export const setDeviceId = (id: string | null) => {
+  deviceId = id;
+};
+
+export const setDeviceName = (name: string | null) => {
+  deviceName = name;
+};
+
+const authFetch = (url: string, options: RequestInit = {}) => {
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> | undefined),
+  };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  return fetch(url, { ...options, headers });
+};
+
+const parseJson = async (response: Response) => {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+};
+
 export const apiClient = {
+  login: async (email: string, password: string) => {
+    const response = await fetch(`${BASE_URL}/api/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', email, password, deviceId, deviceName }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Login failed');
+    }
+    return data;
+  },
+
+  signup: async (email: string, username: string, password: string) => {
+    const response = await fetch(`${BASE_URL}/api/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'signup', email, username, password, deviceId, deviceName }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Signup failed');
+    }
+    return data;
+  },
+
+  logout: async () => {
+    const response = await authFetch(`${BASE_URL}/api/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'logout' }),
+    });
+    if (!response.ok) {
+      const data = await parseJson(response);
+      throw new Error(data?.error || 'Logout failed');
+    }
+    return true;
+  },
+
+  getSession: async () => {
+    const response = await authFetch(`${BASE_URL}/api/auth/session`);
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Session lookup failed');
+    }
+    return data;
+  },
+
+  updateProfile: async (payload: { username?: string; email?: string; avatar?: string | null; showWelcomeScreen?: boolean }) => {
+    const response = await authFetch(`${BASE_URL}/api/account/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Profile update failed');
+    }
+    return data;
+  },
+
+  getAvatarUploadUrl: async (fileName: string, fileType: string) => {
+    const response = await authFetch(`${BASE_URL}/api/account/avatar-presigned-url`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName, fileType }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to create avatar upload');
+    }
+    return data;
+  },
+
+  getFavorites: async (page = 1, limit = 50) => {
+    const response = await authFetch(`${BASE_URL}/api/favorites?page=${page}&limit=${limit}`);
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to fetch favorites');
+    }
+    return data;
+  },
+
+  addFavorite: async (payload: { videoId?: string; tmdbId?: string; title?: string; poster?: string }) => {
+    const response = await authFetch(`${BASE_URL}/api/favorites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, action: 'add' }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to add favorite');
+    }
+    return data;
+  },
+
+  removeFavorite: async (payload: { videoId?: string; tmdbId?: string }) => {
+    const response = await authFetch(`${BASE_URL}/api/favorites`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, action: 'remove' }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to remove favorite');
+    }
+    return data;
+  },
+
+  getSessions: async () => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions`);
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to fetch sessions');
+    }
+    return data;
+  },
+
+  logoutAllSessions: async () => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions`, {
+      method: 'POST',
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to log out all devices');
+    }
+    return data;
+  },
+
+  logoutSession: async (sessionId: string) => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to log out device');
+    }
+    return data;
+  },
+
+  getWatchHistory: async (page = 1, limit = 20) => {
+    const response = await authFetch(`${BASE_URL}/api/watch-history?page=${page}&limit=${limit}`);
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to fetch watch history');
+    }
+    return data;
+  },
+
+  clearWatchHistory: async () => {
+    const response = await authFetch(`${BASE_URL}/api/watch-history`, {
+      method: 'DELETE',
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to clear watch history');
+    }
+    return data;
+  },
+
+  recordWatchHistory: async (payload: { videoId: string; watchedDuration?: number; totalDuration?: number; title?: string; poster?: string }) => {
+    const response = await authFetch(`${BASE_URL}/api/watch-history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to track watch history');
+    }
+    return data;
+  },
+
+  startWatch: async (assetId: string) => {
+    const response = await authFetch(`${BASE_URL}/api/watch/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assetId }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to fetch playback');
+    }
+    return data;
+  },
+
   pickForMe: async (moods: string[], freeText?: string): Promise<AIPickResponse> => {
     try {
       console.log('Finalizing search with moods:', moods, 'and text:', freeText);
@@ -110,6 +332,17 @@ export const apiClient = {
       return await response.json();
     } catch (error) {
       console.error('API Error (searchMovies):', error);
+      throw error;
+    }
+  },
+
+  searchInternalLibrary: async (query: string, limit = 12) => {
+    try {
+      const response = await fetch(`${BASE_URL}/api/library/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+      if (!response.ok) throw new Error('Failed to search internal library');
+      return await response.json();
+    } catch (error) {
+      console.error('API Error (searchInternalLibrary):', error);
       throw error;
     }
   },

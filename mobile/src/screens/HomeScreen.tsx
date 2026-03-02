@@ -32,6 +32,8 @@ import { MOOD_OPTIONS, FEEDBACK_OPTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
 import { AIPickResponse, MoviePick } from '../types';
 import { transformToCloudFront } from '../lib/utils';
+import { useSession } from '../context/SessionContext';
+import { useToast } from '../context/ToastContext';
 
 const { height, width } = Dimensions.get('window');
 
@@ -40,6 +42,8 @@ export const HomeScreen = () => {
   const isFocused = useIsFocused();
   const mainScrollRef = useRef<ScrollView>(null);
   const horizontalScrollRef = useRef<ScrollView>(null);
+  const { user } = useSession();
+  const { showToast } = useToast();
 
   // View state: 'discovery' or 'watch'
   const [activeTab, setActiveTab] = useState<'discovery' | 'watch'>('watch');
@@ -55,7 +59,9 @@ export const HomeScreen = () => {
   // Watch Mode State
   const [hostedMovies, setHostedMovies] = useState<any[]>([]);
   const [hostedSeries, setHostedSeries] = useState<any[]>([]);
+  const [continueWatching, setContinueWatching] = useState<any[]>([]);
   const [isWatchLoading, setIsWatchLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -99,20 +105,57 @@ export const HomeScreen = () => {
     }
   }, [isFocused]);
 
+  const pickRandomItems = (items: any[], count: number) => {
+    const copy = [...items];
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy.slice(0, count);
+  };
+
   const fetchHostedContent = async () => {
     try {
       setIsWatchLoading(true);
-      const [moviesData, tvData] = await Promise.all([
+      const [moviesData, tvData, historyData] = await Promise.all([
         apiClient.getInternalMovies(),
-        apiClient.getInternalTv()
+        apiClient.getInternalTv(),
+        user ? apiClient.getWatchHistory(1, 10) : Promise.resolve({ watchHistory: [] })
       ]);
-      setHostedMovies(moviesData.movies?.slice(0, 4) || []);
-      setHostedSeries(tvData.series?.slice(0, 4) || []);
+      setHostedMovies(pickRandomItems(moviesData.movies || [], 4));
+      setHostedSeries(pickRandomItems(tvData.series || [], 4));
+      const historyItems = (historyData.watchHistory || []).map((entry: any) => {
+        const video = entry.video || {};
+        const rawGenre = video.genre || '';
+        const genres = rawGenre
+          .split(',')
+          .map((genre: string) => genre.trim())
+          .filter(Boolean);
+        return {
+          id: video.tmdbId ? String(video.tmdbId) : video.id || entry.videoId,
+          title: video.title || entry.videoTitle,
+          poster: transformToCloudFront(video.thumbnailUrl || entry.videoPoster) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+          year: video.releaseYear || new Date().getFullYear(),
+          runtime: Math.floor((video.duration || 0) / 60),
+          genres,
+          playable: true,
+          assetId: video.id || entry.videoId,
+          cloudfrontUrl: transformToCloudFront(video.s3Url),
+          progress: Math.round(entry.completionPercent || 0),
+        };
+      });
+      setContinueWatching(historyItems.slice(0, 5));
     } catch (error) {
       console.error('Failed to pre-fetch hosted content', error);
     } finally {
       setIsWatchLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchHostedContent();
+    setRefreshing(false);
   };
 
   const handleTabChange = (tab: 'discovery' | 'watch') => {
@@ -258,6 +301,42 @@ export const HomeScreen = () => {
       </View>
 
       <View style={styles.hostedSummary}>
+        {!!continueWatching.length && (
+          <View style={styles.continueSection}>
+            <View style={styles.hostedHeader}>
+              <Text style={styles.hostedLabel}>CONTINUE WATCHING</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('WatchHistory')}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.continueScroll}
+            >
+              {continueWatching.map((item: any) => (
+                <TouchableOpacity
+                  key={`continue-${item.id}`}
+                  style={styles.continueCard}
+                  onPress={() =>
+                    navigation.navigate('TitleDetail', {
+                      id: item.id,
+                      movie: item,
+                    })
+                  }
+                >
+                  <Image source={{ uri: item.poster }} style={styles.continuePoster} />
+                  <View style={styles.continueProgressTrack}>
+                    <View style={[styles.continueProgressFill, { width: `${Math.min(100, item.progress || 0)}%` }]} />
+                  </View>
+                  <Text style={styles.continueTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={styles.continueMeta}>{item.year}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         <View style={styles.hostedHeader}>
           <Text style={styles.hostedLabel}>READY TO STREAM</Text>
           <TouchableOpacity onPress={() => navigation.navigate('InternalMovies')}>
@@ -274,35 +353,43 @@ export const HomeScreen = () => {
                 key={`movie-${item.id || index}`}
                 style={styles.hostedMiniCard}
                 onPress={() => {
+                  if (!user) {
+                    showToast({ message: 'Sign in to watch.', type: 'info' });
+                    navigation.navigate('Auth', { tab: 'login' });
+                    return;
+                  }
                   const posterUrl = transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
                   const videoUrl = transformToCloudFront(item.s3Url);
+                  const genres = (item.genre || '')
+                    .split(',')
+                    .map((genre: string) => genre.trim())
+                    .filter(Boolean);
 
-                  if (item.tmdbId) {
-                    navigation.navigate('TitleDetail', {
-                      id: item.tmdbId.toString(),
-                      movie: {
-                        id: item.tmdbId.toString(),
-                        title: item.title,
-                        poster: posterUrl,
-                        playable: true,
-                        assetId: item.id,
-                        cloudfrontUrl: videoUrl,
-                        year: item.releaseYear,
-                        runtime: Math.floor((item.duration || 0) / 60),
-                        permanence: 'Permanent Core'
-                      }
-                    });
-                  } else {
-                    navigation.navigate('Watch', {
-                      videoUrl: videoUrl,
+                  const detailId = item.tmdbId ? item.tmdbId.toString() : item.id;
+                  navigation.navigate('TitleDetail', {
+                    id: detailId,
+                    movie: {
+                      id: detailId,
                       title: item.title,
-                      assetId: item.id
-                    });
-                  }
+                      poster: posterUrl,
+                      playable: true,
+                      assetId: item.id,
+                      cloudfrontUrl: videoUrl,
+                      year: item.releaseYear,
+                      runtime: Math.floor((item.duration || 0) / 60),
+                      genres,
+                    }
+                  });
                 }}
               >
                 <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
                 <Text style={styles.hostedMiniTitle} numberOfLines={1}>{item.title}</Text>
+                {!!item.genre && (
+                  <Text style={styles.hostedMiniGenre} numberOfLines={1}>{item.genre}</Text>
+                )}
+                {!!item.releaseYear && (
+                  <Text style={styles.hostedMiniMeta}>{item.releaseYear}</Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -329,6 +416,12 @@ export const HomeScreen = () => {
               >
                 <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
                 <Text style={styles.hostedMiniTitle} numberOfLines={1}>{item.seriesTitle}</Text>
+                {!!item.genre && (
+                  <Text style={styles.hostedMiniGenre} numberOfLines={1}>{item.genre}</Text>
+                )}
+                {!!item.releaseYear && (
+                  <Text style={styles.hostedMiniMeta}>{item.releaseYear}</Text>
+                )}
               </TouchableOpacity>
             ))}
           </View>
@@ -480,7 +573,7 @@ export const HomeScreen = () => {
     <View style={styles.resultsSection}>
       <View style={[
         styles.resultsContent,
-        { paddingTop: SPACING.xl }
+        { paddingTop: SPACING.sm }
       ]}>
         <Text style={styles.resultsTitle}>Your Matching Films</Text>
 
@@ -533,6 +626,7 @@ export const HomeScreen = () => {
                     key={movie.id}
                     movie={movie}
                     width={getTileWidth()}
+                    showDescription
                     onPress={(id: string, movieObj: MoviePick) => navigation.navigate('TitleDetail', { id, movie: movieObj })}
                   />
                 ))}
@@ -564,7 +658,16 @@ export const HomeScreen = () => {
       ref={mainScrollRef}
       showsVerticalScrollIndicator={false}
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: insets.bottom + 140 }}
       scrollEnabled={!isLoading || !!results}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
+          tintColor={COLORS.gold.mid}
+          colors={[COLORS.gold.mid]}
+        />
+      }
     >
       {renderHeroSection()}
       {(results || isLoading) && renderResultsSection()}
@@ -612,7 +715,7 @@ const styles = StyleSheet.create({
   tabContentContainer: {
     flexDirection: 'row',
     width: width * 2,
-    paddingBottom: 40,
+    paddingBottom: 16,
   },
   tabWidth: {
     width: width,
@@ -671,7 +774,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   microcopy: {
-    marginTop: 12,
+    marginTop: 6,
     fontSize: 14,
     color: COLORS.silver,
     fontStyle: 'italic',
@@ -874,6 +977,45 @@ const styles = StyleSheet.create({
   hostedSummary: {
     marginBottom: 32,
   },
+  continueSection: {
+    marginBottom: 24,
+  },
+  continueScroll: {
+    gap: 14,
+    paddingVertical: 6,
+  },
+  continueCard: {
+    width: 180,
+  },
+  continuePoster: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  continueTitle: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  continueMeta: {
+    color: COLORS.silver,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  continueProgressTrack: {
+    marginTop: 8,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(167,171,180,0.2)',
+    overflow: 'hidden',
+  },
+  continueProgressFill: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.gold.mid,
+  },
   hostedHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -913,6 +1055,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 8,
   },
+  hostedMiniGenre: {
+    color: COLORS.gold.mid,
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  hostedMiniMeta: {
+    color: COLORS.silver,
+    fontSize: 11,
+    marginTop: 2,
+  },
   discoveryPrompt: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -922,6 +1075,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     marginTop: 16,
+    marginBottom: 80,
   },
   promptTitle: {
     color: COLORS.gold.mid,

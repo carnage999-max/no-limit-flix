@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,14 +16,101 @@ import { COLORS, SPACING } from '../theme/tokens';
 import { COLLECTIONS } from '../lib/constants';
 import { useFavorites } from '../context/FavoritesContext';
 import { TitleTile } from '../components/index';
+import { useSession } from '../context/SessionContext';
+import { apiClient } from '../lib/api';
+import { transformToCloudFront } from '../lib/utils';
 
 export const LibraryScreen = () => {
   const navigation = useNavigation<any>();
-  const { favorites } = useFavorites();
+  const { favorites, refreshFavorites } = useFavorites();
+  const { user } = useSession();
+  const [continueWatching, setContinueWatching] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      if (!user) {
+        setContinueWatching([]);
+        return;
+      }
+      setLoadingHistory(true);
+      try {
+        const data = await apiClient.getWatchHistory(1, 10);
+        const historyItems = (data.watchHistory || []).map((entry: any) => {
+          const video = entry.video || {};
+          const rawGenre = video.genre || '';
+          const genres = rawGenre
+            .split(',')
+            .map((genre: string) => genre.trim())
+            .filter(Boolean);
+          return {
+            id: video.tmdbId ? String(video.tmdbId) : video.id || entry.videoId,
+            title: video.title || entry.videoTitle,
+            poster: transformToCloudFront(video.thumbnailUrl || entry.videoPoster) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+            year: video.releaseYear || new Date().getFullYear(),
+            runtime: Math.floor((video.duration || 0) / 60),
+            genres,
+            playable: true,
+            assetId: video.id || entry.videoId,
+            cloudfrontUrl: transformToCloudFront(video.s3Url),
+            progress: Math.round(entry.completionPercent || 0),
+          };
+        });
+        setContinueWatching(historyItems.slice(0, 5));
+      } catch (error) {
+        setContinueWatching([]);
+      } finally {
+        setLoadingHistory(false);
+      }
+    };
+    loadHistory();
+  }, [user]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      refreshFavorites(),
+      user ? apiClient.getWatchHistory(1, 10).then((data) => {
+        const historyItems = (data.watchHistory || []).map((entry: any) => {
+          const video = entry.video || {};
+          const rawGenre = video.genre || '';
+          const genres = rawGenre
+            .split(',')
+            .map((genre: string) => genre.trim())
+            .filter(Boolean);
+          return {
+            id: video.tmdbId ? String(video.tmdbId) : video.id || entry.videoId,
+            title: video.title || entry.videoTitle,
+            poster: transformToCloudFront(video.thumbnailUrl || entry.videoPoster) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+            year: video.releaseYear || new Date().getFullYear(),
+            runtime: Math.floor((video.duration || 0) / 60),
+            genres,
+            playable: true,
+            assetId: video.id || entry.videoId,
+            cloudfrontUrl: transformToCloudFront(video.s3Url),
+            progress: Math.round(entry.completionPercent || 0),
+          };
+        });
+        setContinueWatching(historyItems.slice(0, 5));
+      }) : Promise.resolve(),
+    ]);
+    setRefreshing(false);
+  };
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.gold.mid}
+            colors={[COLORS.gold.mid]}
+          />
+        }
+      >
         <Text style={styles.title}>Your Library</Text>
         <Text style={styles.subtitle}>
           Explore curated collections that never rotate
@@ -51,7 +141,55 @@ export const LibraryScreen = () => {
           </View>
         )}
 
-        {favorites.length === 0 && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Continue Watching</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('WatchHistory')}>
+              <Text style={styles.sectionLink}>See all</Text>
+            </TouchableOpacity>
+          </View>
+          {loadingHistory ? (
+            <ActivityIndicator color={COLORS.gold.mid} style={{ marginTop: 12 }} />
+          ) : continueWatching.length > 0 ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.continueScroll}
+            >
+              {continueWatching.map((movie) => (
+                <TouchableOpacity
+                  key={movie.id}
+                  style={styles.continueCard}
+                  onPress={() => navigation.navigate('TitleDetail', { id: movie.id, movie })}
+                >
+                  <Image source={{ uri: movie.poster }} style={styles.continuePoster} />
+                  <View style={styles.continueProgressTrack}>
+                    <View style={[styles.continueProgressFill, { width: `${Math.min(100, movie.progress || 0)}%` }]} />
+                  </View>
+                  <Text style={styles.continueTitle} numberOfLines={1}>{movie.title}</Text>
+                  <Text style={styles.continueMeta}>{movie.year}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <Text style={styles.emptyContinue}>No recent activity yet.</Text>
+          )}
+        </View>
+
+        {!user && (
+          <View style={styles.emptyFavorites}>
+            <Ionicons name="person-circle-outline" size={64} color={COLORS.silver} style={{ opacity: 0.3 }} />
+            <Text style={styles.emptyTitle}>Sign in to sync favorites</Text>
+            <Text style={styles.emptySubtitle}>
+              Your favorites will appear across all your devices.
+            </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Auth', { tab: 'login' })} style={styles.signInButton}>
+              <Text style={styles.signInText}>Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {user && favorites.length === 0 && (
           <View style={styles.emptyFavorites}>
             <Ionicons name="heart-outline" size={64} color={COLORS.silver} style={{ opacity: 0.3 }} />
             <Text style={styles.emptyTitle}>No Favorites Yet</Text>
@@ -63,7 +201,9 @@ export const LibraryScreen = () => {
 
         {/* Available to Watch — Internal Library Entry */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Available to Watch</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Available to Watch</Text>
+          </View>
           <View style={styles.libraryGateGrid}>
             <TouchableOpacity
               style={styles.libraryCard}
@@ -98,7 +238,9 @@ export const LibraryScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Curated Collections</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Curated Collections</Text>
+          </View>
           <View style={styles.collectionsGrid}>
             {COLLECTIONS.map((collection) => (
               <TouchableOpacity
@@ -199,6 +341,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
+  sectionLink: {
+    fontSize: 12,
+    color: COLORS.silver,
+    fontWeight: '600',
+  },
   sectionCount: {
     fontSize: 12,
     color: COLORS.silver,
@@ -206,6 +353,47 @@ const styles = StyleSheet.create({
   },
   favoritesScroll: {
     paddingRight: SPACING.xl,
+  },
+  continueScroll: {
+    gap: 14,
+    paddingVertical: 6,
+  },
+  continueCard: {
+    width: 180,
+  },
+  continuePoster: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  continueTitle: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  continueMeta: {
+    color: COLORS.silver,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  continueProgressTrack: {
+    marginTop: 8,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(167,171,180,0.2)',
+    overflow: 'hidden',
+  },
+  continueProgressFill: {
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.gold.mid,
+  },
+  emptyContinue: {
+    color: COLORS.silver,
+    fontSize: 13,
+    marginTop: 6,
   },
   favoriteItem: {
     marginRight: 12,
@@ -228,6 +416,17 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  signInButton: {
+    marginTop: 16,
+    backgroundColor: COLORS.gold.mid,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  signInText: {
+    color: COLORS.background,
+    fontWeight: '700',
   },
   collectionsGrid: {
     gap: 16,

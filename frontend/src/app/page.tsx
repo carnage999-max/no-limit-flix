@@ -310,7 +310,6 @@ export default function HomePage() {
                         averageRating: video.averageRating ?? null,
                         ratingCount: video.ratingCount ?? null,
                         watchProviders: [],
-                        permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
                         playable: true,
                         assetId: video.id,
                         cloudfrontUrl: video.s3Url,
@@ -338,7 +337,6 @@ export default function HomePage() {
                         averageRating: tv.averageRating ?? null,
                         ratingCount: tv.ratingCount ?? null,
                         watchProviders: [],
-                        permanence: 'Permanent Core' as const,
                         playable: true,
                         assetId: tv.id,
                         cloudfrontUrl: tv.thumbnailUrl,
@@ -369,7 +367,6 @@ export default function HomePage() {
                         averageRating: video.averageRating ?? null,
                         ratingCount: video.ratingCount ?? null,
                         watchProviders: [],
-                        permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
                         playable: true,
                         assetId: video.id || entry.videoId,
                         cloudfrontUrl: video.s3Url,
@@ -506,7 +503,6 @@ export default function HomePage() {
                 averageRating: video.averageRating ?? null,
                 ratingCount: video.ratingCount ?? null,
                 watchProviders: [],
-                permanence: (video.sourceProvider === 'internet_archive' ? 'Licensed' : 'Permanent Core') as const,
                 playable: true,
                 assetId: video.id,
                 cloudfrontUrl: video.s3Url,
@@ -926,14 +922,24 @@ export default function HomePage() {
                                                 </span>
                                             </a>
                                         </div>
-                                        <div style={cardGridStyle} className={gridClassName}>
-                                            {continueWatching.map((movie: any) => (
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                gap: viewSize === 'compact' ? '0.75rem' : '1rem',
+                                                overflowX: 'auto',
+                                                paddingBottom: '0.5rem',
+                                                scrollSnapType: 'x mandatory',
+                                            }}
+                                        >
+                                            {continueWatching.slice(0, 5).map((movie: any) => (
                                                 <div
                                                     key={movie.id}
                                                     style={{
                                                         ...cardTileStyle,
                                                         cursor: 'pointer',
                                                         transition: 'transform 0.2s',
+                                                        flex: '0 0 auto',
+                                                        scrollSnapAlign: 'start',
                                                     }}
                                                     onMouseEnter={(e) => {
                                                         (e.currentTarget as HTMLElement).style.transform = 'scale(1.05)';

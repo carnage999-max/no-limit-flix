@@ -10,12 +10,21 @@ export interface Movie {
 
 export interface MoviePick extends Movie {
     explanation: string;
+    description?: string;
+    rating?: string;
+    averageRating?: number;
+    ratingCount?: number;
+    assets?: Array<{
+        id: string;
+        playbackUrl?: string;
+        playbackType?: string;
+        sourceProvider?: string;
+    }>;
     trailerUrl?: string;
     watchProviders: WatchProvider[];
     playable?: boolean;
     assetId?: string;
     cloudfrontUrl?: string;
-    permanence?: 'Permanent Core' | 'Long-Term' | 'Licensed';
 }
 
 export interface WatchProvider {

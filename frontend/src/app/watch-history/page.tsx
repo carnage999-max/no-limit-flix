@@ -3,9 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { History, ArrowLeft } from 'lucide-react';
+import { History, ArrowLeft, Trash2 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { safeBtoa } from '@/lib/base64';
+import { ConfirmModal } from '@/components';
+import { useToast } from '@/components/Toast';
 
 interface WatchEntry {
     id: string;
@@ -39,6 +41,8 @@ export default function WatchHistoryPage() {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [showClearConfirm, setShowClearConfirm] = useState(false);
+    const { showToast } = useToast();
 
     useEffect(() => {
         if (sessionLoading) return;
@@ -107,7 +111,30 @@ export default function WatchHistoryPage() {
                         Watch History
                     </h1>
                 </div>
-                <p style={{ color: '#A7ABB4', marginBottom: '2rem' }}>Your viewing history across devices.</p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+                    <p style={{ color: '#A7ABB4', marginBottom: 0 }}>Your viewing history across devices.</p>
+                    {entries.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowClearConfirm(true)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                padding: '0.6rem 1rem',
+                                borderRadius: '999px',
+                                border: '1px solid rgba(248, 113, 113, 0.4)',
+                                background: 'rgba(248, 113, 113, 0.12)',
+                                color: '#FCA5A5',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                            }}
+                        >
+                            <Trash2 size={16} />
+                            Clear history
+                        </button>
+                    )}
+                </div>
 
                 {loading ? (
                     <div style={{ color: '#A7ABB4', padding: '2rem', textAlign: 'center' }}>Loading history...</div>
@@ -207,6 +234,29 @@ export default function WatchHistoryPage() {
                     </div>
                 )}
             </div>
+            <ConfirmModal
+                open={showClearConfirm}
+                title="Clear watch history?"
+                description="This will remove your entire watch history across devices. This action cannot be undone."
+                confirmText="Clear history"
+                onConfirm={async () => {
+                    try {
+                        const res = await fetch('/api/watch-history', { method: 'DELETE' });
+                        if (!res.ok) {
+                            throw new Error('Failed to clear watch history');
+                        }
+                        setEntries([]);
+                        setTotalPages(1);
+                        setPage(1);
+                        showToast('Watch history cleared', 'success');
+                    } catch (error: any) {
+                        showToast(error?.message || 'Failed to clear watch history', 'error');
+                    } finally {
+                        setShowClearConfirm(false);
+                    }
+                }}
+                onCancel={() => setShowClearConfirm(false)}
+            />
         </main>
     );
 }

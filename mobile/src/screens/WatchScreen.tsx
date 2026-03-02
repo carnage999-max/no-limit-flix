@@ -19,7 +19,8 @@ import { COLORS } from '../theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { transformToCloudFront } from '../lib/utils';
-import { BASE_URL } from '../lib/api';
+import { apiClient } from '../lib/api';
+import { useSession } from '../context/SessionContext';
 // @ts-ignore - Native module without types
 import { VLCPlayer } from 'react-native-vlc-media-player';
 
@@ -370,6 +371,7 @@ export const WatchScreen = () => {
     const route = useRoute<any>();
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
+    const { user } = useSession();
     const params = route.params || {};
     const title = params.title;
     const assetId = params.assetId; // Changed from videoUrl - now using assetId
@@ -408,25 +410,17 @@ export const WatchScreen = () => {
             setError('No asset ID provided');
             return;
         }
+        if (!user) {
+            setError('Sign in to watch this title.');
+            return;
+        }
 
         const fetchPlaybackUrl = async () => {
             try {
                 setIsBuffering(true);
                 console.log(`📺 [Watch] Fetching signed playback URL for assetId: ${assetId}`);
 
-                // Call /api/watch/start to get signed URL/cookies
-                const response = await fetch(`${BASE_URL}/api/watch/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ assetId }),
-                });
-
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error || 'Failed to fetch playback URL');
-                }
-
-                const data = await response.json();
+                const data = await apiClient.startWatch(assetId);
                 console.log(
                   `✅ [Watch] Playback type: ${data.playbackType}, expires: ${data.expiresAt}`
                 );
@@ -449,7 +443,7 @@ export const WatchScreen = () => {
         };
 
         fetchPlaybackUrl();
-    }, [assetId]);
+    }, [assetId, user]);
 
     // Track Names and Lists
     const [audioTracks, setAudioTracks] = useState<{ id: number, name: string }[]>([]);
@@ -800,6 +794,14 @@ export const WatchScreen = () => {
                         <TouchableOpacity style={styles.errorButton} onPress={() => { setError(null); setActiveEngine('native'); }}>
                             <Text style={styles.errorButtonText}>Try Again</Text>
                         </TouchableOpacity>
+                        {error.toLowerCase().includes('sign in') && (
+                            <TouchableOpacity
+                                style={[styles.errorButton, { backgroundColor: COLORS.gold.mid }]}
+                                onPress={() => navigation.navigate('Auth', { tab: 'login' })}
+                            >
+                                <Text style={[styles.errorButtonText, { color: COLORS.background }]}>Sign in</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
                 )}
 

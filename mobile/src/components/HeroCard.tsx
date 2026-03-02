@@ -3,9 +3,10 @@ import { View, Text, Image, StyleSheet, Dimensions, TouchableOpacity } from 'rea
 import { LinearGradient } from 'expo-linear-gradient';
 import { MoviePick } from '../types';
 import { COLORS, SPACING } from '../theme/tokens';
-import { PermanenceBadge } from './PermanenceBadge';
 import { Ionicons } from '@expo/vector-icons';
 import { transformToCloudFront } from '../lib/utils';
+import { useSession } from '../context/SessionContext';
+import { useToast } from '../context/ToastContext';
 
 const { width } = Dimensions.get('window');
 
@@ -19,6 +20,8 @@ import { useNavigation } from '@react-navigation/native';
 
 export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
   const navigation = useNavigation<any>();
+  const { user } = useSession();
+  const { showToast } = useToast();
   const posterUrl = transformToCloudFront(movie.backdrop || movie.poster);
   const videoUrl = transformToCloudFront(movie.cloudfrontUrl || '');
 
@@ -37,7 +40,6 @@ export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
 
         <View style={styles.content}>
           <View style={styles.badgeRow}>
-            <PermanenceBadge type={movie.permanence} />
             {movie.playable && (
               <View style={styles.playableBadge}>
                 <Ionicons name="play-circle" size={14} color={COLORS.background} />
@@ -57,6 +59,11 @@ export const HeroCard = ({ movie, onViewDetails }: HeroCardProps) => {
                   style={styles.heroPlayBtn}
                   onPress={(e: any) => {
                     e.stopPropagation();
+                    if (!user) {
+                      showToast({ message: 'Sign in to watch.', type: 'info' });
+                      navigation.navigate('Auth', { tab: 'login' });
+                      return;
+                    }
                     navigation.navigate('Watch', {
                       videoUrl: videoUrl,
                       title: movie.title,

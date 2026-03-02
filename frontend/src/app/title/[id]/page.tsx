@@ -104,9 +104,23 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
     const numericMovieRating = typeof movie.rating === 'number' ? movie.rating : null;
     const averageRating = movie.averageRating ?? numericMovieRating ?? (typeof tmdbData?.rating === 'number' ? tmdbData.rating : null);
     const maturityRating = typeof movie.rating === 'string' ? movie.rating : null;
+    const rawGenres = Array.isArray(movie.genres) ? movie.genres : [];
+    const fallbackGenre = (movie as any).genre;
+    const normalizedGenres = rawGenres
+        .flatMap((genre) => genre.split(','))
+        .map((genre) => genre.trim())
+        .filter(Boolean);
+    if (normalizedGenres.length === 0 && typeof fallbackGenre === 'string') {
+        normalizedGenres.push(
+            ...fallbackGenre
+                .split(',')
+                .map((genre: string) => genre.trim())
+                .filter(Boolean)
+        );
+    }
     const tagItems: string[] = [];
-    if (movie.genres && movie.genres.length > 0) {
-        tagItems.push(...movie.genres.slice(0, 4));
+    if (normalizedGenres.length > 0) {
+        tagItems.push(...normalizedGenres.slice(0, 4));
     }
     if (averageRating) {
         const ratingLabel = `Rating ${averageRating.toFixed(1)}`;
@@ -115,12 +129,6 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
     if (maturityRating) {
         const ratingLabel = `Rated ${maturityRating}`;
         tagItems.push(ratingLabel);
-    }
-    if (movie.year) {
-        tagItems.push(`Year ${movie.year}`);
-    }
-    if (movie.runtime) {
-        tagItems.push(`${movie.runtime} min`);
     }
 
     return (

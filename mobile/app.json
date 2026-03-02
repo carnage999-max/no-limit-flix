@@ -39,7 +39,8 @@
     },
     "plugins": [
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {
