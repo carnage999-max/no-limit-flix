@@ -307,6 +307,19 @@ export const apiClient = {
     return data;
   },
 
+  reportIssue: async (payload: { issue: string; name?: string; email?: string; attachments?: Array<{ name: string; type: string; size: number; dataUrl: string }> }) => {
+    const response = await authFetch(`${BASE_URL}/api/issues`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to submit issue');
+    }
+    return data;
+  },
+
   startWatch: async (assetId: string) => {
     const response = await authFetch(`${BASE_URL}/api/watch/start`, {
       method: 'POST',

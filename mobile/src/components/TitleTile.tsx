@@ -26,6 +26,8 @@ export const TitleTile = ({ movie, onPress, width: customWidth, showDescription 
   const { showToast } = useToast();
   const navigation = useNavigation<any>();
   const isFav = isFavorite(movie.id, movie.assetId);
+  const progressValue = typeof movie.progress === 'number' ? Math.round(movie.progress) : null;
+  const showProgress = progressValue !== null && progressValue > 0 && progressValue < 100;
 
   const handleFavoritePress = async (e: any) => {
     e.stopPropagation();
@@ -66,6 +68,11 @@ export const TitleTile = ({ movie, onPress, width: customWidth, showDescription 
           <View style={styles.playableTag}>
             <Ionicons name="play" size={10} color={COLORS.background} />
             <Text style={styles.playableTagText}>Play</Text>
+          </View>
+        )}
+        {showProgress && (
+          <View style={styles.progressBadge}>
+            <Text style={styles.progressBadgeText}>Continue watching {progressValue}%</Text>
           </View>
         )}
       </View>
@@ -154,5 +161,21 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  progressBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(17, 24, 39, 0.8)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  progressBadgeText: {
+    color: COLORS.text,
+    fontSize: 9,
+    fontWeight: '700',
   },
 });

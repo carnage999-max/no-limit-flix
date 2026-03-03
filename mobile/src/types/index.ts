@@ -6,6 +6,7 @@ export interface Movie {
     poster: string;
     backdrop?: string;
     genres: string[];
+    progress?: number;
 }
 
 export interface MoviePick extends Movie {

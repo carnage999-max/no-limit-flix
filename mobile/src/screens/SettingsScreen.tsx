@@ -5,46 +5,164 @@ import {
     Text,
     ScrollView,
     TouchableOpacity,
-    Linking,
     Image,
+    TextInput,
+    Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getUserFacingError } from '../lib/errors';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { apiClient } from '../lib/api';
 
-const BASE_WEB_URL = 'https://nolimitflix.com';
+const BASE_WEB_URL = 'https://www.nolimitflix.com';
 
 export const SettingsScreen = () => {
     const navigation = useNavigation<any>();
     const { user, signOut } = useSession();
     const { showToast } = useToast();
+    const insets = useSafeAreaInsets();
     const [logoutOpen, setLogoutOpen] = React.useState(false);
+    const [reportOpen, setReportOpen] = React.useState(false);
+    const [issueText, setIssueText] = React.useState('');
+    const [issueName, setIssueName] = React.useState('');
+    const [issueEmail, setIssueEmail] = React.useState('');
+    const [issueSubmitting, setIssueSubmitting] = React.useState(false);
+    const [attachments, setAttachments] = React.useState<Array<{ name: string; type: string; size: number; dataUrl: string; previewUri: string }>>([]);
+    const [issueError, setIssueError] = React.useState('');
+    const MAX_FILES = 3;
+    const MAX_FILE_BYTES = 3 * 1024 * 1024;
+    const TAB_BAR_HEIGHT = 72;
 
-    const openLink = (url: string) => {
-        Linking.openURL(url);
+    const openLink = (url: string, title?: string) => {
+        navigation.navigate('WebView', { url, title });
     };
 
     const menuItems = [
         {
             title: 'Privacy Policy',
             icon: 'shield-checkmark-outline',
-            onPress: () => openLink('https://nolimitflix.com/privacy-policy'),
+            onPress: () => openLink(`${BASE_WEB_URL}/privacy`, 'Privacy Policy'),
         },
         {
             title: 'Terms of Service',
             icon: 'document-text-outline',
-            onPress: () => openLink('https://nolimitflix.com/terms'),
+            onPress: () => openLink(`${BASE_WEB_URL}/terms`, 'Terms of Service'),
         },
         {
             title: 'Request Account Deletion',
             icon: 'trash-outline',
-            onPress: () => openLink(`${BASE_WEB_URL}/delete-account`),
+            onPress: () => openLink(`${BASE_WEB_URL}/delete-account`, 'Delete Account'),
+        },
+        {
+            title: 'Report an Issue',
+            icon: 'flag-outline',
+            onPress: () => setReportOpen(true),
         },
     ];
+
+    const normalizePickedAssets = async (result: DocumentPicker.DocumentPickerResult) => {
+        if ('assets' in result && result.assets && result.assets.length > 0) return result.assets;
+        if ((result as any)?.uri) {
+            const fallback = result as unknown as DocumentPicker.DocumentPickerAsset;
+            return [fallback];
+        }
+        return [];
+    };
+
+    const inferMimeType = (name: string) => {
+        const lower = name.toLowerCase();
+        if (lower.endsWith('.png')) return 'image/png';
+        if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+        if (lower.endsWith('.webp')) return 'image/webp';
+        if (lower.endsWith('.gif')) return 'image/gif';
+        return '';
+    };
+
+    const buildAttachmentPayload = async (file: DocumentPicker.DocumentPickerAsset) => {
+        const info = await FileSystem.getInfoAsync(file.uri);
+        const size = typeof info.size === 'number' ? info.size : file.size || 0;
+        const fallbackType = file.name ? inferMimeType(file.name) : '';
+        const type = file.mimeType || fallbackType || 'application/octet-stream';
+        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+        return {
+            name: file.name || 'attachment',
+            type,
+            size,
+            dataUrl: `data:${type};base64,${base64}`,
+            previewUri: file.uri,
+        };
+    };
+
+    const handlePickAttachments = async () => {
+        if (attachments.length >= MAX_FILES) return;
+        setIssueError('');
+        const result = await DocumentPicker.getDocumentAsync({ multiple: true, copyToCacheDirectory: true });
+        if (result.canceled) return;
+        const assets = await normalizePickedAssets(result);
+        if (!assets.length) {
+            setIssueError('No attachment was selected. Please try again.');
+            showToast({ message: 'No attachment was selected. Please try again.', type: 'error' });
+            return;
+        }
+        const picks = assets.slice(0, MAX_FILES - attachments.length);
+        const sizedPicks = await Promise.all(
+            picks.map(async (file) => {
+                const info = await FileSystem.getInfoAsync(file.uri);
+                const size = typeof info.size === 'number' ? info.size : file.size || 0;
+                return { file, size };
+            })
+        );
+        const oversize = sizedPicks.find((entry) => entry.size > MAX_FILE_BYTES);
+        if (oversize) {
+            setIssueError(`${oversize.file.name} is too large. Max ${Math.round(MAX_FILE_BYTES / (1024 * 1024))}MB per file.`);
+            showToast({ message: `${oversize.file.name} is too large. Max ${Math.round(MAX_FILE_BYTES / (1024 * 1024))}MB per file.`, type: 'error' });
+            return;
+        }
+        const mapped = await Promise.all(picks.map(buildAttachmentPayload));
+        setAttachments((prev) => [...prev, ...mapped].slice(0, 3));
+    };
+
+    const handleSubmitIssue = async () => {
+        if (!issueText.trim()) {
+            setIssueError('Please describe the issue before submitting.');
+            return;
+        }
+        try {
+            setIssueSubmitting(true);
+            setIssueError('');
+            await apiClient.reportIssue({
+                issue: issueText.trim(),
+                name: issueName.trim() || undefined,
+                email: issueEmail.trim() || undefined,
+                attachments: attachments.map((file) => ({
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    dataUrl: file.dataUrl,
+                })),
+            });
+            setReportOpen(false);
+            setIssueText('');
+            setIssueName('');
+            setIssueEmail('');
+            setAttachments([]);
+            setIssueError('');
+            showToast({ message: 'Issue submitted. We will follow up soon.', type: 'success' });
+        } catch (error: any) {
+            const message = getUserFacingError(error, ['failed to submit issue']);
+            setIssueError(message);
+            showToast({ message, type: 'error' });
+        } finally {
+            setIssueSubmitting(false);
+        }
+    };
 
     return (
         <View style={styles.container}>
@@ -189,6 +307,75 @@ export const SettingsScreen = () => {
                     }
                 }}
             />
+
+            {reportOpen && (
+                <View style={styles.sheetOverlay}>
+                    <Pressable style={styles.sheetBackdrop} onPress={() => setReportOpen(false)} />
+                    <View style={[styles.sheetContainer, { paddingBottom: 28 + Math.max(insets.bottom, 0) + TAB_BAR_HEIGHT }]}>
+                        <View style={styles.sheetHandle} />
+                        <Text style={styles.sheetTitle}>Report an Issue</Text>
+                        <Text style={styles.sheetSubtitle}>Tell us what went wrong. We will follow up by email if provided.</Text>
+
+                    <Text style={styles.inputLabel}>Issue details</Text>
+                    <TextInput
+                        style={styles.textArea}
+                        value={issueText}
+                        onChangeText={setIssueText}
+                        placeholder="Describe the issue in detail..."
+                        placeholderTextColor={COLORS.silver}
+                        multiline
+                    />
+
+                    <Text style={styles.inputLabel}>Attachments (up to 3)</Text>
+                    <Text style={styles.helperText}>Max {Math.round(MAX_FILE_BYTES / (1024 * 1024))}MB per file · {attachments.length}/{MAX_FILES} attached</Text>
+                    <View style={styles.attachmentRow}>
+                        {attachments.map((file, index) => (
+                            <View key={`${file.name}-${index}`} style={styles.attachmentPreview}>
+                                {file.type.startsWith('image/') ? (
+                                    <Image source={{ uri: file.previewUri }} style={styles.attachmentImage} />
+                                ) : (
+                                    <Text style={styles.attachmentName} numberOfLines={2}>{file.name}</Text>
+                                )}
+                            </View>
+                        ))}
+                        {attachments.length < 3 && (
+                            <TouchableOpacity style={styles.attachmentAdd} onPress={handlePickAttachments}>
+                                <Ionicons name="add" size={22} color={COLORS.gold.mid} />
+                                <Text style={styles.attachmentAddText}>Add</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
+
+                    <Text style={styles.inputLabel}>Name (optional)</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={issueName}
+                        onChangeText={setIssueName}
+                        placeholder="Your name"
+                        placeholderTextColor={COLORS.silver}
+                    />
+
+                    <Text style={styles.inputLabel}>Email (optional)</Text>
+                    <TextInput
+                        style={styles.input}
+                        value={issueEmail}
+                        onChangeText={setIssueEmail}
+                        placeholder="name@email.com"
+                        placeholderTextColor={COLORS.silver}
+                        keyboardType="email-address"
+                    />
+
+                    <TouchableOpacity
+                        style={[styles.sheetButton, (!issueText.trim() || issueSubmitting) && { opacity: 0.6 }]}
+                        onPress={handleSubmitIssue}
+                        disabled={!issueText.trim() || issueSubmitting}
+                    >
+                        <Text style={styles.sheetButtonText}>{issueSubmitting ? 'Submitting...' : 'Submit issue'}</Text>
+                    </TouchableOpacity>
+                        {null}
+                    </View>
+                </View>
+            )}
         </View>
     );
 };
@@ -321,5 +508,144 @@ const styles = StyleSheet.create({
         letterSpacing: 1,
         marginTop: 8,
         opacity: 0.4,
+    },
+    sheetBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+    },
+    sheetOverlay: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        top: 0,
+        bottom: 0,
+        zIndex: 50,
+        elevation: 12,
+    },
+    sheetContainer: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#101115',
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        paddingHorizontal: 20,
+        paddingTop: 12,
+        paddingBottom: 28,
+        borderWidth: 1,
+        borderColor: 'rgba(167,171,180,0.15)',
+    },
+    sheetHandle: {
+        width: 48,
+        height: 5,
+        backgroundColor: 'rgba(167,171,180,0.4)',
+        borderRadius: 999,
+        alignSelf: 'center',
+        marginBottom: 12,
+    },
+    sheetTitle: {
+        color: COLORS.text,
+        fontSize: 18,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    sheetSubtitle: {
+        color: COLORS.silver,
+        fontSize: 12,
+        textAlign: 'center',
+        marginTop: 6,
+        marginBottom: 16,
+    },
+    inputLabel: {
+        color: COLORS.silver,
+        fontSize: 12,
+        marginTop: 8,
+        marginBottom: 6,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontWeight: '600',
+    },
+    helperText: {
+        color: COLORS.silver,
+        fontSize: 11,
+        marginBottom: 6,
+    },
+    input: {
+        borderWidth: 1,
+        borderColor: 'rgba(212, 175, 55, 0.35)',
+        borderRadius: 12,
+        paddingHorizontal: 14,
+        height: 46,
+        color: COLORS.text,
+        backgroundColor: 'rgba(17,17,20,0.92)',
+    },
+    textArea: {
+        borderWidth: 1,
+        borderColor: 'rgba(167,171,180,0.2)',
+        borderRadius: 12,
+        padding: 12,
+        color: COLORS.text,
+        minHeight: 120,
+        backgroundColor: 'rgba(17,17,20,0.8)',
+    },
+    attachmentRow: {
+        flexDirection: 'row',
+        gap: 12,
+        flexWrap: 'wrap',
+        marginBottom: 8,
+    },
+    attachmentPreview: {
+        width: 72,
+        height: 72,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(167,171,180,0.2)',
+        backgroundColor: 'rgba(17,17,20,0.7)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    attachmentImage: {
+        width: '100%',
+        height: '100%',
+    },
+    attachmentName: {
+        color: COLORS.silver,
+        fontSize: 10,
+        textAlign: 'center',
+        paddingHorizontal: 6,
+    },
+    attachmentAdd: {
+        width: 72,
+        height: 72,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(212,175,55,0.3)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(212,175,55,0.08)',
+    },
+    attachmentAddText: {
+        color: COLORS.gold.mid,
+        fontSize: 10,
+        marginTop: 4,
+        fontWeight: '600',
+    },
+    sheetButton: {
+        marginTop: 12,
+        backgroundColor: COLORS.gold.mid,
+        paddingVertical: 12,
+        borderRadius: 14,
+        alignItems: 'center',
+    },
+    sheetButtonText: {
+        color: COLORS.background,
+        fontWeight: '700',
+    },
+    errorText: {
+        marginTop: 10,
+        color: '#FCA5A5',
+        fontSize: 12,
     },
 });

@@ -25,6 +25,7 @@ import { getUserFacingError } from '../lib/errors';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
+import Constants from 'expo-constants';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -54,17 +55,18 @@ export const AuthScreen = ({ route }: any) => {
   const reverseClientId = androidClientId
     ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
     : undefined;
-  const googleRedirectUri = makeRedirectUri({
-    scheme: 'nolimitflix',
-    native: reverseClientId ? `${reverseClientId}:/oauthredirect` : undefined,
-  });
+  const useProxy = Constants.appOwnership === 'expo';
+  const googleRedirectUri = useProxy
+    ? makeRedirectUri({ useProxy: true })
+    : reverseClientId
+      ? `${reverseClientId}:/oauth2redirect`
+      : makeRedirectUri({ scheme: 'nolimitflix' });
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
     androidClientId,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
     redirectUri: googleRedirectUri,
     scopes: ['profile', 'email'],
   });
-
   React.useEffect(() => {
     if (googleResponse?.type !== 'success') return;
     const idToken = googleResponse.params?.id_token;
@@ -246,7 +248,7 @@ export const AuthScreen = ({ route }: any) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.googleButton}
-              onPress={() => promptGoogle()}
+              onPress={() => promptGoogle?.({ useProxy })}
               disabled={!googleRequest || loading}
             >
               <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
@@ -295,7 +297,7 @@ export const AuthScreen = ({ route }: any) => {
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.googleButton}
-              onPress={() => promptGoogle()}
+              onPress={() => promptGoogle?.({ useProxy })}
               disabled={!googleRequest || loading}
             >
               <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
@@ -455,6 +457,11 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontSize: 14,
     fontWeight: '600',
+  },
+  googleDebug: {
+    color: COLORS.silver,
+    fontSize: 11,
+    marginTop: 8,
   },
   googleIcon: {
     width: 18,

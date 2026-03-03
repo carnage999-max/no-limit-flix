@@ -337,7 +337,21 @@ export default function ProfilePage() {
                             gap: '0.75rem'
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                                <Link2 size={18} />
+                                <div style={{
+                                    width: '30px',
+                                    height: '30px',
+                                    borderRadius: '8px',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}>
+                                    <img
+                                        src="/Google_logo.png"
+                                        alt="Google"
+                                        style={{ width: '18px', height: '18px', objectFit: 'contain' }}
+                                    />
+                                </div>
                                 <div>
                                     <div style={{ color: '#F3F4F6', fontWeight: 700 }}>Linked accounts</div>
                                     <div style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>
@@ -361,8 +375,16 @@ export default function ProfilePage() {
                                         fontWeight: 600,
                                         cursor: 'pointer',
                                         width: 'fit-content',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
                                     }}
                                 >
+                                    <img
+                                        src="/Google_logo.png"
+                                        alt="Google"
+                                        style={{ width: '18px', height: '18px', objectFit: 'contain' }}
+                                    />
                                     Unlink Google
                                 </button>
                             )}

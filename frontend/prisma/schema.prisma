@@ -88,6 +88,7 @@ model User {
   favorites         Favorite[]
   analyticsEvents   AnalyticsEvent[]
   deletionRequests  AccountDeletionRequest[]
+  issueReports      IssueReport[]
   sessions          UserSession[]
 
   @@index([email])
@@ -191,4 +192,23 @@ model AccountDeletionRequest {
   @@index([email])
   @@index([userId])
   @@index([status])
+}
+
+model IssueReport {
+  id          String   @id @default(cuid())
+  userId      String?
+  name        String?
+  email       String?
+  issue       String
+  attachments Json?
+  status      String   @default("open") // open, resolved
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  resolvedAt  DateTime?
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
 }

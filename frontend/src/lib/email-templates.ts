@@ -136,3 +136,42 @@ export const buildDeletionRequestEmail = () => {
         `
     );
 };
+
+export const buildIssueReceivedEmail = (details: { issueId: string; issue: string; name?: string; email?: string }) => {
+    return wrapEmail(
+        'Issue report received',
+        `
+          <p style="margin: 0 0 12px;">We’ve received your report and our team is reviewing it.</p>
+          ${buildInfoRow('Issue ID', details.issueId)}
+          ${details.name ? buildInfoRow('Name', details.name) : ''}
+          ${details.email ? buildInfoRow('Email', details.email) : ''}
+          ${buildInfoRow('Summary', details.issue)}
+          <p style="margin: 16px 0 0; ${baseStyles.muted};">We’ll follow up as soon as there’s an update.</p>
+        `
+    );
+};
+
+export const buildIssueResolvedEmail = (details: { issueId: string }) => {
+    return wrapEmail(
+        'Issue resolved',
+        `
+          <p style="margin: 0 0 12px;">Your reported issue has been marked as resolved.</p>
+          ${buildInfoRow('Issue ID', details.issueId)}
+          <p style="margin: 16px 0 0; ${baseStyles.muted};">If you still need help, reply to this email and we’ll take another look.</p>
+        `
+    );
+};
+
+export const buildIssueInternalEmail = (details: { issueId: string; issue: string; name?: string; email?: string; userId?: string }) => {
+    return wrapEmail(
+        'New issue report',
+        `
+          <p style="margin: 0 0 12px;">A new issue was reported in No Limit Flix.</p>
+          ${buildInfoRow('Issue ID', details.issueId)}
+          ${details.userId ? buildInfoRow('User ID', details.userId) : ''}
+          ${details.name ? buildInfoRow('Name', details.name) : ''}
+          ${details.email ? buildInfoRow('Email', details.email) : ''}
+          ${buildInfoRow('Summary', details.issue)}
+        `
+    );
+};

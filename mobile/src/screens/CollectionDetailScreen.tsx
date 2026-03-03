@@ -17,6 +17,7 @@ import { COLLECTIONS } from '../lib/constants';
 import { apiClient } from '../lib/api';
 import { MoviePick } from '../types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWatchProgress } from '../hooks/useWatchProgress';
 
 const { width } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ export const CollectionDetailScreen = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { id } = route.params || {};
+  const { progressMap } = useWatchProgress();
   const collection = COLLECTIONS.find(c => c.slug === id) || COLLECTIONS[0];
 
   const [movies, setMovies] = useState<MoviePick[]>([]);
@@ -172,14 +174,18 @@ export const CollectionDetailScreen = () => {
           </View>
         ) : filteredMovies.length > 0 ? (
           <View style={styles.grid}>
-            {filteredMovies.map((movie: MoviePick) => (
+            {filteredMovies.map((movie: MoviePick) => {
+              const progress = progressMap[movie.assetId || movie.id];
+              const mergedMovie = progress !== undefined ? { ...movie, progress } : movie;
+              return (
               <TitleTile 
                 key={movie.id} 
-                movie={movie} 
+                movie={mergedMovie} 
                 width={getTileWidth()}
                 onPress={(movieId: string) => navigation.navigate('TitleDetail', { id: movieId, movie })}
               />
-            ))}
+              );
+            })}
           </View>
         ) : (
           <View style={styles.emptyContainer}>

@@ -1,7 +1,7 @@
 import React from 'react';
 
 export default function PrivacyPage() {
-  const lastUpdated = "January 30, 2026";
+  const lastUpdated = "March 3, 2026";
   
   return (
     <div className="min-h-screen bg-[#0B0B0D] text-white">
@@ -15,57 +15,91 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">Introduction</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              This Global Privacy Policy describes how <strong>No Limit Flix®</strong> collects, uses, discloses, and safeguards personal information across all our services. 
-              This policy is designed to meet or exceed global privacy standards, including GDPR, CCPA, and others.
+              This Privacy Policy explains how <strong>No Limit Flix®</strong> collects, uses, and protects information when you use our website and mobile applications. We
+              are a streaming and discovery platform that delivers content directly from our infrastructure and licensed public sources. If you do not agree with this policy,
+              please do not use the Services.
             </p>
           </section>
 
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">1. Information We Collect</h2>
             <p className="text-[#A7ABB4] leading-relaxed mb-4">
-              We collect only information necessary to operate and improve the Services. For our mobile application users, this is limited to:
+              We collect information necessary to operate, secure, and improve the Services:
             </p>
             <ul className="list-disc pl-6 space-y-2 text-[#A7ABB4]">
-              <li><strong>Search & Preferences:</strong> Session-based inputs (mood selections and "vibe" text) used to generate recommendations.</li>
-              <li><strong>Device Data:</strong> Basic information (OS version, app version) to ensure compatibility and performance.</li>
-              <li><strong>App Activity:</strong> Anonymous interactions with our movie discovery engine.</li>
+              <li><strong>Account information:</strong> Email, username, password hash, and profile image (if provided).</li>
+              <li><strong>Session & device data:</strong> Device identifiers, device name, app version, OS version, IP address, and approximate location for security and device management.</li>
+              <li><strong>Watch activity:</strong> Watch history, watch progress, and “continue watching” state.</li>
+              <li><strong>Preferences:</strong> Mood selections, genres, and content preferences used for recommendations.</li>
+              <li><strong>Usage analytics:</strong> Aggregated product analytics and performance data (no advertising data).</li>
+              <li><strong>Support submissions:</strong> Issue reports, optional attachments, and any contact details you provide.</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">2. Mobile Data Safety & Ephemeral Processing</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">2. How We Use Information</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              <strong>No Limit Flix® does not collect personal identifiers</strong> like your name, email address, phone number, or precise location. 
-              Any "vibe" or search text you provide is processed <strong>ephemerally</strong>. This means it is used solely to generate your immediate recommendations and is not stored against a permanent user profile.
+              We use your information to provide streaming and discovery features, personalize recommendations, secure accounts, and improve performance. This includes
+              remembering watch progress across devices, enabling favorites, and sending service-related emails (such as security alerts or account updates).
             </p>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">3. Automated and AI-Assisted Processing</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">3. Streaming & Content Sources</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              No Limit Flix® uses AI-assisted systems to interpret user inputs and generate content recommendations. 
-              These processes do not rely on long-term behavioral profiling. We use industry-standard encryption (HTTPS) for all data in transit between your device and our servers.
+              We stream content directly from our infrastructure (including S3 and CloudFront) and from public sources such as Internet Archive. We may store source
+              metadata such as rights, license URLs, and source pages for attribution and compliance.
             </p>
           </section>
 
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">4. Disclosure and Data Sharing</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              We do <strong>not sell</strong> personal data. Search queries may be shared with trusted AI infrastructure partners (like OpenRouter or Google Gemini) solely for processing your request. These partners do not use this data for their own marketing purposes.
+              We do <strong>not sell</strong> personal data. We share data only with service providers that help us run the platform, such as:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-[#A7ABB4]">
+              <li><strong>Infrastructure:</strong> AWS (S3/CloudFront) and hosting providers for content delivery.</li>
+              <li><strong>Email:</strong> Resend for transactional emails.</li>
+              <li><strong>Metadata providers:</strong> TMDb/OMDb for posters and metadata, when available.</li>
+              <li><strong>Public sources:</strong> Internet Archive for public domain content sources.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">5. Your Choices & Rights</h2>
+            <p className="text-[#A7ABB4] leading-relaxed">
+              You can update your profile, manage devices, and request account deletion at any time. You may also request access, correction, or deletion of your data by
+              contacting us at <strong>support@nolimitflix.com</strong>. Where applicable, we honor GDPR/CCPA rights.
             </p>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">5. Your Rights</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">6. Data Retention</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              Since we do not maintain user accounts or link data to personal identifiers, there is no "account" to manage. However, you can clear your local application cache at any time to remove your interaction history from your device.
+              We retain data for as long as necessary to provide the Services, comply with legal obligations, resolve disputes, and enforce our agreements. You may request
+              deletion of your account and associated data.
             </p>
           </section>
 
           <section>
-            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">5. Security</h2>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">7. Security</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              We employ industry-standard administrative and technical measures to protect your information, including encryption and access controls.
+              We use industry-standard security controls, including encryption in transit, secure storage, and access controls. No method of transmission or storage is
+              completely secure, but we continually improve our safeguards.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">8. Children’s Privacy</h2>
+            <p className="text-[#A7ABB4] leading-relaxed">
+              The Services are not directed to children under 13. If you believe a child has provided personal information, contact us to remove it.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">9. Contact Us</h2>
+            <p className="text-[#A7ABB4] leading-relaxed">
+              For privacy questions or requests, contact <strong>support@nolimitflix.com</strong>.
             </p>
           </section>
         </div>

@@ -161,6 +161,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 8,
+    zIndex: 200,
   },
   toastContent: {
     flexDirection: 'row',

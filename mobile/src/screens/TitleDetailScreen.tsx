@@ -23,6 +23,7 @@ import { transformToCloudFront } from '../lib/utils';
 import { useToast } from '../context/ToastContext';
 import { useSession } from '../context/SessionContext';
 import { getUserFacingError } from '../lib/errors';
+import { useWatchProgress } from '../hooks/useWatchProgress';
 
 const { width, height } = Dimensions.get('window');
 const AUTOPLAY_KEY = '@nolimitflix_autoplay';
@@ -41,6 +42,7 @@ export const TitleDetailScreen = () => {
   const { isFavorite, toggleFavorite } = useFavorites();
   const { user } = useSession();
   const { showToast } = useToast();
+  const { progressMap } = useWatchProgress();
 
   const [movie, setMovie] = React.useState<MoviePick | null>(passedMovie || null);
   const [loading, setLoading] = React.useState(!movie?.explanation || !movie?.watchProviders);
@@ -161,6 +163,17 @@ export const TitleDetailScreen = () => {
   }
   // Keep tags focused on genres + ratings (no year/runtime)
 
+  const progressValue = progressMap[movie.assetId || movie.id];
+  const hasResume = typeof progressValue === 'number' && progressValue > 0 && progressValue < 100;
+  const resumeSeconds = hasResume && movie.runtime ? Math.round(movie.runtime * 60 * (progressValue / 100)) : 0;
+  const formatTime = (sec: number) => {
+    if (!sec || isNaN(sec)) return "0:00";
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    return h > 0 ? `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}` : `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -202,7 +215,11 @@ export const TitleDetailScreen = () => {
                 }}
               >
                 <Ionicons name="play" size={24} color={COLORS.background} />
-                <Text style={styles.playButtonText}>Play Now</Text>
+                <Text style={styles.playButtonText}>
+                  {hasResume
+                    ? `Resume ${resumeSeconds ? `(${formatTime(resumeSeconds)})` : ''}`
+                    : 'Play Now'}
+                </Text>
               </TouchableOpacity>
             ) : null}
 

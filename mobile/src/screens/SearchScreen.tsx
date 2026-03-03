@@ -17,6 +17,7 @@ import { COLORS, SPACING } from '../theme/tokens';
 import { apiClient } from '../lib/api';
 import { transformToCloudFront } from '../lib/utils';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useWatchProgress } from '../hooks/useWatchProgress';
 
 interface SearchResult {
   id: string;
@@ -32,6 +33,7 @@ export const SearchScreen = () => {
   const [loading, setLoading] = useState(false);
   const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const { progressMap } = useWatchProgress();
 
   const RECENT_KEY = '@nolimitflix_recent_searches';
 
@@ -110,6 +112,14 @@ export const SearchScreen = () => {
   const handleSelectMovie = (movieId: string) => {
     Keyboard.dismiss();
     navigation.navigate('TitleDetail', { id: movieId });
+  };
+
+  const getProgressForInternal = (item: any) => {
+    if (!item) return undefined;
+    const key = item.id;
+    if (progressMap[key] !== undefined) return progressMap[key];
+    if (item.tmdbId && progressMap[String(item.tmdbId)] !== undefined) return progressMap[String(item.tmdbId)];
+    return undefined;
   };
 
   const renderSearchResult = ({ item }: { item: SearchResult }) => (
@@ -234,6 +244,8 @@ export const SearchScreen = () => {
                 .map((genre: string) => genre.trim())
                 .filter(Boolean);
               const detailId = item.tmdbId ? item.tmdbId.toString() : item.id;
+              const progress = getProgressForInternal(item);
+              const showProgress = typeof progress === 'number' && progress > 0 && progress < 100;
               return (
                 <TouchableOpacity
                   key={`internal-${detailId}`}
@@ -251,13 +263,21 @@ export const SearchScreen = () => {
                         year: item.releaseYear,
                         runtime: Math.floor((item.duration || 0) / 60),
                         genres,
+                        progress,
                       },
                     })
                   }
                   activeOpacity={0.7}
                 >
                   <View style={styles.resultContent}>
-                    <Image source={{ uri: posterUrl }} style={styles.resultPoster} />
+                    <View style={styles.resultPosterWrap}>
+                      <Image source={{ uri: posterUrl }} style={styles.resultPoster} />
+                      {showProgress ? (
+                        <View style={styles.progressBadge}>
+                          <Text style={styles.progressBadgeText}>Continue watching {progress}%</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     <View style={styles.resultText}>
                       <Text style={styles.resultTitle} numberOfLines={1}>
                         {item.title}
@@ -362,11 +382,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
+  resultPosterWrap: {
+    position: 'relative',
+  },
   resultPoster: {
     width: 46,
     height: 68,
     borderRadius: 8,
     backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  progressBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(17, 24, 39, 0.82)',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  progressBadgeText: {
+    color: COLORS.text,
+    fontSize: 8,
+    fontWeight: '700',
   },
   resultText: {
     flex: 1,

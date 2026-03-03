@@ -19,12 +19,17 @@ import { TitleTile } from '../components/index';
 import { useSession } from '../context/SessionContext';
 import { apiClient } from '../lib/api';
 import { transformToCloudFront } from '../lib/utils';
+import { buildWatchProgressMap } from '../hooks/useWatchProgress';
+
+const CONTINUE_CARD_WIDTH = 180;
+const CONTINUE_CARD_GAP = 14;
 
 export const LibraryScreen = () => {
   const navigation = useNavigation<any>();
   const { favorites, refreshFavorites } = useFavorites();
   const { user } = useSession();
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
+  const [watchProgressMap, setWatchProgressMap] = useState<Record<string, number>>({});
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -57,6 +62,7 @@ export const LibraryScreen = () => {
             progress: Math.round(entry.completionPercent || 0),
           };
         });
+        setWatchProgressMap(buildWatchProgressMap(data.watchHistory || []));
         setContinueWatching(historyItems.slice(0, 5));
       } catch (error) {
         setContinueWatching([]);
@@ -92,11 +98,19 @@ export const LibraryScreen = () => {
             progress: Math.round(entry.completionPercent || 0),
           };
         });
+        setWatchProgressMap(buildWatchProgressMap(data.watchHistory || []));
         setContinueWatching(historyItems.slice(0, 5));
       }) : Promise.resolve(),
     ]);
     setRefreshing(false);
   };
+
+  const favoritesWithProgress = favorites.map((movie) => {
+    const key = movie.assetId || movie.id;
+    const progress = watchProgressMap[key];
+    if (progress === undefined) return movie;
+    return { ...movie, progress };
+  });
 
   return (
     <View style={styles.container}>
@@ -128,7 +142,7 @@ export const LibraryScreen = () => {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.favoritesScroll}
             >
-              {favorites.map((movie) => (
+              {favoritesWithProgress.map((movie) => (
                 <View key={movie.id} style={styles.favoriteItem}>
                   <TitleTile
                     movie={movie}
@@ -155,6 +169,11 @@ export const LibraryScreen = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.continueScroll}
+              decelerationRate="fast"
+              snapToInterval={CONTINUE_CARD_WIDTH + CONTINUE_CARD_GAP}
+              snapToAlignment="start"
+              disableIntervalMomentum
+              nestedScrollEnabled
             >
               {continueWatching.map((movie) => (
                 <TouchableOpacity

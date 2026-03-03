@@ -21,8 +21,11 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import Constants from 'expo-constants';
 
 WebBrowser.maybeCompleteAuthSession();
+
+const googleLogo = require('../../assets/Google_logo.png');
 
 export const ProfileScreen = ({ navigation }: any) => {
   const { user, updateProfile, refreshSession } = useSession();
@@ -34,15 +37,18 @@ export const ProfileScreen = ({ navigation }: any) => {
   const [uploading, setUploading] = useState(false);
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+  const [removeAvatarConfirmOpen, setRemoveAvatarConfirmOpen] = useState(false);
 
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
   const reverseClientId = androidClientId
     ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
     : undefined;
-  const googleRedirectUri = makeRedirectUri({
-    scheme: 'nolimitflix',
-    native: reverseClientId ? `${reverseClientId}:/oauthredirect` : undefined,
-  });
+  const useProxy = Constants.appOwnership === 'expo';
+  const googleRedirectUri = useProxy
+    ? makeRedirectUri({ useProxy: true })
+    : reverseClientId
+      ? `${reverseClientId}:/oauth2redirect`
+      : makeRedirectUri({ scheme: 'nolimitflix' });
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
     androidClientId,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -56,6 +62,7 @@ export const ProfileScreen = ({ navigation }: any) => {
     if (!idToken) return;
     (async () => {
       setLinkingGoogle(true);
+      showToast({ message: 'Linking Google account...', type: 'info' });
       try {
         await apiClient.linkGoogleAccount(idToken);
         await refreshSession();
@@ -158,7 +165,7 @@ export const ProfileScreen = ({ navigation }: any) => {
             <TouchableOpacity style={styles.avatarButton} onPress={handlePickAvatar} disabled={uploading}>
               {uploading ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.avatarButtonText}>Upload photo</Text>}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={handleRemoveAvatar}>
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setRemoveAvatarConfirmOpen(true)}>
               <Text style={styles.secondaryButtonText}>Remove</Text>
             </TouchableOpacity>
           </View>
@@ -210,19 +217,35 @@ export const ProfileScreen = ({ navigation }: any) => {
               <Text style={styles.sectionSubtitle}>
                 {user?.googleId ? 'Google account connected.' : 'No Google account linked yet.'}
               </Text>
+              {linkingGoogle ? (
+                <View style={styles.linkingRow}>
+                  <ActivityIndicator color={COLORS.gold.mid} size="small" />
+                  <Text style={styles.linkingText}>Linking Google account...</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           {!user?.googleId ? (
             <TouchableOpacity
               style={styles.googleButton}
-              onPress={() => promptGoogle?.()}
+              onPress={() => promptGoogle?.({ useProxy })}
               disabled={!googleRequest || linkingGoogle}
             >
-              {linkingGoogle ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.googleButtonText}>Link Google account</Text>}
+              {linkingGoogle ? (
+                <ActivityIndicator color={COLORS.background} />
+              ) : (
+                <View style={styles.googleButtonContent}>
+                  <Image source={googleLogo} style={styles.googleLogo} resizeMode="contain" />
+                  <Text style={styles.googleButtonText}>Link Google account</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.unlinkButton} onPress={() => setUnlinkConfirmOpen(true)}>
-              <Text style={styles.unlinkText}>Unlink Google</Text>
+              <View style={styles.unlinkButtonContent}>
+                <Image source={googleLogo} style={styles.unlinkLogo} resizeMode="contain" />
+                <Text style={styles.unlinkText}>Unlink Google</Text>
+              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -243,6 +266,18 @@ export const ProfileScreen = ({ navigation }: any) => {
           } catch (error: any) {
             showToast({ message: getUserFacingError(error, ['failed to unlink google account']), type: 'error' });
           }
+        }}
+      />
+      <ConfirmDialog
+        visible={removeAvatarConfirmOpen}
+        title="Remove profile photo"
+        message="This will remove your current profile photo. You can upload a new one anytime."
+        confirmText="Remove"
+        tone="danger"
+        onCancel={() => setRemoveAvatarConfirmOpen(false)}
+        onConfirm={async () => {
+          setRemoveAvatarConfirmOpen(false);
+          await handleRemoveAvatar();
         }}
       />
     </View>
@@ -403,11 +438,31 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
+  linkingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+  },
+  linkingText: {
+    color: COLORS.gold.light,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   googleButton: {
     backgroundColor: COLORS.gold.mid,
     paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
+  },
+  googleButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  googleLogo: {
+    width: 18,
+    height: 18,
   },
   googleButtonText: {
     color: COLORS.background,
@@ -420,6 +475,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: 'center',
     backgroundColor: 'rgba(239,68,68,0.1)',
+  },
+  unlinkButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  unlinkLogo: {
+    width: 18,
+    height: 18,
   },
   unlinkText: {
     color: COLORS.accent.red,

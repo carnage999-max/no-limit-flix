@@ -19,6 +19,7 @@ import { RefreshControl } from 'react-native';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useWatchProgress } from '../hooks/useWatchProgress';
 
 const { width } = Dimensions.get('window');
 
@@ -38,14 +39,17 @@ export const InternalMoviesScreen = () => {
     const { user } = useSession();
     const { showToast } = useToast();
     const insets = useSafeAreaInsets();
+    const { progressMap, statusMap, lastWatchedMap } = useWatchProgress();
     const [movies, setMovies] = useState<Movie[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
     const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
     const [selectedYear, setSelectedYear] = useState<number | null>(null);
+    const [watchFilter, setWatchFilter] = useState<'all' | 'watching' | 'watched' | 'unwatched'>('all');
+    const [sortBy, setSortBy] = useState<'recent' | 'title' | 'year' | 'progress'>('recent');
     const [viewSize, setViewSize] = useState<'compact' | 'standard' | 'large'>('standard');
-    const [activeDropdown, setActiveDropdown] = useState<'genre' | 'year' | null>(null);
+    const [activeDropdown, setActiveDropdown] = useState<'genre' | 'year' | 'status' | 'sort' | null>(null);
 
     useEffect(() => {
         fetchMovies();
@@ -81,6 +85,7 @@ export const InternalMoviesScreen = () => {
         const movieDuration = item.duration ? Math.floor(item.duration / 60) : 0;
         const posterUrl = transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
         const videoUrl = transformToCloudFront(item.s3Url);
+        const progress = progressMap[item.id] ?? (item.tmdbId ? progressMap[String(item.tmdbId)] : undefined);
 
         return (
             <View style={styles.itemContainer}>
@@ -94,7 +99,8 @@ export const InternalMoviesScreen = () => {
                         genres: item.genre ? [item.genre] : ['Featured'],
                         playable: true,
                         assetId: item.id,
-                        cloudfrontUrl: videoUrl
+                        cloudfrontUrl: videoUrl,
+                        progress,
                     } as any}
                     width={getTileWidth()}
                     onPress={() => {
@@ -116,6 +122,7 @@ export const InternalMoviesScreen = () => {
                                 year: movieYear,
                                 runtime: movieDuration,
                                 genres: item.genre ? [item.genre] : ['Featured'],
+                                progress,
                             }
                         });
                     }}
@@ -139,7 +146,22 @@ export const InternalMoviesScreen = () => {
     const filteredMovies = movies.filter(movie => {
         if (selectedGenre && !(movie.genre || '').includes(selectedGenre)) return false;
         if (selectedYear && movie.releaseYear !== selectedYear) return false;
+        const statusKey = statusMap[movie.id] || (movie.tmdbId ? statusMap[String(movie.tmdbId)] : undefined);
+        if (watchFilter === 'watching' && statusKey !== 'watching') return false;
+        if (watchFilter === 'watched' && statusKey !== 'completed') return false;
+        if (watchFilter === 'unwatched' && statusKey) return false;
         return true;
+    }).sort((a, b) => {
+        if (sortBy === 'title') return a.title.localeCompare(b.title);
+        if (sortBy === 'year') return (b.releaseYear || 0) - (a.releaseYear || 0);
+        if (sortBy === 'progress') {
+            const aProgress = progressMap[a.id] ?? (a.tmdbId ? progressMap[String(a.tmdbId)] : 0) ?? 0;
+            const bProgress = progressMap[b.id] ?? (b.tmdbId ? progressMap[String(b.tmdbId)] : 0) ?? 0;
+            return bProgress - aProgress;
+        }
+        const aWatched = lastWatchedMap[a.id] ?? (a.tmdbId ? lastWatchedMap[String(a.tmdbId)] : 0) ?? 0;
+        const bWatched = lastWatchedMap[b.id] ?? (b.tmdbId ? lastWatchedMap[String(b.tmdbId)] : 0) ?? 0;
+        return bWatched - aWatched;
     });
 
     return (
@@ -243,6 +265,66 @@ export const InternalMoviesScreen = () => {
                             {years.map((year) => (
                                 <TouchableOpacity key={year} style={styles.dropdownItem} onPress={() => { setSelectedYear(year); setActiveDropdown(null); }}>
                                     <Text style={styles.dropdownText}>{year}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    )}
+                    <TouchableOpacity
+                        style={styles.filterRow}
+                        onPress={() => setActiveDropdown(activeDropdown === 'status' ? null : 'status')}
+                    >
+                        <Text style={styles.filterLabel}>Watch status</Text>
+                        <View style={styles.filterValueRow}>
+                            <Text style={styles.filterValue}>
+                                {watchFilter === 'all' ? 'All' : watchFilter === 'watching' ? 'Watching' : watchFilter === 'watched' ? 'Watched' : 'Unwatched'}
+                            </Text>
+                            <Ionicons name={activeDropdown === 'status' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
+                        </View>
+                    </TouchableOpacity>
+                    {activeDropdown === 'status' && (
+                        <ScrollView style={styles.dropdownList}>
+                            {[
+                                { label: 'All', value: 'all' },
+                                { label: 'Watching', value: 'watching' },
+                                { label: 'Watched', value: 'watched' },
+                                { label: 'Unwatched', value: 'unwatched' },
+                            ].map((option) => (
+                                <TouchableOpacity
+                                    key={option.value}
+                                    style={styles.dropdownItem}
+                                    onPress={() => { setWatchFilter(option.value as any); setActiveDropdown(null); }}
+                                >
+                                    <Text style={styles.dropdownText}>{option.label}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                    )}
+                    <TouchableOpacity
+                        style={styles.filterRow}
+                        onPress={() => setActiveDropdown(activeDropdown === 'sort' ? null : 'sort')}
+                    >
+                        <Text style={styles.filterLabel}>Sort by</Text>
+                        <View style={styles.filterValueRow}>
+                            <Text style={styles.filterValue}>
+                                {sortBy === 'recent' ? 'Recently watched' : sortBy === 'title' ? 'Title' : sortBy === 'year' ? 'Year' : 'Progress'}
+                            </Text>
+                            <Ionicons name={activeDropdown === 'sort' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
+                        </View>
+                    </TouchableOpacity>
+                    {activeDropdown === 'sort' && (
+                        <ScrollView style={styles.dropdownList}>
+                            {[
+                                { label: 'Recently watched', value: 'recent' },
+                                { label: 'Title', value: 'title' },
+                                { label: 'Year', value: 'year' },
+                                { label: 'Progress', value: 'progress' },
+                            ].map((option) => (
+                                <TouchableOpacity
+                                    key={option.value}
+                                    style={styles.dropdownItem}
+                                    onPress={() => { setSortBy(option.value as any); setActiveDropdown(null); }}
+                                >
+                                    <Text style={styles.dropdownText}>{option.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>

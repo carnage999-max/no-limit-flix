@@ -8,6 +8,7 @@ import { AnimatedSplashScreen } from './src/screens/AnimatedSplashScreen';
 import { SessionProvider, useSession } from './src/context/SessionContext';
 import { ToastProvider } from './src/context/ToastContext';
 import { WelcomeOverlay } from './src/components/WelcomeOverlay';
+import * as WebBrowser from 'expo-web-browser';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -15,6 +16,8 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);

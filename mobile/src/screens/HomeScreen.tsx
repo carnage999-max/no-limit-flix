@@ -34,8 +34,12 @@ import { AIPickResponse, MoviePick } from '../types';
 import { transformToCloudFront } from '../lib/utils';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
+import * as SecureStore from 'expo-secure-store';
+import { buildWatchProgressMap } from '../hooks/useWatchProgress';
 
 const { height, width } = Dimensions.get('window');
+const CONTINUE_CARD_WIDTH = 180;
+const CONTINUE_CARD_GAP = 14;
 
 export const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -50,6 +54,7 @@ export const HomeScreen = () => {
 
   // Discovery State
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
+  const [preferredGenres, setPreferredGenres] = useState<string[]>([]);
   const [vibeText, setVibeText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<AIPickResponse | null>(null);
@@ -60,6 +65,7 @@ export const HomeScreen = () => {
   const [hostedMovies, setHostedMovies] = useState<any[]>([]);
   const [hostedSeries, setHostedSeries] = useState<any[]>([]);
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
+  const [watchProgressMap, setWatchProgressMap] = useState<Record<string, number>>({});
   const [isWatchLoading, setIsWatchLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -100,6 +106,30 @@ export const HomeScreen = () => {
   }, []);
 
   useEffect(() => {
+    const loadPreferences = async () => {
+      try {
+        const storedMoods = await SecureStore.getItemAsync('@nolimitflix_pref_moods');
+        if (storedMoods && selectedMoods.length === 0) {
+          const parsed = JSON.parse(storedMoods);
+          if (Array.isArray(parsed)) {
+            setSelectedMoods(parsed.slice(0, 6));
+          }
+        }
+        const storedGenres = await SecureStore.getItemAsync('@nolimitflix_pref_genres');
+        if (storedGenres) {
+          const parsedGenres = JSON.parse(storedGenres);
+          if (Array.isArray(parsedGenres)) {
+            setPreferredGenres(parsedGenres.map((item) => `${item}`.toLowerCase()));
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+    loadPreferences();
+  }, []);
+
+  useEffect(() => {
     if (isFocused) {
       fetchHostedContent();
     }
@@ -122,7 +152,15 @@ export const HomeScreen = () => {
         apiClient.getInternalTv(),
         user ? apiClient.getWatchHistory(1, 10) : Promise.resolve({ watchHistory: [] })
       ]);
-      setHostedMovies(pickRandomItems(moviesData.movies || [], 4));
+      const allMovies = moviesData.movies || [];
+      const preferredFiltered = preferredGenres.length
+        ? allMovies.filter((item: any) => {
+            const genres = `${item.genre || ''}`.toLowerCase();
+            return preferredGenres.some((pref) => genres.includes(pref));
+          })
+        : allMovies;
+      const curatedMovies = preferredFiltered.length ? preferredFiltered : allMovies;
+      setHostedMovies(pickRandomItems(curatedMovies, 4));
       setHostedSeries(pickRandomItems(tvData.series || [], 4));
       const historyItems = (historyData.watchHistory || []).map((entry: any) => {
         const video = entry.video || {};
@@ -144,6 +182,7 @@ export const HomeScreen = () => {
           progress: Math.round(entry.completionPercent || 0),
         };
       });
+      setWatchProgressMap(buildWatchProgressMap(historyData.watchHistory || []));
       setContinueWatching(historyItems.slice(0, 5));
     } catch (error) {
       console.error('Failed to pre-fetch hosted content', error);
@@ -156,6 +195,18 @@ export const HomeScreen = () => {
     setRefreshing(true);
     await fetchHostedContent();
     setRefreshing(false);
+  };
+
+  const getProgressForItem = (item: any) => {
+    const candidates = [
+      item?.id,
+      item?.tmdbId !== undefined && item?.tmdbId !== null ? String(item.tmdbId) : null,
+    ].filter(Boolean) as string[];
+    for (const key of candidates) {
+      const value = watchProgressMap[key];
+      if (value !== undefined) return value;
+    }
+    return undefined;
   };
 
   const handleTabChange = (tab: 'discovery' | 'watch') => {
@@ -313,6 +364,11 @@ export const HomeScreen = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.continueScroll}
+              decelerationRate="fast"
+              snapToInterval={CONTINUE_CARD_WIDTH + CONTINUE_CARD_GAP}
+              snapToAlignment="start"
+              disableIntervalMomentum
+              nestedScrollEnabled
             >
               {continueWatching.map((item: any) => (
                 <TouchableOpacity
@@ -348,7 +404,10 @@ export const HomeScreen = () => {
           <ActivityIndicator color={COLORS.gold.mid} style={{ marginVertical: 20 }} />
         ) : (
           <View style={styles.hostedGrid}>
-            {hostedMovies.map((item, index) => (
+            {hostedMovies.map((item, index) => {
+              const progress = getProgressForItem(item);
+              const showProgress = typeof progress === 'number' && progress > 0 && progress < 100;
+              return (
               <TouchableOpacity
                 key={`movie-${item.id || index}`}
                 style={styles.hostedMiniCard}
@@ -378,11 +437,19 @@ export const HomeScreen = () => {
                       year: item.releaseYear,
                       runtime: Math.floor((item.duration || 0) / 60),
                       genres,
+                      progress,
                     }
                   });
                 }}
               >
-                <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
+                <View style={styles.hostedMiniPosterWrap}>
+                  <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
+                  {showProgress ? (
+                    <View style={styles.progressOverlay}>
+                      <Text style={styles.progressOverlayText}>Continue watching {progress}%</Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={styles.hostedMiniTitle} numberOfLines={1}>{item.title}</Text>
                 {!!item.genre && (
                   <Text style={styles.hostedMiniGenre} numberOfLines={1}>{item.genre}</Text>
@@ -391,7 +458,8 @@ export const HomeScreen = () => {
                   <Text style={styles.hostedMiniMeta}>{item.releaseYear}</Text>
                 )}
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
       </View>
@@ -408,13 +476,23 @@ export const HomeScreen = () => {
           <ActivityIndicator color={COLORS.gold.mid} style={{ marginVertical: 20 }} />
         ) : (
           <View style={styles.hostedGrid}>
-            {hostedSeries.map((item, index) => (
+            {hostedSeries.map((item, index) => {
+              const progress = getProgressForItem(item);
+              const showProgress = typeof progress === 'number' && progress > 0 && progress < 100;
+              return (
               <TouchableOpacity
                 key={`series-${item.id || index}`}
                 style={styles.hostedMiniCard}
                 onPress={() => navigation.navigate('InternalTv')}
               >
-                <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
+                <View style={styles.hostedMiniPosterWrap}>
+                  <Image source={{ uri: transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }} style={styles.hostedMiniPoster} />
+                  {showProgress ? (
+                    <View style={styles.progressOverlay}>
+                      <Text style={styles.progressOverlayText}>Continue watching {progress}%</Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={styles.hostedMiniTitle} numberOfLines={1}>{item.seriesTitle}</Text>
                 {!!item.genre && (
                   <Text style={styles.hostedMiniGenre} numberOfLines={1}>{item.genre}</Text>
@@ -423,7 +501,8 @@ export const HomeScreen = () => {
                   <Text style={styles.hostedMiniMeta}>{item.releaseYear}</Text>
                 )}
               </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
         )}
       </View>
@@ -1043,11 +1122,31 @@ const styles = StyleSheet.create({
     width: (width - SPACING.xl * 2 - 12) / 2,
     marginBottom: 4,
   },
+  hostedMiniPosterWrap: {
+    position: 'relative',
+  },
   hostedMiniPoster: {
     width: '100%',
     aspectRatio: 16 / 9,
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  progressOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    right: 8,
+    backgroundColor: 'rgba(17, 24, 39, 0.78)',
+    borderRadius: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  progressOverlayText: {
+    color: COLORS.text,
+    fontSize: 10,
+    fontWeight: '700',
   },
   hostedMiniTitle: {
     color: COLORS.text,
