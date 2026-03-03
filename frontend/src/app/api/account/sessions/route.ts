@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
                     sessionId: session.sessionId,
                     deviceId: session.deviceId,
                     deviceName: session.deviceName,
+                    deviceNickname: session.deviceNickname,
+                    deviceEmoji: session.deviceEmoji,
                     userAgent: session.userAgent,
                     ipAddress: session.ipAddress,
                     createdAt: session.createdAt,
@@ -78,6 +80,8 @@ export async function GET(request: NextRequest) {
                         sessionId: session.sessionId,
                         deviceId: session.deviceId,
                         deviceName: session.deviceName,
+                        deviceNickname: session.deviceNickname,
+                        deviceEmoji: session.deviceEmoji,
                         userAgent: session.userAgent,
                         ipAddress: session.ipAddress,
                         createdAt: session.createdAt,
@@ -114,17 +118,60 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
+        const body = await request.json().catch(() => ({}));
+        const keepPrimary = body?.keepPrimary !== false;
+
+        const userRecord = await prisma.user.findUnique({
+            where: { id: sessionUser.id },
+            select: { primaryDeviceId: true }
+        });
+        const primaryDeviceId = userRecord?.primaryDeviceId || null;
+
+        let revokeWhere: any = { userId: sessionUser.id, revokedAt: null };
+        let keptPrimary = false;
+        if (keepPrimary && primaryDeviceId) {
+            revokeWhere = {
+                ...revokeWhere,
+                OR: [{ deviceId: null }, { deviceId: { not: primaryDeviceId } }]
+            };
+            keptPrimary = true;
+        }
+
         await prisma.userSession.updateMany({
-            where: { userId: sessionUser.id, revokedAt: null },
+            where: revokeWhere,
             data: { revokedAt: new Date() }
         });
-        await prisma.user.update({
-            where: { id: sessionUser.id },
-            data: { primaryDeviceId: null }
-        });
 
-        const response = NextResponse.json({ success: true });
-        response.cookies.delete(SESSION_COOKIE_NAME);
+        if (!keptPrimary) {
+            await prisma.user.update({
+                where: { id: sessionUser.id },
+                data: { primaryDeviceId: null }
+            });
+        }
+
+        const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+        const payload = verifySessionToken(token);
+        let isCurrentRevoked = false;
+        if (payload?.sessionId) {
+            if (keptPrimary && primaryDeviceId) {
+                const current = await prisma.userSession.findFirst({
+                    where: { sessionId: payload.sessionId, userId: sessionUser.id, revokedAt: null },
+                    select: { deviceId: true }
+                });
+                if (!current) {
+                    isCurrentRevoked = true;
+                } else {
+                    isCurrentRevoked = current.deviceId !== primaryDeviceId;
+                }
+            } else {
+                isCurrentRevoked = true;
+            }
+        }
+
+        const response = NextResponse.json({ success: true, loggedOutCurrent: isCurrentRevoked, keptPrimary });
+        if (isCurrentRevoked) {
+            response.cookies.delete(SESSION_COOKIE_NAME);
+        }
         return response;
     } catch (error) {
         console.error('Logout all sessions error:', error);
@@ -139,7 +186,7 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { deviceId } = await request.json();
+        const { deviceId, setPrimary, nickname, emoji } = await request.json();
         if (!deviceId) {
             return NextResponse.json({ error: 'deviceId is required' }, { status: 400 });
         }
@@ -151,10 +198,26 @@ export async function PATCH(request: NextRequest) {
             return NextResponse.json({ error: 'Device not found' }, { status: 404 });
         }
 
-        await prisma.user.update({
-            where: { id: sessionUser.id },
-            data: { primaryDeviceId: deviceId }
-        });
+        const updates: { deviceNickname?: string | null; deviceEmoji?: string | null } = {};
+        if (typeof nickname === 'string') {
+            updates.deviceNickname = nickname.trim() ? nickname.trim() : null;
+        }
+        if (typeof emoji === 'string') {
+            updates.deviceEmoji = emoji.trim() ? emoji.trim() : null;
+        }
+        if (Object.keys(updates).length > 0) {
+            await prisma.userSession.updateMany({
+                where: { userId: sessionUser.id, deviceId },
+                data: updates
+            });
+        }
+
+        if (setPrimary) {
+            await prisma.user.update({
+                where: { id: sessionUser.id },
+                data: { primaryDeviceId: deviceId }
+            });
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {
@@ -162,6 +225,7 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to set primary device' }, { status: 500 });
     }
 }
+
 
 export async function DELETE(request: NextRequest) {
     try {

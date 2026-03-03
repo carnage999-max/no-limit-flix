@@ -39,6 +39,7 @@ export async function getSessionUser(request: NextRequest) {
             avatar: true,
             showWelcomeScreen: true,
             role: true,
+            googleId: true,
         }
     });
 

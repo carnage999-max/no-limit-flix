@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
@@ -26,6 +27,25 @@ export const DevicesScreen = ({ navigation }: any) => {
   const [showHistory, setShowHistory] = useState(false);
   const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const [confirmSession, setConfirmSession] = useState<{ sessionId: string; isCurrent: boolean } | null>(null);
+  const [confirmPrimary, setConfirmPrimary] = useState<any | null>(null);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
+  const [keepPrimary, setKeepPrimary] = useState(true);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [draftNickname, setDraftNickname] = useState('');
+  const [draftEmoji, setDraftEmoji] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
+  const emojiOptions = [
+    { label: 'Work', emoji: '💼' },
+    { label: 'Home', emoji: '🏠' },
+    { label: 'Shop', emoji: '🛍️' },
+    { label: 'Church', emoji: '⛪' },
+    { label: 'Travel', emoji: '✈️' },
+    { label: 'Studio', emoji: '🎬' },
+    { label: 'Gym', emoji: '🏋️' },
+    { label: 'Cafe', emoji: '☕' },
+    { label: 'Gaming', emoji: '🎮' },
+  ];
 
   const loadSessions = async () => {
     setLoading(true);
@@ -47,11 +67,23 @@ export const DevicesScreen = ({ navigation }: any) => {
   }, []);
 
   const handleLogoutAll = () => {
+    setKeepPrimary(true);
     setConfirmAllOpen(true);
   };
 
   const handleLogoutDevice = (sessionId: string, isCurrent: boolean) => {
     setConfirmSession({ sessionId, isCurrent });
+  };
+
+  const handleSaveLabel = async (deviceId: string) => {
+    try {
+      await apiClient.updateDeviceLabel({ deviceId, nickname: draftNickname, emoji: draftEmoji });
+      showToast({ message: 'Device label updated.', type: 'success' });
+      setEditingDeviceId(null);
+      await loadSessions();
+    } catch (error: any) {
+      showToast({ message: getUserFacingError(error, ['failed to update device label']), type: 'error' });
+    }
   };
 
   return (
@@ -77,9 +109,12 @@ export const DevicesScreen = ({ navigation }: any) => {
             <View key={session.sessionId} style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.deviceLabel}>
-                  {session.deviceName
-                    ? (user?.username ? `${user.username}'s ${session.deviceName}` : session.deviceName)
-                    : (session?.device?.deviceLabel || 'Device')}
+                  {session.deviceEmoji ? `${session.deviceEmoji} ` : ''}
+                  {session.deviceNickname
+                    ? session.deviceNickname
+                    : session.deviceName
+                      ? (user?.username ? `${user.username}'s ${session.deviceName}` : session.deviceName)
+                      : (session?.device?.deviceLabel || 'Device')}
                 </Text>
                 {session.isCurrent ? <Text style={styles.currentTag}>This device</Text> : null}
                 {session.deviceId && primaryDeviceId === session.deviceId ? (
@@ -92,29 +127,50 @@ export const DevicesScreen = ({ navigation }: any) => {
               <Text style={styles.metaText}>
                 Last active {new Date(session.lastUsedAt || session.createdAt).toLocaleString()}
               </Text>
-              <TouchableOpacity
-                style={styles.logoutButton}
-                onPress={() => handleLogoutDevice(session.sessionId, session.isCurrent)}
-              >
-                <Text style={styles.logoutText}>Log out this device</Text>
-              </TouchableOpacity>
-              {session.deviceId && session.deviceId !== primaryDeviceId ? (
+              <View style={styles.menuWrapper}>
                 <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={async () => {
-                    try {
-                  await apiClient.setPrimaryDevice(session.deviceId);
-                  setPrimaryDeviceId(session.deviceId);
-                  showToast({ message: 'Primary device updated.', type: 'success' });
-                  await loadSessions();
-                } catch (error: any) {
-                  showToast({ message: getUserFacingError(error, ['failed to set primary device']), type: 'error' });
-                }
-              }}
-            >
-              <Text style={styles.primaryButtonText}>Set as primary</Text>
-            </TouchableOpacity>
-              ) : null}
+                  style={styles.menuButton}
+                  onPress={() => setOpenMenuId((prev) => (prev === session.sessionId ? null : session.sessionId))}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={18} color={COLORS.text} />
+                  <Text style={styles.menuButtonText}>Manage</Text>
+                </TouchableOpacity>
+                {openMenuId === session.sessionId ? (
+                  <View style={styles.menuPanel}>
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setOpenMenuId(null);
+                        setEditingDeviceId(session.deviceId);
+                        setDraftNickname(session.deviceNickname || '');
+                        setDraftEmoji(session.deviceEmoji || '');
+                      }}
+                    >
+                      <Text style={styles.menuItemText}>Edit label</Text>
+                    </TouchableOpacity>
+                    {session.deviceId && session.deviceId !== primaryDeviceId ? (
+                      <TouchableOpacity
+                        style={styles.menuItem}
+                        onPress={() => {
+                          setOpenMenuId(null);
+                          setConfirmPrimary(session);
+                        }}
+                      >
+                        <Text style={[styles.menuItemText, styles.menuItemPrimary]}>Set as primary</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    <TouchableOpacity
+                      style={styles.menuItem}
+                      onPress={() => {
+                        setOpenMenuId(null);
+                        handleLogoutDevice(session.sessionId, session.isCurrent);
+                      }}
+                    >
+                      <Text style={[styles.menuItemText, styles.menuItemDanger]}>Log out this device</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
             </View>
           ))}
           {sessions.length === 0 && (
@@ -140,12 +196,16 @@ export const DevicesScreen = ({ navigation }: any) => {
                 <Text style={styles.historyToggleText}>{showHistory ? 'Hide' : 'View'} device history</Text>
                 <Ionicons name={showHistory ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
               </TouchableOpacity>
+              <TouchableOpacity onPress={() => setConfirmClearHistory(true)} style={styles.clearHistoryButton}>
+                <Text style={styles.clearHistoryText}>Clear history</Text>
+              </TouchableOpacity>
               {showHistory && (
                 <View style={styles.historyList}>
                   {history.map((session) => (
                     <View key={`history-${session.id}`} style={styles.historyCard}>
                       <Text style={styles.historyLabel}>
-                        {session.deviceName || session?.device?.deviceLabel || 'Device'}
+                        {session.deviceEmoji ? `${session.deviceEmoji} ` : ''}
+                        {session.deviceNickname || session.deviceName || session?.device?.deviceLabel || 'Device'}
                       </Text>
                       <Text style={styles.metaText}>
                         Last active {new Date(session.lastUsedAt || session.createdAt).toLocaleString()}
@@ -168,14 +228,28 @@ export const DevicesScreen = ({ navigation }: any) => {
         onConfirm={async () => {
           setConfirmAllOpen(false);
           try {
-            await apiClient.logoutAllSessions();
-            showToast({ message: 'Logged out everywhere.', type: 'success' });
-            await signOut();
+            const res = await apiClient.logoutAllSessions(keepPrimary);
+            showToast({ message: keepPrimary ? 'Logged out other devices.' : 'Logged out everywhere.', type: 'success' });
+            if (res?.loggedOutCurrent) {
+              await signOut();
+            } else {
+              await loadSessions();
+            }
           } catch (error: any) {
             showToast({ message: getUserFacingError(error, ['failed to log out all devices', 'logout failed']), type: 'error' });
           }
         }}
-      />
+      >
+        <TouchableOpacity
+          onPress={() => setKeepPrimary((prev) => !prev)}
+          style={styles.checkboxRow}
+        >
+          <View style={[styles.checkboxBox, !keepPrimary && styles.checkboxBoxActive]}>
+            {!keepPrimary ? <Ionicons name="checkmark" size={14} color={COLORS.background} /> : null}
+          </View>
+          <Text style={styles.checkboxText}>Also log out the primary device</Text>
+        </TouchableOpacity>
+      </ConfirmDialog>
       <ConfirmDialog
         visible={!!confirmSession}
         title="Log out device"
@@ -200,6 +274,78 @@ export const DevicesScreen = ({ navigation }: any) => {
           }
         }}
       />
+      <ConfirmDialog
+        visible={!!confirmPrimary}
+        title="Set as primary"
+        message="This device will become your primary device."
+        confirmText="Set primary"
+        tone="default"
+        onCancel={() => setConfirmPrimary(null)}
+        onConfirm={async () => {
+          if (!confirmPrimary?.deviceId) return;
+          setConfirmPrimary(null);
+          try {
+            await apiClient.setPrimaryDevice(confirmPrimary.deviceId);
+            setPrimaryDeviceId(confirmPrimary.deviceId);
+            showToast({ message: 'Primary device updated.', type: 'success' });
+            await loadSessions();
+          } catch (error: any) {
+            showToast({ message: getUserFacingError(error, ['failed to set primary device']), type: 'error' });
+          }
+        }}
+      />
+      <ConfirmDialog
+        visible={confirmClearHistory}
+        title="Clear device history"
+        message="This will remove signed-out device history."
+        confirmText="Clear history"
+        tone="danger"
+        onCancel={() => setConfirmClearHistory(false)}
+        onConfirm={async () => {
+          setConfirmClearHistory(false);
+          try {
+            await apiClient.clearDeviceHistory();
+            showToast({ message: 'Device history cleared.', type: 'success' });
+            await loadSessions();
+          } catch (error: any) {
+            showToast({ message: getUserFacingError(error, ['failed to clear device history']), type: 'error' });
+          }
+        }}
+      />
+      <ConfirmDialog
+        visible={!!editingDeviceId}
+        title="Edit device label"
+        message="Choose an emoji and nickname for this device."
+        confirmText="Save label"
+        tone="default"
+        onCancel={() => setEditingDeviceId(null)}
+        onConfirm={async () => {
+          if (!editingDeviceId) return;
+          await handleSaveLabel(editingDeviceId);
+        }}
+      >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiRow}>
+          {emojiOptions.map((option) => (
+            <TouchableOpacity
+              key={option.label}
+              style={[
+                styles.emojiChip,
+                draftEmoji === option.emoji && styles.emojiChipActive
+              ]}
+              onPress={() => setDraftEmoji(option.emoji)}
+            >
+              <Text style={styles.emojiChipText}>{option.emoji} {option.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+        <TextInput
+          style={styles.nicknameInput}
+          placeholder="Nickname (e.g. John’s Pixel)"
+          placeholderTextColor={COLORS.silver}
+          value={draftNickname}
+          onChangeText={setDraftNickname}
+        />
+      </ConfirmDialog>
     </View>
   );
 };
@@ -277,21 +423,80 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontSize: 12,
   },
-  logoutButton: {
+  menuWrapper: {
     marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  menuButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(167,171,180,0.3)',
+    borderRadius: 10,
     paddingVertical: 8,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  logoutText: {
-    color: COLORS.accent.red,
-    fontWeight: '700',
+  menuButtonText: {
+    color: COLORS.text,
+    fontWeight: '600',
+    fontSize: 12,
   },
-  primaryButton: {
-    marginTop: 4,
+  menuPanel: {
+    marginTop: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(167,171,180,0.2)',
+    backgroundColor: 'rgba(14,14,16,0.98)',
+    padding: 8,
+    gap: 6,
+  },
+  menuItem: {
     paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
   },
-  primaryButtonText: {
+  menuItemText: {
+    color: COLORS.text,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  menuItemPrimary: {
     color: '#93C5FD',
-    fontWeight: '700',
+  },
+  menuItemDanger: {
+    color: COLORS.accent.red,
+  },
+  emojiRow: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  emojiChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(167,171,180,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  emojiChipActive: {
+    borderColor: 'rgba(212,175,55,0.6)',
+    backgroundColor: 'rgba(212,175,55,0.2)',
+  },
+  emojiChipText: {
+    color: COLORS.text,
+    fontSize: 12,
+  },
+  nicknameInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(167,171,180,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: COLORS.text,
+    fontSize: 13,
   },
   center: {
     flex: 1,
@@ -351,6 +556,14 @@ const styles = StyleSheet.create({
     color: COLORS.silver,
     fontWeight: '600',
   },
+  clearHistoryButton: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  clearHistoryText: {
+    color: COLORS.accent.red,
+    fontWeight: '700',
+  },
   historyList: {
     marginTop: 8,
     gap: 10,
@@ -365,5 +578,28 @@ const styles = StyleSheet.create({
   historyLabel: {
     color: COLORS.text,
     fontWeight: '600',
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxBoxActive: {
+    backgroundColor: COLORS.accent.red,
+    borderColor: COLORS.accent.red,
+  },
+  checkboxText: {
+    color: COLORS.silver,
+    fontSize: 12,
   },
 });

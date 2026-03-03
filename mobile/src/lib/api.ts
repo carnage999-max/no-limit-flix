@@ -200,9 +200,11 @@ export const apiClient = {
     return data;
   },
 
-  logoutAllSessions: async () => {
+  logoutAllSessions: async (keepPrimary = true) => {
     const response = await authFetch(`${BASE_URL}/api/account/sessions`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keepPrimary }),
     });
     const data = await parseJson(response);
     if (!response.ok) {
@@ -220,6 +222,54 @@ export const apiClient = {
     const data = await parseJson(response);
     if (!response.ok) {
       throw new Error(data?.error || 'Failed to log out device');
+    }
+    return data;
+  },
+
+  updateDeviceLabel: async (payload: { deviceId: string; nickname?: string | null; emoji?: string | null }) => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: payload.deviceId, nickname: payload.nickname, emoji: payload.emoji }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to update device label');
+    }
+    return data;
+  },
+
+  clearDeviceHistory: async () => {
+    const response = await authFetch(`${BASE_URL}/api/account/sessions/history`, {
+      method: 'DELETE',
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to clear device history');
+    }
+    return data;
+  },
+
+  linkGoogleAccount: async (idToken: string) => {
+    const response = await authFetch(`${BASE_URL}/api/account/link-google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to link Google account');
+    }
+    return data;
+  },
+
+  unlinkGoogleAccount: async () => {
+    const response = await authFetch(`${BASE_URL}/api/account/unlink-google`, {
+      method: 'POST',
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to unlink Google account');
     }
     return data;
   },

@@ -56,7 +56,7 @@ export const AuthScreen = ({ route }: any) => {
     : undefined;
   const googleRedirectUri = makeRedirectUri({
     scheme: 'nolimitflix',
-    native: reverseClientId ? `${reverseClientId}:/oauth2redirect` : undefined,
+    native: reverseClientId ? `${reverseClientId}:/oauthredirect` : undefined,
   });
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
     androidClientId,

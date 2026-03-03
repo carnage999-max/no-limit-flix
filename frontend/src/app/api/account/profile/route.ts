@@ -42,6 +42,7 @@ export async function PUT(request: NextRequest) {
                 avatar: true,
                 showWelcomeScreen: true,
                 role: true,
+                googleId: true,
             }
         });
 

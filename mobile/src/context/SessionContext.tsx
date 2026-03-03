@@ -11,6 +11,7 @@ export interface SessionUser {
   avatar?: string | null;
   showWelcomeScreen?: boolean;
   role?: string;
+  googleId?: string | null;
 }
 
 interface SessionContextType {

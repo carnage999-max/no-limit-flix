@@ -11,6 +11,7 @@ interface ConfirmDialogProps {
   tone?: 'danger' | 'default';
   onConfirm: () => void;
   onCancel: () => void;
+  children?: React.ReactNode;
 }
 
 export const ConfirmDialog = ({
@@ -22,6 +23,7 @@ export const ConfirmDialog = ({
   tone = 'danger',
   onConfirm,
   onCancel,
+  children,
 }: ConfirmDialogProps) => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -29,6 +31,7 @@ export const ConfirmDialog = ({
         <View style={styles.card}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
+          {children}
           <View style={styles.actions}>
             <TouchableOpacity style={styles.cancelButton} onPress={onCancel}>
               <Text style={styles.cancelText}>{cancelText}</Text>

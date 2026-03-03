@@ -101,6 +101,8 @@ model UserSession {
   sessionId   String   @unique
   deviceId    String?
   deviceName  String?
+  deviceNickname String?
+  deviceEmoji   String?
   refreshTokenHash      String?
   refreshTokenExpiresAt DateTime?
   userAgent   String?

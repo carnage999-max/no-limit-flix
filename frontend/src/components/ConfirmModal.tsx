@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
 interface ConfirmModalProps {
@@ -12,6 +13,7 @@ interface ConfirmModalProps {
     onConfirm: () => void | Promise<void>;
     onCancel: () => void;
     tone?: 'default' | 'danger';
+    children?: ReactNode;
 }
 
 export default function ConfirmModal({
@@ -23,6 +25,7 @@ export default function ConfirmModal({
     onConfirm,
     onCancel,
     tone = 'default',
+    children,
 }: ConfirmModalProps) {
     const confirmRef = useRef<HTMLButtonElement | null>(null);
     const previousActiveRef = useRef<HTMLElement | null>(null);
@@ -136,6 +139,7 @@ export default function ConfirmModal({
                         {description}
                     </p>
                 )}
+                {children}
                 <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                     <button
                         type="button"

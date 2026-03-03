@@ -225,7 +225,8 @@ export async function POST(request: NextRequest) {
                     username: user.username,
                     avatar: user.avatar,
                     showWelcomeScreen: user.showWelcomeScreen,
-                    role: user.role
+                    role: user.role,
+                    googleId: user.googleId,
                 }
             });
 
@@ -283,7 +284,8 @@ export async function POST(request: NextRequest) {
                     username: user.username,
                     avatar: user.avatar,
                     showWelcomeScreen: user.showWelcomeScreen,
-                    role: user.role
+                    role: user.role,
+                    googleId: user.googleId,
                 }
             });
 
@@ -414,7 +416,8 @@ export async function POST(request: NextRequest) {
                     username: user.username,
                     avatar: user.avatar,
                     showWelcomeScreen: user.showWelcomeScreen,
-                    role: user.role
+                    role: user.role,
+                    googleId: user.googleId,
                 }
             });
 

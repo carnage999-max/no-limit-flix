@@ -17,15 +17,56 @@ import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
 import { getUserFacingError } from '../lib/errors';
 import { apiClient } from '../lib/api';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export const ProfileScreen = ({ navigation }: any) => {
-  const { user, updateProfile } = useSession();
+  const { user, updateProfile, refreshSession } = useSession();
   const { showToast } = useToast();
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
   const [showWelcome, setShowWelcome] = useState(user?.showWelcomeScreen ?? true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
+  const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
+
+  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const reverseClientId = androidClientId
+    ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
+    : undefined;
+  const googleRedirectUri = makeRedirectUri({
+    scheme: 'nolimitflix',
+    native: reverseClientId ? `${reverseClientId}:/oauthredirect` : undefined,
+  });
+  const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    androidClientId,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    redirectUri: googleRedirectUri,
+    scopes: ['profile', 'email'],
+  });
+
+  React.useEffect(() => {
+    if (googleResponse?.type !== 'success') return;
+    const idToken = googleResponse.params?.id_token;
+    if (!idToken) return;
+    (async () => {
+      setLinkingGoogle(true);
+      try {
+        await apiClient.linkGoogleAccount(idToken);
+        await refreshSession();
+        showToast({ message: 'Google account linked.', type: 'success' });
+      } catch (error: any) {
+        showToast({ message: getUserFacingError(error, ['failed to link google account', 'google account already linked']), type: 'error' });
+      } finally {
+        setLinkingGoogle(false);
+      }
+    })();
+  }, [googleResponse]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -160,7 +201,50 @@ export const ProfileScreen = ({ navigation }: any) => {
         <TouchableOpacity style={styles.primaryButton} onPress={handleSave} disabled={saving}>
           {saving ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.primaryText}>Save changes</Text>}
         </TouchableOpacity>
+
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="link" size={18} color={COLORS.text} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Linked accounts</Text>
+              <Text style={styles.sectionSubtitle}>
+                {user?.googleId ? 'Google account connected.' : 'No Google account linked yet.'}
+              </Text>
+            </View>
+          </View>
+          {!user?.googleId ? (
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => promptGoogle?.()}
+              disabled={!googleRequest || linkingGoogle}
+            >
+              {linkingGoogle ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.googleButtonText}>Link Google account</Text>}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.unlinkButton} onPress={() => setUnlinkConfirmOpen(true)}>
+              <Text style={styles.unlinkText}>Unlink Google</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
+      <ConfirmDialog
+        visible={unlinkConfirmOpen}
+        title="Unlink Google account"
+        message="You will no longer be able to sign in with Google for this account."
+        confirmText="Unlink"
+        tone="danger"
+        onCancel={() => setUnlinkConfirmOpen(false)}
+        onConfirm={async () => {
+          setUnlinkConfirmOpen(false);
+          try {
+            await apiClient.unlinkGoogleAccount();
+            await refreshSession();
+            showToast({ message: 'Google account unlinked.', type: 'success' });
+          } catch (error: any) {
+            showToast({ message: getUserFacingError(error, ['failed to unlink google account']), type: 'error' });
+          }
+        }}
+      />
     </View>
   );
 };
@@ -293,6 +377,52 @@ const styles = StyleSheet.create({
   primaryText: {
     color: COLORS.background,
     fontSize: 16,
+    fontWeight: '700',
+  },
+  sectionCard: {
+    marginTop: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    padding: 16,
+    gap: 12,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sectionTitle: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  sectionSubtitle: {
+    color: COLORS.silver,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  googleButton: {
+    backgroundColor: COLORS.gold.mid,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  googleButtonText: {
+    color: COLORS.background,
+    fontWeight: '700',
+  },
+  unlinkButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.5)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: 'rgba(239,68,68,0.1)',
+  },
+  unlinkText: {
+    color: COLORS.accent.red,
     fontWeight: '700',
   },
 });
