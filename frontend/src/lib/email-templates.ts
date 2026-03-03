@@ -1,29 +1,85 @@
 const baseStyles = {
-    fontFamily: 'font-family: Arial, sans-serif;',
+    fontFamily: 'font-family: "Inter", "Segoe UI", Arial, sans-serif;',
     bg: 'background-color: #0B0B0D;',
     cardBg: 'background-color: #111114;',
     text: 'color: #F3F4F6;',
     muted: 'color: #A7ABB4;',
     gold: 'color: #D4AF37;',
-    border: 'border: 1px solid rgba(212, 175, 55, 0.25);',
+    border: 'border: 1px solid rgba(212, 175, 55, 0.22);',
 };
+
+const APP_URL = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://nolimitflix.com').replace(/\/$/, '');
+const LOGO_URL = `${APP_URL}/no-limit-flix-logo.png`;
 
 const wrapEmail = (title: string, body: string) => {
     return `
-        <div style="${baseStyles.fontFamily} ${baseStyles.bg} padding: 32px;">
-          <div style="max-width: 560px; margin: 0 auto; ${baseStyles.cardBg} ${baseStyles.border} border-radius: 16px; padding: 28px;">
-            <div style="text-transform: uppercase; letter-spacing: 0.2em; font-size: 11px; ${baseStyles.gold}; font-weight: 700;">
-              No Limit Flix
-            </div>
-            <h1 style="margin: 12px 0 12px; font-size: 24px; ${baseStyles.text}; font-weight: 700;">${title}</h1>
-            <div style="font-size: 14px; line-height: 1.6; ${baseStyles.text};">
-              ${body}
-            </div>
-            <div style="margin-top: 24px; font-size: 12px; ${baseStyles.muted};">
-              If you did not initiate this, please contact support.
-            </div>
-          </div>
-        </div>
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${title}</title>
+  </head>
+  <body style="margin:0; padding:0; ${baseStyles.bg}; ${baseStyles.fontFamily}">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${baseStyles.bg}; padding: 24px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="${baseStyles.cardBg}; ${baseStyles.border}; border-radius: 18px; padding: 28px; width: 100%; max-width: 600px;">
+            <tr>
+              <td>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding-bottom: 16px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="width: 48px; height: 48px; border-radius: 12px; overflow: hidden; background: #0B0B0D;">
+                            <img src="${LOGO_URL}" width="48" height="48" alt="No Limit Flix" style="display:block; width:48px; height:48px; border-radius:12px;" />
+                          </td>
+                          <td style="padding-left: 12px;">
+                            <div style="font-size: 12px; letter-spacing: 0.22em; text-transform: uppercase; ${baseStyles.gold}; font-weight: 700;">No Limit Flix</div>
+                            <div style="font-size: 13px; ${baseStyles.muted}; margin-top: 4px;">Streaming + Discovery</div>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <h1 style="margin: 0 0 12px; font-size: 24px; ${baseStyles.text}; font-weight: 700;">${title}</h1>
+                      <div style="font-size: 14px; line-height: 1.6; ${baseStyles.text};">
+                        ${body}
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top: 20px;">
+                      <div style="height: 1px; background: rgba(167, 171, 180, 0.15);"></div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding-top: 16px;">
+                      <div style="font-size: 12px; ${baseStyles.muted}; line-height: 1.5;">
+                        If you did not initiate this activity, please contact support immediately.
+                      </div>
+                      <div style="font-size: 12px; ${baseStyles.muted}; margin-top: 10px;">
+                        <a href="${APP_URL}" style="color: #D4AF37; text-decoration: none;">NoLimitFlix.com</a>
+                        &nbsp;&middot;&nbsp;
+                        <a href="mailto:info@nolimitflix.com" style="color: #D4AF37; text-decoration: none;">Support</a>
+                      </div>
+                      <div style="font-size: 11px; ${baseStyles.muted}; margin-top: 8px;">
+                        No Limit Flix · This email was sent to you because it relates to your account activity.
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
     `;
 };
 
