@@ -15,6 +15,7 @@ import { transformToCloudFront } from '../lib/utils';
 import { useToast } from '../context/ToastContext';
 import { useSession } from '../context/SessionContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { getUserFacingError } from '../lib/errors';
 
 export const WatchHistoryScreen = ({ navigation }: any) => {
   const { showToast } = useToast();
@@ -29,7 +30,7 @@ export const WatchHistoryScreen = ({ navigation }: any) => {
       const data = await apiClient.getWatchHistory(1, 20);
       setItems(data.watchHistory || []);
     } catch (error: any) {
-      showToast({ message: error?.message || 'Failed to load history.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['failed to fetch watch history', 'failed to load history']), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -134,7 +135,7 @@ export const WatchHistoryScreen = ({ navigation }: any) => {
             setItems([]);
             showToast({ message: 'Watch history cleared.', type: 'success' });
           } catch (error: any) {
-            showToast({ message: error?.message || 'Failed to clear history.', type: 'error' });
+            showToast({ message: getUserFacingError(error, ['failed to clear history']), type: 'error' });
           }
         }}
       />

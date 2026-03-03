@@ -24,15 +24,30 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     const refresh = useCallback(async () => {
-        try {
-            setLoading(true);
+        const fetchSession = async () => {
             const res = await fetch('/api/auth/session', { cache: 'no-store' });
             if (!res.ok) {
-                setUser(null);
-                return;
+                return { ok: false, status: res.status };
             }
             const data = await res.json();
             setUser(data.user || null);
+            return { ok: true, status: res.status };
+        };
+
+        try {
+            setLoading(true);
+            const initial = await fetchSession();
+            if (initial.ok) {
+                return;
+            }
+            if (initial.status === 401) {
+                const refreshRes = await fetch('/api/auth/refresh', { method: 'POST' });
+                if (refreshRes.ok) {
+                    await fetchSession();
+                    return;
+                }
+            }
+            setUser(null);
         } catch (error) {
             setUser(null);
         } finally {

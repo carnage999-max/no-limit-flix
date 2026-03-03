@@ -14,6 +14,14 @@ export function generateSessionToken(): string {
     return crypto.randomBytes(32).toString('hex');
 }
 
+export function generateRefreshToken(): string {
+    return crypto.randomBytes(48).toString('hex');
+}
+
+export function hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 const getAuthSecret = () => {
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
     if (!secret) {
@@ -79,4 +87,6 @@ export function verifySessionToken(token?: string | null): { userId: string; rol
 
 // Cookie constants
 export const SESSION_COOKIE_NAME = 'auth_token';
-export const SESSION_COOKIE_AGE = 30 * 24 * 60 * 60; // 30 days
+export const SESSION_COOKIE_AGE = 60 * 24 * 60 * 60; // 60 days
+export const REFRESH_TOKEN_COOKIE_NAME = 'refresh_token';
+export const REFRESH_TOKEN_AGE = 180 * 24 * 60 * 60; // 180 days

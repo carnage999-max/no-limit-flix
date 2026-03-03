@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import * as SecureStore from 'expo-secure-store';
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
-import { apiClient, setAuthToken, setDeviceId, setDeviceName } from '../lib/api';
+import { apiClient, setAuthToken, setDeviceId, setDeviceName, setRefreshToken } from '../lib/api';
 
 export interface SessionUser {
   id: string;
@@ -21,6 +21,7 @@ interface SessionContextType {
   welcomeSubtitle: string;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, username: string, password: string) => Promise<void>;
+  signInWithGoogle: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   updateProfile: (payload: { username?: string; email?: string; avatar?: string | null; showWelcomeScreen?: boolean }) => Promise<SessionUser>;
@@ -29,8 +30,9 @@ interface SessionContextType {
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
-const AUTH_TOKEN_KEY = '@nolimitflix_auth_token';
-const DEVICE_ID_KEY = '@nolimitflix_device_id';
+const AUTH_TOKEN_KEY = 'nolimitflixAuthToken';
+const DEVICE_ID_KEY = 'nolimitflixDeviceId';
+const REFRESH_TOKEN_KEY = 'nolimitflixRefreshToken';
 
 const WELCOME_SUBTITLES = [
   'The world of discovery awaits you.',
@@ -93,6 +95,7 @@ const getRandomSubtitle = () => {
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshTokenState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [welcomeVisible, setWelcomeVisible] = useState(false);
   const [welcomeSubtitle, setWelcomeSubtitle] = useState('');
@@ -104,6 +107,16 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       await SecureStore.setItemAsync(AUTH_TOKEN_KEY, newToken);
     } else {
       await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+    }
+  };
+
+  const applyRefreshToken = async (newToken: string | null) => {
+    setRefreshTokenState(newToken);
+    setRefreshToken(newToken);
+    if (newToken) {
+      await SecureStore.setItemAsync(REFRESH_TOKEN_KEY, newToken);
+    } else {
+      await SecureStore.deleteItemAsync(REFRESH_TOKEN_KEY);
     }
   };
 
@@ -122,11 +135,31 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setUser(null);
         return;
       }
-      const data = await apiClient.getSession();
-      setUser(data?.user || null);
+      try {
+        const data = await apiClient.getSession();
+        setUser(data?.user || null);
+        return;
+      } catch (error: any) {
+        const canRefresh = Boolean(refreshToken);
+        if (!canRefresh) {
+          throw error;
+        }
+        const refreshed = await apiClient.refreshSession(refreshToken);
+        const nextToken = refreshed?.token as string | undefined;
+        const nextRefresh = refreshed?.refreshToken as string | undefined;
+        if (nextToken) {
+          await applyToken(nextToken);
+        }
+        if (nextRefresh) {
+          await applyRefreshToken(nextRefresh);
+        }
+        const data = await apiClient.getSession();
+        setUser(data?.user || null);
+      }
     } catch {
       setUser(null);
       await applyToken(null);
+      await applyRefreshToken(null);
     } finally {
       setLoading(false);
     }
@@ -156,9 +189,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         const stored = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+        const storedRefresh = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
         if (stored) {
           await applyToken(stored);
-          return;
+        }
+        if (storedRefresh) {
+          await applyRefreshToken(storedRefresh);
         }
       } finally {
         setLoading(false);
@@ -176,8 +212,12 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const signIn = async (email: string, password: string) => {
     const data = await apiClient.login(email, password);
     const nextToken = data?.token as string | undefined;
+    const nextRefresh = data?.refreshToken as string | undefined;
     if (nextToken) {
       await applyToken(nextToken);
+    }
+    if (nextRefresh) {
+      await applyRefreshToken(nextRefresh);
     }
     setUser(data?.user || null);
     triggerWelcome(data?.user?.username, data?.user?.showWelcomeScreen !== false);
@@ -186,8 +226,26 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const signUp = async (email: string, username: string, password: string) => {
     const data = await apiClient.signup(email, username, password);
     const nextToken = data?.token as string | undefined;
+    const nextRefresh = data?.refreshToken as string | undefined;
     if (nextToken) {
       await applyToken(nextToken);
+    }
+    if (nextRefresh) {
+      await applyRefreshToken(nextRefresh);
+    }
+    setUser(data?.user || null);
+    triggerWelcome(data?.user?.username, data?.user?.showWelcomeScreen !== false);
+  };
+
+  const signInWithGoogle = async (idToken: string) => {
+    const data = await apiClient.googleLogin(idToken);
+    const nextToken = data?.token as string | undefined;
+    const nextRefresh = data?.refreshToken as string | undefined;
+    if (nextToken) {
+      await applyToken(nextToken);
+    }
+    if (nextRefresh) {
+      await applyRefreshToken(nextRefresh);
     }
     setUser(data?.user || null);
     triggerWelcome(data?.user?.username, data?.user?.showWelcomeScreen !== false);
@@ -200,6 +258,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       // ignore logout failures
     } finally {
       await applyToken(null);
+      await applyRefreshToken(null);
       setUser(null);
     }
   };
@@ -220,6 +279,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       welcomeSubtitle,
       signIn,
       signUp,
+      signInWithGoogle,
       signOut,
       refreshSession,
       updateProfile,

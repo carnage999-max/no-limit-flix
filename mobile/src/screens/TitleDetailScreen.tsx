@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { transformToCloudFront } from '../lib/utils';
 import { useToast } from '../context/ToastContext';
 import { useSession } from '../context/SessionContext';
+import { getUserFacingError } from '../lib/errors';
 
 const { width, height } = Dimensions.get('window');
 const AUTOPLAY_KEY = '@nolimitflix_autoplay';
@@ -59,7 +60,7 @@ export const TitleDetailScreen = () => {
       const added = await toggleFavorite(movie);
       showToast({ message: added ? 'Added to favorites.' : 'Removed from favorites.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Favorite failed.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['favorite', 'sign in']), type: 'error' });
     }
   };
 

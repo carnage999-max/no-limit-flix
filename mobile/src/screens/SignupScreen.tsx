@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
+import { getUserFacingError } from '../lib/errors';
 
 export const SignupScreen = ({ navigation }: any) => {
   const { signUp } = useSession();
@@ -33,7 +34,7 @@ export const SignupScreen = ({ navigation }: any) => {
       await signUp(email.trim(), username.trim(), password);
       showToast({ message: 'Account created.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Signup failed.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['signup failed', 'email or username already exists', 'maximum active devices reached']), type: 'error' });
     } finally {
       setLoading(false);
     }

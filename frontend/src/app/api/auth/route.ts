@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
-import { hashPassword, verifyPassword, createSessionToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, verifySessionToken } from '@/lib/auth';
+import { hashPassword, verifyPassword, createSessionToken, generateRefreshToken, hashToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_AGE, verifySessionToken } from '@/lib/auth';
 import { parseUserAgent, lookupLocation } from '@/lib/device';
 import { sendEmail } from '@/lib/email';
+import { buildBlockedDeviceEmail, buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
 
 const prisma = new PrismaClient();
 
 export async function POST(request: NextRequest) {
     try {
-        const { action, email, password, username, deviceId, deviceName } = await request.json();
+        const { action, email, password, username, deviceId, deviceName, idToken } = await request.json();
         const normalizedDeviceId = typeof deviceId === 'string' && deviceId.trim().length > 0
             ? deviceId.trim()
             : null;
@@ -19,6 +20,9 @@ export async function POST(request: NextRequest) {
 
         const upsertSession = async (userId: string, role: string, userEmail: string) => {
             const sessionId = crypto.randomUUID();
+            const refreshToken = generateRefreshToken();
+            const refreshHash = hashToken(refreshToken);
+            const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_AGE * 1000);
             const ipAddress = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
                 || request.headers.get('x-real-ip')
                 || undefined;
@@ -54,16 +58,11 @@ export async function POST(request: NextRequest) {
                     await sendEmail({
                         to: userEmail,
                         subject: 'New device sign-in blocked',
-                        html: `
-                            <div style="font-family: Arial, sans-serif; color: #111;">
-                              <h2>New device sign-in blocked</h2>
-                              <p>We blocked a sign-in because your account has reached the maximum number of active devices.</p>
-                              <p><strong>Device:</strong> ${effectiveDeviceName}</p>
-                              <p><strong>IP:</strong> ${ipAddress || 'Unknown'}</p>
-                              <p><strong>Location:</strong> ${locationText}</p>
-                              <p>If this was you, log out of another device and try again.</p>
-                            </div>
-                        `,
+                        html: buildBlockedDeviceEmail({
+                            device: effectiveDeviceName,
+                            ip: ipAddress || 'Unknown',
+                            location: locationText,
+                        }),
                     });
                 } catch (err) {
                     console.warn('Device limit email failed', err);
@@ -89,6 +88,8 @@ export async function POST(request: NextRequest) {
                             revokedAt: null,
                             lastUsedAt: new Date(),
                             deviceName: effectiveDeviceName || existing.deviceName,
+                            refreshTokenHash: refreshHash,
+                            refreshTokenExpiresAt: refreshExpiresAt,
                         }
                     });
                 } else {
@@ -99,6 +100,8 @@ export async function POST(request: NextRequest) {
                             sessionId,
                             deviceId: effectiveDeviceId,
                             deviceName: effectiveDeviceName || undefined,
+                            refreshTokenHash: refreshHash,
+                            refreshTokenExpiresAt: refreshExpiresAt,
                             userAgent,
                             ipAddress,
                         }
@@ -111,6 +114,8 @@ export async function POST(request: NextRequest) {
                         userId,
                         sessionId,
                         deviceName: effectiveDeviceName || undefined,
+                        refreshTokenHash: refreshHash,
+                        refreshTokenExpiresAt: refreshExpiresAt,
                         userAgent,
                         ipAddress,
                     }
@@ -133,28 +138,24 @@ export async function POST(request: NextRequest) {
                     await sendEmail({
                         to: userEmail,
                         subject: 'New device signed in',
-                        html: `
-                            <div style="font-family: Arial, sans-serif; color: #111;">
-                              <h2>New device signed in</h2>
-                              <p>We noticed a new device sign-in to your account.</p>
-                              <p><strong>Device:</strong> ${effectiveDeviceName}</p>
-                              <p><strong>IP:</strong> ${ipAddress || 'Unknown'}</p>
-                              <p><strong>Location:</strong> ${locationText}</p>
-                              <p>If this wasn’t you, please log out of all devices immediately.</p>
-                            </div>
-                        `,
+                        html: buildNewDeviceEmail({
+                            device: effectiveDeviceName,
+                            ip: ipAddress || 'Unknown',
+                            location: locationText,
+                        }),
                     });
                 } catch (err) {
                     console.warn('Device login email failed', err);
                 }
             }
 
-            return createSessionToken({
+            const accessToken = createSessionToken({
                 userId,
                 role,
                 expiresAt: Date.now() + SESSION_COOKIE_AGE * 1000,
                 sessionId,
             });
+            return { accessToken, refreshToken };
         };
 
         if (action === 'signup') {
@@ -191,21 +192,18 @@ export async function POST(request: NextRequest) {
                 await sendEmail({
                     to: user.email,
                     subject: 'Welcome to No Limit Flix',
-                    html: `
-                        <div style="font-family: Arial, sans-serif; color: #111;">
-                          <h2>Welcome to No Limit Flix</h2>
-                          <p>Your account has been created successfully.</p>
-                          <p>You can now sign in and start exploring the catalog.</p>
-                        </div>
-                    `,
+                    html: buildWelcomeEmail(),
                 });
             } catch (err) {
                 console.warn('Signup email failed', err);
             }
 
             let token: string;
+            let refreshToken: string;
             try {
-                token = await upsertSession(user.id, user.role, user.email);
+                const sessionTokens = await upsertSession(user.id, user.role, user.email);
+                token = sessionTokens.accessToken;
+                refreshToken = sessionTokens.refreshToken;
             } catch (err: any) {
                 if (err?.message === 'MAX_DEVICES_REACHED') {
                     return NextResponse.json(
@@ -220,6 +218,7 @@ export async function POST(request: NextRequest) {
             const response = NextResponse.json({
                 success: true,
                 token,
+                refreshToken,
                 user: {
                     id: user.id,
                     email: user.email,
@@ -235,6 +234,13 @@ export async function POST(request: NextRequest) {
                 secure: process.env.NODE_ENV === 'production',
                 sameSite: 'lax',
                 maxAge: SESSION_COOKIE_AGE,
+                path: '/'
+            });
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: REFRESH_TOKEN_AGE,
                 path: '/'
             });
 
@@ -252,8 +258,11 @@ export async function POST(request: NextRequest) {
             }
 
             let token: string;
+            let refreshToken: string;
             try {
-                token = await upsertSession(user.id, user.role, user.email);
+                const sessionTokens = await upsertSession(user.id, user.role, user.email);
+                token = sessionTokens.accessToken;
+                refreshToken = sessionTokens.refreshToken;
             } catch (err: any) {
                 if (err?.message === 'MAX_DEVICES_REACHED') {
                     return NextResponse.json(
@@ -267,6 +276,7 @@ export async function POST(request: NextRequest) {
             const response = NextResponse.json({
                 success: true,
                 token,
+                refreshToken,
                 user: {
                     id: user.id,
                     email: user.email,
@@ -284,6 +294,144 @@ export async function POST(request: NextRequest) {
                 maxAge: SESSION_COOKIE_AGE,
                 path: '/'
             });
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: REFRESH_TOKEN_AGE,
+                path: '/'
+            });
+
+            return response;
+        } else if (action === 'google') {
+            if (!idToken || typeof idToken !== 'string') {
+                return NextResponse.json({ error: 'Missing Google token' }, { status: 400 });
+            }
+
+            const verifyGoogleToken = async () => {
+                const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`, {
+                    cache: 'no-store',
+                });
+                if (!response.ok) return null;
+                const data = await response.json();
+                const validAudiences = [
+                    process.env.GOOGLE_WEB_CLIENT_ID,
+                    process.env.GOOGLE_ANDROID_CLIENT_ID,
+                ].filter(Boolean);
+                if (!validAudiences.length || !validAudiences.includes(data.aud)) {
+                    return null;
+                }
+                if (data.email_verified !== 'true' && data.email_verified !== true) return null;
+                return data;
+            };
+
+            const tokenInfo = await verifyGoogleToken();
+            const googleId = tokenInfo?.sub ? String(tokenInfo.sub) : null;
+            if (!tokenInfo?.email || !googleId) {
+                return NextResponse.json({ error: 'Google token invalid' }, { status: 401 });
+            }
+
+            let user = await prisma.user.findFirst({
+                where: { googleId }
+            });
+
+            if (!user) {
+                const emailLower = tokenInfo.email.toLowerCase();
+                const byEmail = await prisma.user.findUnique({ where: { email: emailLower } });
+                if (byEmail) {
+                    if (byEmail.googleId && byEmail.googleId !== googleId) {
+                        return NextResponse.json(
+                            { error: 'Account is already linked to a different Google profile.' },
+                            { status: 409 }
+                        );
+                    }
+                    user = await prisma.user.update({
+                        where: { id: byEmail.id },
+                        data: {
+                            googleId,
+                            avatar: byEmail.avatar || tokenInfo.picture || undefined,
+                        }
+                    });
+                }
+            }
+
+            if (!user) {
+                const baseUsername = tokenInfo.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 16) || 'user';
+                let candidate = baseUsername;
+                let attempts = 0;
+                while (attempts < 5) {
+                    const exists = await prisma.user.findUnique({ where: { username: candidate } });
+                    if (!exists) break;
+                    candidate = `${baseUsername}${Math.floor(Math.random() * 9999)}`;
+                    attempts += 1;
+                }
+                const hashedPassword = hashPassword(crypto.randomUUID());
+                user = await prisma.user.create({
+                    data: {
+                        email: tokenInfo.email.toLowerCase(),
+                        username: candidate,
+                        password: hashedPassword,
+                        googleId,
+                        avatar: tokenInfo.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${candidate}`,
+                        role: 'user'
+                    }
+                });
+
+                try {
+                    await sendEmail({
+                        to: user.email,
+                        subject: 'Welcome to No Limit Flix',
+                        html: buildWelcomeEmail(),
+                    });
+                } catch (err) {
+                    console.warn('Signup email failed', err);
+                }
+            }
+
+            let token: string;
+            let refreshToken: string;
+            try {
+                const sessionTokens = await upsertSession(user.id, user.role, user.email);
+                token = sessionTokens.accessToken;
+                refreshToken = sessionTokens.refreshToken;
+            } catch (err: any) {
+                if (err?.message === 'MAX_DEVICES_REACHED') {
+                    return NextResponse.json(
+                        { error: 'Maximum active devices reached. Log out another device to continue.' },
+                        { status: 403 }
+                    );
+                }
+                throw err;
+            }
+
+            const response = NextResponse.json({
+                success: true,
+                token,
+                refreshToken,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    username: user.username,
+                    avatar: user.avatar,
+                    showWelcomeScreen: user.showWelcomeScreen,
+                    role: user.role
+                }
+            });
+
+            response.cookies.set(SESSION_COOKIE_NAME, token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: SESSION_COOKIE_AGE,
+                path: '/'
+            });
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: REFRESH_TOKEN_AGE,
+                path: '/'
+            });
 
             return response;
         } else if (action === 'logout') {
@@ -292,12 +440,13 @@ export async function POST(request: NextRequest) {
             if (payload?.sessionId) {
                 await prisma.userSession.updateMany({
                     where: { sessionId: payload.sessionId },
-                    data: { revokedAt: new Date() }
+                    data: { revokedAt: new Date(), refreshTokenHash: null, refreshTokenExpiresAt: null }
                 });
             }
 
             const response = NextResponse.json({ success: true });
             response.cookies.delete(SESSION_COOKIE_NAME);
+            response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME);
             return response;
         }
 

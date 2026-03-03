@@ -74,6 +74,7 @@ model User {
   email             String   @unique
   username          String   @unique
   password          String
+  googleId          String?  @unique
   avatar            String?
   showWelcomeScreen Boolean  @default(true)
   maxDevices        Int      @default(5)
@@ -100,6 +101,8 @@ model UserSession {
   sessionId   String   @unique
   deviceId    String?
   deviceName  String?
+  refreshTokenHash      String?
+  refreshTokenExpiresAt DateTime?
   userAgent   String?
   ipAddress   String?
   createdAt   DateTime @default(now())

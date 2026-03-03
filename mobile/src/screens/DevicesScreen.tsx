@@ -13,6 +13,7 @@ import { apiClient } from '../lib/api';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { getUserFacingError } from '../lib/errors';
 
 export const DevicesScreen = ({ navigation }: any) => {
   const { signOut, user } = useSession();
@@ -35,7 +36,7 @@ export const DevicesScreen = ({ navigation }: any) => {
       setPrimaryDeviceId(data.primaryDeviceId || null);
       setMaxDevices(typeof data.maxDevices === 'number' ? data.maxDevices : null);
     } catch (error: any) {
-      showToast({ message: error?.message || 'Failed to load devices.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['failed to fetch sessions', 'failed to load devices']), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -102,17 +103,17 @@ export const DevicesScreen = ({ navigation }: any) => {
                   style={styles.primaryButton}
                   onPress={async () => {
                     try {
-                      await apiClient.setPrimaryDevice(session.deviceId);
-                      setPrimaryDeviceId(session.deviceId);
-                      showToast({ message: 'Primary device updated.', type: 'success' });
-                      await loadSessions();
-                    } catch (error: any) {
-                      showToast({ message: error?.message || 'Failed to set primary device.', type: 'error' });
-                    }
-                  }}
-                >
-                  <Text style={styles.primaryButtonText}>Set as primary</Text>
-                </TouchableOpacity>
+                  await apiClient.setPrimaryDevice(session.deviceId);
+                  setPrimaryDeviceId(session.deviceId);
+                  showToast({ message: 'Primary device updated.', type: 'success' });
+                  await loadSessions();
+                } catch (error: any) {
+                  showToast({ message: getUserFacingError(error, ['failed to set primary device']), type: 'error' });
+                }
+              }}
+            >
+              <Text style={styles.primaryButtonText}>Set as primary</Text>
+            </TouchableOpacity>
               ) : null}
             </View>
           ))}
@@ -171,7 +172,7 @@ export const DevicesScreen = ({ navigation }: any) => {
             showToast({ message: 'Logged out everywhere.', type: 'success' });
             await signOut();
           } catch (error: any) {
-            showToast({ message: error?.message || 'Logout failed.', type: 'error' });
+            showToast({ message: getUserFacingError(error, ['failed to log out all devices', 'logout failed']), type: 'error' });
           }
         }}
       />
@@ -195,7 +196,7 @@ export const DevicesScreen = ({ navigation }: any) => {
               await loadSessions();
             }
           } catch (error: any) {
-            showToast({ message: error?.message || 'Logout failed.', type: 'error' });
+            showToast({ message: getUserFacingError(error, ['failed to log out device', 'logout failed']), type: 'error' });
           }
         }}
       />

@@ -2,7 +2,10 @@
   "expo": {
     "name": "No Limit Flix",
     "slug": "no-limit-flix",
-    "scheme": "nolimitflix",
+    "scheme": [
+      "nolimitflix",
+      "com.googleusercontent.apps.200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

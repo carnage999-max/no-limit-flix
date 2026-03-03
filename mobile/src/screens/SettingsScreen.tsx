@@ -14,6 +14,7 @@ import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
 import { useNavigation } from '@react-navigation/native';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { getUserFacingError } from '../lib/errors';
 
 const BASE_WEB_URL = 'https://nolimitflix.com';
 
@@ -184,7 +185,7 @@ export const SettingsScreen = () => {
                         await signOut();
                         showToast({ message: 'Logged out.', type: 'success' });
                     } catch (error: any) {
-                        showToast({ message: error?.message || 'Logout failed.', type: 'error' });
+                        showToast({ message: getUserFacingError(error, ['logout failed']), type: 'error' });
                     }
                 }}
             />

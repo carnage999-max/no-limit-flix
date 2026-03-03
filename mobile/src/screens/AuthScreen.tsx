@@ -21,8 +21,15 @@ import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getUserFacingError } from '../lib/errors';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const { width } = Dimensions.get('window');
+const googleLogo = require('../../assets/Google_logo.png');
 
 export const AuthScreen = ({ route }: any) => {
   const initialTab = route?.params?.tab === 'signup' ? 'signup' : 'login';
@@ -30,7 +37,7 @@ export const AuthScreen = ({ route }: any) => {
   const scrollRef = useRef<Animated.ScrollView>(null);
   const sliderWidth = (width - SPACING.xl * 2 - 8) / 2;
   const navigation = useNavigation<any>();
-  const { signIn, signUp } = useSession();
+  const { signIn, signUp, signInWithGoogle } = useSession();
   const { showToast } = useToast();
   const scrollX = useRef(new Animated.Value(initialTab === 'signup' ? width : 0)).current;
   const insets = useSafeAreaInsets();
@@ -43,6 +50,41 @@ export const AuthScreen = ({ route }: any) => {
   const [loading, setLoading] = useState(false);
   const [secureLogin, setSecureLogin] = useState(true);
   const [secureSignup, setSecureSignup] = useState(true);
+  const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
+  const reverseClientId = androidClientId
+    ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
+    : undefined;
+  const googleRedirectUri = makeRedirectUri({
+    scheme: 'nolimitflix',
+    native: reverseClientId ? `${reverseClientId}:/oauth2redirect` : undefined,
+  });
+  const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    androidClientId,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    redirectUri: googleRedirectUri,
+    scopes: ['profile', 'email'],
+  });
+
+  React.useEffect(() => {
+    if (googleResponse?.type !== 'success') return;
+    const idToken = googleResponse.params?.id_token;
+    if (!idToken) return;
+    (async () => {
+      setLoading(true);
+      try {
+        await signInWithGoogle(idToken);
+        showToast({ message: 'Signed in with Google.', type: 'success' });
+        navigation.goBack();
+      } catch (error: any) {
+        showToast({
+          message: getUserFacingError(error, ['google login failed', 'maximum active devices reached']),
+          type: 'error'
+        });
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [googleResponse]);
 
   const handleTabChange = (tab: 'login' | 'signup') => {
     setActiveTab(tab);
@@ -68,7 +110,14 @@ export const AuthScreen = ({ route }: any) => {
       showToast({ message: 'Welcome back.', type: 'success' });
       navigation.goBack();
     } catch (error: any) {
-      showToast({ message: error?.message || 'Login failed.', type: 'error' });
+      showToast({
+        message: getUserFacingError(error, [
+          'login failed',
+          'invalid email or password',
+          'maximum active devices reached',
+        ]),
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -85,7 +134,14 @@ export const AuthScreen = ({ route }: any) => {
       showToast({ message: 'Account created.', type: 'success' });
       navigation.goBack();
     } catch (error: any) {
-      showToast({ message: error?.message || 'Signup failed.', type: 'error' });
+      showToast({
+        message: getUserFacingError(error, [
+          'signup failed',
+          'email or username already exists',
+          'maximum active devices reached',
+        ]),
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -188,6 +244,14 @@ export const AuthScreen = ({ route }: any) => {
             <TouchableOpacity style={styles.primaryButton} onPress={handleLogin} disabled={loading}>
               {loading ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.primaryText}>Sign in</Text>}
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => promptGoogle()}
+              disabled={!googleRequest || loading}
+            >
+              <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -228,6 +292,14 @@ export const AuthScreen = ({ route }: any) => {
             </View>
             <TouchableOpacity style={styles.primaryButton} onPress={handleSignup} disabled={loading}>
               {loading ? <ActivityIndicator color={COLORS.background} /> : <Text style={styles.primaryText}>Create account</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={() => promptGoogle()}
+              disabled={!googleRequest || loading}
+            >
+              <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -366,5 +438,26 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     fontSize: 16,
     fontWeight: '700',
+  },
+  googleButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  googleButtonText: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  googleIcon: {
+    width: 18,
+    height: 18,
   },
 });

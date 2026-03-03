@@ -1,9 +1,15 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
+
+declare global {
+    interface Window {
+        google?: any;
+    }
+}
 
 function AuthContent() {
     const [isLogin, setIsLogin] = useState(true);
@@ -13,10 +19,13 @@ function AuthContent() {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [googleReady, setGoogleReady] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading: sessionLoading, refresh } = useSession();
+    const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+    const googleButtonRef = useRef<HTMLDivElement | null>(null);
 
     // Redirect if already authenticated (require both user + userId)
     useEffect(() => {
@@ -27,6 +36,25 @@ function AuthContent() {
         }
     }, [router, user, sessionLoading, searchParams]);
 
+    const getDeviceInfo = useCallback(() => {
+        if (typeof window === 'undefined') return {};
+        const storageKey = 'nlf_device_id';
+        let deviceId = window.localStorage.getItem(storageKey);
+        if (!deviceId && window.crypto?.randomUUID) {
+            deviceId = window.crypto.randomUUID();
+            window.localStorage.setItem(storageKey, deviceId);
+        }
+        const ua = window.navigator.userAgent || '';
+        let browser = 'Browser';
+        if (ua.includes('Edg/')) browser = 'Edge';
+        else if (ua.includes('Chrome')) browser = 'Chrome';
+        else if (ua.includes('Safari')) browser = 'Safari';
+        else if (ua.includes('Firefox')) browser = 'Firefox';
+        const platform = window.navigator.platform || 'Web';
+        const deviceName = `${platform} ${browser}`.trim();
+        return { deviceId, deviceName };
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -34,25 +62,6 @@ function AuthContent() {
         setSuccessMessage('');
 
         try {
-            const getDeviceInfo = () => {
-                if (typeof window === 'undefined') return {};
-                const storageKey = 'nlf_device_id';
-                let deviceId = window.localStorage.getItem(storageKey);
-                if (!deviceId && window.crypto?.randomUUID) {
-                    deviceId = window.crypto.randomUUID();
-                    window.localStorage.setItem(storageKey, deviceId);
-                }
-                const ua = window.navigator.userAgent || '';
-                let browser = 'Browser';
-                if (ua.includes('Edg/')) browser = 'Edge';
-                else if (ua.includes('Chrome')) browser = 'Chrome';
-                else if (ua.includes('Safari')) browser = 'Safari';
-                else if (ua.includes('Firefox')) browser = 'Firefox';
-                const platform = window.navigator.platform || 'Web';
-                const deviceName = `${platform} ${browser}`.trim();
-                return { deviceId, deviceName };
-            };
-
             const deviceInfo = getDeviceInfo();
             const response = await fetch('/api/auth', {
                 method: 'POST',
@@ -90,6 +99,87 @@ function AuthContent() {
             setLoading(false);
         }
     };
+
+    const handleGoogleCredential = useCallback(async (credential: string) => {
+        if (!credential) return;
+        setLoading(true);
+        setError('');
+        setSuccessMessage('');
+
+        try {
+            const deviceInfo = getDeviceInfo();
+            const response = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'google',
+                    idToken: credential,
+                    ...deviceInfo,
+                })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                setSuccessMessage('Signed in with Google. Redirecting...');
+                await refresh();
+                const redirectUrl = searchParams.get('redirect') || '/';
+                const showWelcome = data?.user?.showWelcomeScreen ?? true;
+                setTimeout(() => {
+                    if (showWelcome) {
+                        router.push(`/welcome?redirect=${encodeURIComponent(redirectUrl)}`);
+                    } else {
+                        router.push(redirectUrl);
+                    }
+                    router.refresh();
+                }, 150);
+            } else {
+                setError(data.error || 'Google sign-in failed');
+            }
+        } catch (err) {
+            setError('An error occurred. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    }, [getDeviceInfo, refresh, router, searchParams]);
+
+    useEffect(() => {
+        if (!googleClientId) return;
+        if (typeof window === 'undefined') return;
+        if (window.google?.accounts?.id) {
+            setGoogleReady(true);
+            return;
+        }
+        const existing = document.querySelector('script[data-google-identity]');
+        if (existing) {
+            existing.addEventListener('load', () => setGoogleReady(true), { once: true });
+            return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.dataset.googleIdentity = 'true';
+        script.onload = () => setGoogleReady(true);
+        script.onerror = () => setError('Google sign-in unavailable right now.');
+        document.body.appendChild(script);
+    }, [googleClientId]);
+
+    useEffect(() => {
+        if (!googleReady || !googleClientId || !googleButtonRef.current) return;
+        if (!window.google?.accounts?.id) return;
+        window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: (response: any) => handleGoogleCredential(response?.credential),
+        });
+        googleButtonRef.current.innerHTML = '';
+        window.google.accounts.id.renderButton(googleButtonRef.current, {
+            theme: 'outline',
+            size: 'large',
+            text: 'continue_with',
+            shape: 'pill',
+            logo_alignment: 'left',
+            width: 360,
+        });
+    }, [googleReady, googleClientId, handleGoogleCredential]);
 
     return (
         <main style={{
@@ -394,6 +484,21 @@ function AuthContent() {
                         {isLogin ? 'Sign In' : 'Create Account'}
                     </button>
                 </form>
+
+                {googleClientId && (
+                    <div style={{ marginTop: '1.5rem' }}>
+                        <div style={{ height: '1px', background: 'rgba(167, 171, 180, 0.1)', marginBottom: '1.25rem' }} />
+                        <div
+                            ref={googleButtonRef}
+                            style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                minHeight: '44px',
+                                opacity: loading ? 0.7 : 1
+                            }}
+                        />
+                    </div>
+                )}
 
                 {/* Info Text */}
                 <p style={{

@@ -7,6 +7,7 @@ import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { useSession } from '../context/SessionContext';
 import { useNavigation } from '@react-navigation/native';
+import { getUserFacingError } from '../lib/errors';
 
 const { width } = Dimensions.get('window');
 const TILE_WIDTH = (width - SPACING.xl * 2 - SPACING.md) / 2;
@@ -37,7 +38,7 @@ export const TitleTile = ({ movie, onPress, width: customWidth, showDescription 
       const added = await toggleFavorite(movie);
       showToast({ message: added ? 'Added to favorites.' : 'Removed from favorites.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Favorite failed.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['favorite', 'sign in']), type: 'error' });
     }
   };
 

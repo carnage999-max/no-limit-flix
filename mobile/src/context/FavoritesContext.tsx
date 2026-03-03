@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { MoviePick } from '../types';
 import { apiClient } from '../lib/api';
+import { getUserFacingError } from '../lib/errors';
 import { useSession } from './SessionContext';
 
 interface FavoritesContextType {
@@ -110,7 +111,11 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return !currentlyFav;
     } catch (error) {
       console.error('Error toggling favorite:', error);
-      throw error;
+      throw new Error(getUserFacingError(error, [
+        'failed to add favorite',
+        'failed to remove favorite',
+        'sign in to manage favorites'
+      ]));
     }
   }, [favoriteIds, refreshFavorites, user]);
 

@@ -15,6 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { COLORS, SPACING } from '../theme/tokens';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
+import { getUserFacingError } from '../lib/errors';
 import { apiClient } from '../lib/api';
 
 export const ProfileScreen = ({ navigation }: any) => {
@@ -32,7 +33,7 @@ export const ProfileScreen = ({ navigation }: any) => {
       await updateProfile({ username, email, showWelcomeScreen: showWelcome });
       showToast({ message: 'Profile updated.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Update failed.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['profile update failed', 'email or username already in use', 'update failed']), type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -76,7 +77,7 @@ export const ProfileScreen = ({ navigation }: any) => {
       await updateProfile({ avatar: publicUrl });
       showToast({ message: 'Avatar updated.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Avatar update failed.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['avatar update failed', 'upload failed', 'failed to create avatar upload']), type: 'error' });
     } finally {
       setUploading(false);
     }
@@ -87,7 +88,7 @@ export const ProfileScreen = ({ navigation }: any) => {
       await updateProfile({ avatar: null });
       showToast({ message: 'Avatar removed.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Failed to remove avatar.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['failed to remove avatar']), type: 'error' });
     }
   };
 

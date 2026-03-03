@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../theme/tokens';
 import { useSession } from '../context/SessionContext';
 import { useToast } from '../context/ToastContext';
+import { getUserFacingError } from '../lib/errors';
 
 export const LoginScreen = ({ navigation }: any) => {
   const { signIn } = useSession();
@@ -32,7 +33,7 @@ export const LoginScreen = ({ navigation }: any) => {
       await signIn(email.trim(), password);
       showToast({ message: 'Welcome back.', type: 'success' });
     } catch (error: any) {
-      showToast({ message: error?.message || 'Login failed.', type: 'error' });
+      showToast({ message: getUserFacingError(error, ['login failed', 'invalid email or password', 'maximum active devices reached']), type: 'error' });
     } finally {
       setLoading(false);
     }
