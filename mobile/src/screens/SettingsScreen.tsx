@@ -18,8 +18,10 @@ import { useNavigation } from '@react-navigation/native';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getUserFacingError } from '../lib/errors';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import { apiClient } from '../lib/api';
+import { captureMonitoringMessage } from '../lib/monitoring';
+
+const FileSystem: any = require('expo-file-system/legacy');
 
 const BASE_WEB_URL = 'https://www.nolimitflix.com';
 
@@ -44,7 +46,24 @@ export const SettingsScreen = () => {
         navigation.navigate('WebView', { url, title });
     };
 
-    const menuItems = [
+    const sendDiagnosticsEvent = () => {
+        captureMonitoringMessage(
+            'DIAGNOSTICS_EVENT',
+            'Manual diagnostics event from settings',
+            {
+                platform: 'mobile',
+                screen: 'settings',
+                auth: Boolean(user),
+                dev: __DEV__,
+            },
+            {
+                timestamp: new Date().toISOString(),
+            }
+        );
+        showToast({ message: 'Diagnostics event sent.', type: 'success' });
+    };
+
+    const menuItems: Array<{ title: string; subtitle?: string; icon: string; onPress: () => void }> = [
         {
             title: 'Privacy Policy',
             icon: 'shield-checkmark-outline',
@@ -65,6 +84,12 @@ export const SettingsScreen = () => {
             icon: 'flag-outline',
             onPress: () => setReportOpen(true),
         },
+        ...(__DEV__ ? [{
+            title: 'Send Diagnostics Event',
+            subtitle: 'Send a test monitoring event',
+            icon: 'bug-outline',
+            onPress: sendDiagnosticsEvent,
+        }] : []),
     ];
 
     const normalizePickedAssets = async (result: DocumentPicker.DocumentPickerResult) => {
@@ -85,18 +110,31 @@ export const SettingsScreen = () => {
         return '';
     };
 
+    const ensureReadableUri = async (uri: string, fileName?: string) => {
+        if (!uri) return uri;
+        if (uri.startsWith('file://')) return uri;
+
+        const safeName = `${Date.now()}-${(fileName || 'attachment').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const destination = `${FileSystem.cacheDirectory}${safeName}`;
+        await FileSystem.copyAsync({ from: uri, to: destination });
+        return destination;
+    };
+
     const buildAttachmentPayload = async (file: DocumentPicker.DocumentPickerAsset) => {
-        const info = await FileSystem.getInfoAsync(file.uri);
-        const size = typeof info.size === 'number' ? info.size : file.size || 0;
+        const readableUri = await ensureReadableUri(file.uri, file.name);
+        const info = await FileSystem.getInfoAsync(readableUri);
+        const size = ('size' in info && typeof info.size === 'number') ? info.size : (file.size || 0);
         const fallbackType = file.name ? inferMimeType(file.name) : '';
         const type = file.mimeType || fallbackType || 'application/octet-stream';
-        const base64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const base64 = await FileSystem.readAsStringAsync(readableUri, { encoding: 'base64' as any });
+        const dataUrl = `data:${type};base64,${base64}`;
+        const isImage = type.startsWith('image/');
         return {
             name: file.name || 'attachment',
             type,
             size,
-            dataUrl: `data:${type};base64,${base64}`,
-            previewUri: file.uri,
+            dataUrl,
+            previewUri: isImage ? readableUri : file.uri,
         };
     };
 
@@ -115,7 +153,7 @@ export const SettingsScreen = () => {
         const sizedPicks = await Promise.all(
             picks.map(async (file) => {
                 const info = await FileSystem.getInfoAsync(file.uri);
-                const size = typeof info.size === 'number' ? info.size : file.size || 0;
+                const size = ('size' in info && typeof info.size === 'number') ? info.size : (file.size || 0);
                 return { file, size };
             })
         );
@@ -125,8 +163,15 @@ export const SettingsScreen = () => {
             showToast({ message: `${oversize.file.name} is too large. Max ${Math.round(MAX_FILE_BYTES / (1024 * 1024))}MB per file.`, type: 'error' });
             return;
         }
-        const mapped = await Promise.all(picks.map(buildAttachmentPayload));
-        setAttachments((prev) => [...prev, ...mapped].slice(0, 3));
+        try {
+            const mapped = await Promise.all(picks.map(buildAttachmentPayload));
+            setAttachments((prev) => [...prev, ...mapped].slice(0, 3));
+            showToast({ message: `${mapped.length} attachment${mapped.length > 1 ? 's' : ''} added.`, type: 'success' });
+        } catch (error: any) {
+            const message = 'Could not process the selected file. Please try another file.';
+            setIssueError(message);
+            showToast({ message, type: 'error' });
+        }
     };
 
     const handleSubmitIssue = async () => {

@@ -6,9 +6,11 @@ import { RootNavigator } from './src/navigation/RootNavigator';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { AnimatedSplashScreen } from './src/screens/AnimatedSplashScreen';
 import { SessionProvider, useSession } from './src/context/SessionContext';
-import { ToastProvider } from './src/context/ToastContext';
+import { ToastProvider, useToast } from './src/context/ToastContext';
 import { WelcomeOverlay } from './src/components/WelcomeOverlay';
 import * as WebBrowser from 'expo-web-browser';
+import { BASE_URL } from './src/lib/api';
+import { initMonitoring, wrapAppWithMonitoring } from './src/lib/monitoring';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {
@@ -18,8 +20,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 WebBrowser.maybeCompleteAuthSession();
+initMonitoring();
 
-export default function App() {
+function App() {
   const [appIsReady, setAppIsReady] = useState(false);
   const [splashAnimationFinished, setSplashAnimationFinished] = useState(false);
 
@@ -59,6 +62,7 @@ export default function App() {
             <FavoritesProvider>
               <StatusBar style="light" />
               <RootNavigator />
+              <ConnectivityGate />
               <WelcomeGate />
               {!splashAnimationFinished && (
                 <AnimatedSplashScreen onAnimationFinish={() => setSplashAnimationFinished(true)} />
@@ -72,13 +76,58 @@ export default function App() {
 }
 
 const WelcomeGate = () => {
-  const { user, welcomeVisible, welcomeSubtitle, dismissWelcome } = useSession();
+  const { user, welcomeVisible, welcomeName, welcomeSubtitle, dismissWelcome } = useSession();
   return (
     <WelcomeOverlay
       visible={welcomeVisible}
-      username={user?.username}
+      username={welcomeName || user?.username}
       subtitle={welcomeSubtitle}
       onFinish={dismissWelcome}
     />
   );
 };
+
+const ConnectivityGate = () => {
+  const { showToast } = useToast();
+  const lastReachableRef = React.useRef<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    const checkConnectivity = async () => {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 4500);
+        await fetch(`${BASE_URL}/api/auth/session`, {
+          method: 'GET',
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        clearTimeout(timeout);
+        if (!active) return;
+        if (lastReachableRef.current === false) {
+          showToast({ message: 'Back online', type: 'success' });
+        }
+        lastReachableRef.current = true;
+      } catch {
+        if (!active) return;
+        if (lastReachableRef.current !== false) {
+          showToast({ message: 'No internet connection', type: 'error', duration: 3000 });
+        }
+        lastReachableRef.current = false;
+      }
+    };
+
+    checkConnectivity();
+    const intervalId = setInterval(checkConnectivity, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+    };
+  }, [showToast]);
+
+  return null;
+};
+
+export default wrapAppWithMonitoring(App);

@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationContainer } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
 import { COLORS } from '../theme/tokens';
 import * as SecureStore from 'expo-secure-store';
+import * as Linking from 'expo-linking';
 
 import { HomeScreen } from '../screens/HomeScreen';
 import { CollectionsScreen } from '../screens/CollectionsScreen';
@@ -30,6 +32,22 @@ import { CustomTabBar } from '../components/CustomTabBar';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+const linking = {
+  prefixes: ['nolimitflix://'],
+  config: {
+    screens: {
+      MainTabs: {
+        screens: {
+          Search: 'quick/search',
+          Library: 'quick/library',
+          Collections: 'quick/collections',
+        },
+      },
+      WatchHistory: 'quick/watch-history',
+    },
+  },
+};
+
 function TabNavigator() {
   return (
     <Tab.Navigator
@@ -50,7 +68,10 @@ function TabNavigator() {
 export function RootNavigator() {
   const [ready, setReady] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [navigationReady, setNavigationReady] = useState(false);
   const { user, loading } = useSession();
+  const navRef = useRef<any>(null);
+  const pendingQuickRouteRef = useRef<string | null>(null);
 
   useEffect(() => {
     const bootstrap = async () => {
@@ -64,21 +85,113 @@ export function RootNavigator() {
     bootstrap();
   }, []);
 
+  const openQuickRoute = (route: string) => {
+    if (!route || !route.startsWith('quick/')) return;
+    if (!navRef.current?.isReady?.()) {
+      pendingQuickRouteRef.current = route;
+      return;
+    }
+    if (!user) {
+      pendingQuickRouteRef.current = route;
+      navRef.current.navigate('Auth', { tab: 'login' });
+      return;
+    }
+    pendingQuickRouteRef.current = null;
+    if (route === 'quick/search') {
+      navRef.current.navigate('MainTabs', { screen: 'Search' });
+      return;
+    }
+    if (route === 'quick/library') {
+      navRef.current.navigate('MainTabs', { screen: 'Library' });
+      return;
+    }
+    if (route === 'quick/collections') {
+      navRef.current.navigate('MainTabs', { screen: 'Collections' });
+      return;
+    }
+    if (route === 'quick/watch-history') {
+      navRef.current.navigate('WatchHistory');
+    }
+  };
+
+  const handleQuickDeepLink = (url: string) => {
+    if (!url) return;
+    let route = '';
+    try {
+      const normalizedUrl = url.includes('://') ? url : `nolimitflix://${url.replace(/^\/+/, '')}`;
+      const parsedUrl = new URL(normalizedUrl);
+      const host = `${parsedUrl.hostname || ''}`.toLowerCase();
+      const path = `${parsedUrl.pathname || ''}`.toLowerCase().replace(/^\/+|\/+$/g, '');
+      route = [host, path].filter(Boolean).join('/');
+    } catch {
+      const parsed = Linking.parse(url);
+      const host = `${parsed.hostname || ''}`.toLowerCase();
+      const path = `${parsed.path || ''}`.toLowerCase().replace(/^\/+|\/+$/g, '');
+      route = [host, path].filter(Boolean).join('/');
+    }
+    if (!route) {
+      const lower = url.toLowerCase();
+      if (lower.includes('watch-history')) route = 'quick/watch-history';
+      else if (lower.includes('collections')) route = 'quick/collections';
+      else if (lower.includes('library')) route = 'quick/library';
+      else if (lower.includes('search')) route = 'quick/search';
+    }
+
+    openQuickRoute(route);
+  };
+
+  useEffect(() => {
+    const processInitialUrl = async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        setTimeout(() => handleQuickDeepLink(initialUrl), 150);
+      }
+    };
+    processInitialUrl();
+
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      handleQuickDeepLink(url);
+    });
+    return () => sub.remove();
+  }, [user]);
+
+  useEffect(() => {
+    if (!navigationReady) return;
+    if (!pendingQuickRouteRef.current) return;
+    openQuickRoute(pendingQuickRouteRef.current);
+  }, [navigationReady, user, showOnboarding]);
+
+  useEffect(() => {
+    if (!user || showOnboarding) return;
+    const nav = navRef.current;
+    if (!nav?.isReady?.()) return;
+    const currentRoute = nav.getCurrentRoute?.();
+    const currentName = currentRoute?.name;
+    if (currentName === 'Auth' || currentName === 'Welcome') {
+      nav.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'MainTabs' }],
+        })
+      );
+    }
+  }, [user, showOnboarding]);
+
   if (!ready || loading) {
     return null;
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer linking={linking as any} ref={navRef} onReady={() => setNavigationReady(true)}>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: COLORS.background },
         }}
       >
-        {showOnboarding ? (
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-        ) : user ? (
+        {showOnboarding && <Stack.Screen name="Onboarding" component={OnboardingScreen} />}
+
+        {user ? (
           <>
             <Stack.Screen name="MainTabs" component={TabNavigator} />
             <Stack.Screen name="TitleDetail" component={TitleDetailScreen} />
@@ -89,16 +202,13 @@ export function RootNavigator() {
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Devices" component={DevicesScreen} />
             <Stack.Screen name="WatchHistory" component={WatchHistoryScreen} />
-            <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="WebView" component={WebViewScreen} />
           </>
         ) : (
-          <>
-            <Stack.Screen name="Welcome" component={LoggedOutScreen} />
-            <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="WebView" component={WebViewScreen} />
-          </>
+          <Stack.Screen name="Welcome" component={LoggedOutScreen} />
         )}
+
+        <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
+        <Stack.Screen name="WebView" component={WebViewScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import * as Application from 'expo-application';
 import * as Device from 'expo-device';
+import { AppState } from 'react-native';
 import { apiClient, setAuthToken, setDeviceId, setDeviceName, setRefreshToken } from '../lib/api';
+import {
+  captureMonitoringException,
+  captureMonitoringMessage,
+  setMonitoringUser,
+} from '../lib/monitoring';
 
 export interface SessionUser {
   id: string;
@@ -19,6 +24,7 @@ interface SessionContextType {
   token: string | null;
   loading: boolean;
   welcomeVisible: boolean;
+  welcomeName: string;
   welcomeSubtitle: string;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, username: string, password: string) => Promise<void>;
@@ -93,15 +99,42 @@ const getRandomSubtitle = () => {
   return WELCOME_SUBTITLES[index];
 };
 
+const isNetworkLikeError = (error: any) => {
+  const message = `${error?.message || ''}`.toLowerCase();
+  return (
+    message.includes('network request failed')
+    || message.includes('fetch failed')
+    || message.includes('timeout')
+    || message.includes('internet')
+    || message.includes('connection')
+  );
+};
+
+const isAuthLikeError = (error: any) => {
+  if (error?.status === 401 || error?.status === 403) return true;
+  const message = `${error?.message || ''}`.toLowerCase();
+  return (
+    message.includes('unauthorized')
+    || message.includes('invalid token')
+    || message.includes('refresh token invalid')
+    || message.includes('token expired')
+    || message.includes('jwt')
+  );
+};
+
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [refreshToken, setRefreshTokenState] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [welcomeVisible, setWelcomeVisible] = useState(false);
+  const [welcomeName, setWelcomeName] = useState('');
   const [welcomeSubtitle, setWelcomeSubtitle] = useState('');
+  const tokenRef = useRef<string | null>(null);
+  const refreshTokenRef = useRef<string | null>(null);
 
   const applyToken = async (newToken: string | null) => {
+    tokenRef.current = newToken;
     setToken(newToken);
     setAuthToken(newToken);
     if (newToken) {
@@ -112,6 +145,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const applyRefreshToken = async (newToken: string | null) => {
+    refreshTokenRef.current = newToken;
     setRefreshTokenState(newToken);
     setRefreshToken(newToken);
     if (newToken) {
@@ -123,6 +157,8 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const triggerWelcome = (username?: string | null, allow = true) => {
     if (!allow) return;
+    const normalized = `${username || ''}`.trim();
+    setWelcomeName(normalized || 'Guest');
     setWelcomeSubtitle(getRandomSubtitle());
     setWelcomeVisible(true);
     setTimeout(() => setWelcomeVisible(false), 4200);
@@ -130,22 +166,48 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const dismissWelcome = () => setWelcomeVisible(false);
 
-  const refreshSession = async () => {
+  const refreshSessionInternal = async (
+    accessTokenOverride?: string | null,
+    refreshTokenOverride?: string | null,
+    finalizeLoading = true
+  ) => {
     try {
-      if (!token) {
+      const activeToken = accessTokenOverride ?? tokenRef.current;
+      if (!activeToken) {
         setUser(null);
         return;
+      }
+      if (accessTokenOverride) {
+        setAuthToken(accessTokenOverride);
       }
       try {
         const data = await apiClient.getSession();
         setUser(data?.user || null);
         return;
       } catch (error: any) {
-        const canRefresh = Boolean(refreshToken);
+        let activeRefresh = refreshTokenOverride ?? refreshTokenRef.current;
+        if (!activeRefresh) {
+          activeRefresh = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
+          if (activeRefresh) {
+            refreshTokenRef.current = activeRefresh;
+            setRefreshToken(activeRefresh);
+            setRefreshTokenState(activeRefresh);
+          }
+        }
+        captureMonitoringMessage(
+          'AUTH_SESSION_READ_FAILED',
+          'Session read failed, attempting refresh',
+          {
+            status: error?.status ?? null,
+            network: isNetworkLikeError(error),
+            hasRefreshToken: Boolean(activeRefresh),
+          }
+        );
+        const canRefresh = Boolean(activeRefresh);
         if (!canRefresh) {
           throw error;
         }
-        const refreshed = await apiClient.refreshSession(refreshToken);
+        const refreshed = await apiClient.refreshSession(activeRefresh);
         const nextToken = refreshed?.token as string | undefined;
         const nextRefresh = refreshed?.refreshToken as string | undefined;
         if (nextToken) {
@@ -157,13 +219,37 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const data = await apiClient.getSession();
         setUser(data?.user || null);
       }
-    } catch {
+    } catch (error: any) {
+      // Keep local auth state on transient network failures.
+      if (isNetworkLikeError(error)) {
+        captureMonitoringMessage(
+          'AUTH_SESSION_NETWORK_FAILURE',
+          'Session check failed due to network condition',
+          { status: error?.status ?? null }
+        );
+        return;
+      }
+      if (!isAuthLikeError(error)) {
+        captureMonitoringException(error, { scope: 'session_refresh' });
+        return;
+      }
+      captureMonitoringMessage(
+        'AUTH_SESSION_INVALIDATED',
+        'Session invalidated and cleared on device',
+        { status: error?.status ?? null }
+      );
       setUser(null);
       await applyToken(null);
       await applyRefreshToken(null);
     } finally {
-      setLoading(false);
+      if (finalizeLoading) {
+        setLoading(false);
+      }
     }
+  };
+
+  const refreshSession = async () => {
+    await refreshSessionInternal(undefined, undefined, true);
   };
 
   useEffect(() => {
@@ -172,14 +258,10 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const storedDeviceId = await SecureStore.getItemAsync(DEVICE_ID_KEY);
         let resolvedDeviceId = storedDeviceId;
         if (!resolvedDeviceId) {
-          try {
-            resolvedDeviceId = await Application.getInstallationIdAsync();
-          } catch {
-            resolvedDeviceId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-          }
+          resolvedDeviceId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
           await SecureStore.setItemAsync(DEVICE_ID_KEY, resolvedDeviceId);
         }
-        setDeviceId(resolvedDeviceId);
+        setDeviceId(resolvedDeviceId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
         const resolvedDeviceName =
           Device.deviceName
           || Device.modelName
@@ -192,11 +274,22 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const stored = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
         const storedRefresh = await SecureStore.getItemAsync(REFRESH_TOKEN_KEY);
         if (stored) {
-          await applyToken(stored);
+          tokenRef.current = stored;
+          setToken(stored);
+          setAuthToken(stored);
         }
         if (storedRefresh) {
-          await applyRefreshToken(storedRefresh);
+          refreshTokenRef.current = storedRefresh;
+          setRefreshTokenState(storedRefresh);
+          setRefreshToken(storedRefresh);
         }
+
+        if (stored) {
+          await refreshSessionInternal(stored, storedRefresh, true);
+          return;
+        }
+      } catch (error) {
+        captureMonitoringException(error, { scope: 'session_bootstrap' });
       } finally {
         setLoading(false);
       }
@@ -205,70 +298,158 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   useEffect(() => {
-    if (token) {
-      refreshSession();
-    }
-  }, [token]);
+    setMonitoringUser(user ? { id: user.id, email: user.email, username: user.username } : null);
+  }, [user]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && token) {
+        refreshSession();
+      }
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [token, refreshToken]);
 
   const signIn = async (email: string, password: string) => {
-    const data = await apiClient.login(email, password);
-    const nextToken = data?.token as string | undefined;
-    const nextRefresh = data?.refreshToken as string | undefined;
-    if (nextToken) {
-      await applyToken(nextToken);
+    try {
+      const data = await apiClient.login(email, password);
+      const nextToken = data?.token as string | undefined;
+      const nextRefresh = data?.refreshToken as string | undefined;
+      if (!nextToken) {
+        throw new Error('Login failed');
+      }
+      if (nextToken) {
+        await applyToken(nextToken);
+      }
+      if (nextRefresh) {
+        await applyRefreshToken(nextRefresh);
+      }
+      setUser(data?.user || null);
+      triggerWelcome(data?.user?.username || email.split('@')[0], data?.user?.showWelcomeScreen !== false);
+    } catch (error: any) {
+      captureMonitoringMessage(
+        'AUTH_LOGIN_FAILED',
+        'Login attempt failed',
+        {
+          status: error?.status ?? null,
+          network: isNetworkLikeError(error),
+          auth: isAuthLikeError(error),
+        },
+        {
+          hasEmail: Boolean(email),
+        }
+      );
+      throw error;
     }
-    if (nextRefresh) {
-      await applyRefreshToken(nextRefresh);
-    }
-    setUser(data?.user || null);
-    triggerWelcome(data?.user?.username, data?.user?.showWelcomeScreen !== false);
   };
 
   const signUp = async (email: string, username: string, password: string) => {
-    const data = await apiClient.signup(email, username, password);
-    const nextToken = data?.token as string | undefined;
-    const nextRefresh = data?.refreshToken as string | undefined;
-    if (nextToken) {
-      await applyToken(nextToken);
+    try {
+      const data = await apiClient.signup(email, username, password);
+      const nextToken = data?.token as string | undefined;
+      const nextRefresh = data?.refreshToken as string | undefined;
+      if (!nextToken) {
+        throw new Error('Signup failed');
+      }
+      if (nextToken) {
+        await applyToken(nextToken);
+      }
+      if (nextRefresh) {
+        await applyRefreshToken(nextRefresh);
+      }
+      setUser(data?.user || null);
+      triggerWelcome(data?.user?.username || username, data?.user?.showWelcomeScreen !== false);
+    } catch (error: any) {
+      captureMonitoringMessage(
+        'AUTH_SIGNUP_FAILED',
+        'Signup attempt failed',
+        {
+          status: error?.status ?? null,
+          network: isNetworkLikeError(error),
+          auth: isAuthLikeError(error),
+        },
+        {
+          hasEmail: Boolean(email),
+          hasUsername: Boolean(username),
+        }
+      );
+      throw error;
     }
-    if (nextRefresh) {
-      await applyRefreshToken(nextRefresh);
-    }
-    setUser(data?.user || null);
-    triggerWelcome(data?.user?.username, data?.user?.showWelcomeScreen !== false);
   };
 
   const signInWithGoogle = async (idToken: string) => {
-    const data = await apiClient.googleLogin(idToken);
-    const nextToken = data?.token as string | undefined;
-    const nextRefresh = data?.refreshToken as string | undefined;
-    if (nextToken) {
-      await applyToken(nextToken);
+    try {
+      const data = await apiClient.googleLogin(idToken);
+      const nextToken = data?.token as string | undefined;
+      const nextRefresh = data?.refreshToken as string | undefined;
+      if (!nextToken) {
+        throw new Error('Google login failed');
+      }
+      if (nextToken) {
+        await applyToken(nextToken);
+      }
+      if (nextRefresh) {
+        await applyRefreshToken(nextRefresh);
+      }
+      setUser(data?.user || null);
+      triggerWelcome(
+        data?.user?.username || data?.user?.email?.split('@')[0] || 'Guest',
+        data?.user?.showWelcomeScreen !== false
+      );
+    } catch (error: any) {
+      captureMonitoringMessage(
+        'AUTH_GOOGLE_LOGIN_FAILED',
+        'Google login attempt failed',
+        {
+          status: error?.status ?? null,
+          network: isNetworkLikeError(error),
+          auth: isAuthLikeError(error),
+        }
+      );
+      throw error;
     }
-    if (nextRefresh) {
-      await applyRefreshToken(nextRefresh);
-    }
-    setUser(data?.user || null);
-    triggerWelcome(data?.user?.username, data?.user?.showWelcomeScreen !== false);
   };
 
   const signOut = async () => {
     try {
       await apiClient.logout();
-    } catch {
-      // ignore logout failures
+    } catch (error) {
+      captureMonitoringMessage(
+        'AUTH_LOGOUT_FAILED',
+        'Logout endpoint failed on device',
+        {},
+        { reason: 'endpoint_failure' }
+      );
     } finally {
       await applyToken(null);
       await applyRefreshToken(null);
       setUser(null);
+      setWelcomeName('');
     }
   };
 
   const updateProfile = async (payload: { username?: string; email?: string; avatar?: string | null; showWelcomeScreen?: boolean }) => {
-    const data = await apiClient.updateProfile(payload);
-    const updated = data?.user || data;
-    setUser(updated);
-    return updated;
+    try {
+      const data = await apiClient.updateProfile(payload);
+      const updated = data?.user || data;
+      setUser(updated);
+      return updated;
+    } catch (error) {
+      captureMonitoringMessage(
+        'PROFILE_UPDATE_FAILED',
+        'Profile update failed',
+        { status: (error as any)?.status ?? null },
+        {
+          hasUsername: typeof payload.username === 'string',
+          hasEmail: typeof payload.email === 'string',
+          hasAvatar: Object.prototype.hasOwnProperty.call(payload, 'avatar'),
+          hasWelcomeFlag: typeof payload.showWelcomeScreen === 'boolean',
+        }
+      );
+      throw error;
+    }
   };
 
   const value = useMemo(
@@ -277,6 +458,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       token,
       loading,
       welcomeVisible,
+      welcomeName,
       welcomeSubtitle,
       signIn,
       signUp,
@@ -286,7 +468,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       updateProfile,
       dismissWelcome,
     }),
-    [user, token, loading, welcomeVisible, welcomeSubtitle]
+    [user, token, loading, welcomeVisible, welcomeName, welcomeSubtitle]
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

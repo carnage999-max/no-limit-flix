@@ -46,7 +46,7 @@ export const HomeScreen = () => {
   const isFocused = useIsFocused();
   const mainScrollRef = useRef<ScrollView>(null);
   const horizontalScrollRef = useRef<ScrollView>(null);
-  const { user } = useSession();
+  const { user, token, loading: sessionLoading } = useSession();
   const { showToast } = useToast();
 
   // View state: 'discovery' or 'watch'
@@ -67,6 +67,7 @@ export const HomeScreen = () => {
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
   const [watchProgressMap, setWatchProgressMap] = useState<Record<string, number>>({});
   const [isWatchLoading, setIsWatchLoading] = useState(true);
+  const [watchLoadError, setWatchLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   // Animations
@@ -147,10 +148,11 @@ export const HomeScreen = () => {
   const fetchHostedContent = async () => {
     try {
       setIsWatchLoading(true);
+      setWatchLoadError(null);
       const [moviesData, tvData, historyData] = await Promise.all([
         apiClient.getInternalMovies(),
         apiClient.getInternalTv(),
-        user ? apiClient.getWatchHistory(1, 10) : Promise.resolve({ watchHistory: [] })
+        user && token ? apiClient.getWatchHistory(1, 10) : Promise.resolve({ watchHistory: [] })
       ]);
       const allMovies = moviesData.movies || [];
       const preferredFiltered = preferredGenres.length
@@ -186,6 +188,7 @@ export const HomeScreen = () => {
       setContinueWatching(historyItems.slice(0, 5));
     } catch (error) {
       console.error('Failed to pre-fetch hosted content', error);
+      setWatchLoadError('Could not load your watch library right now.');
     } finally {
       setIsWatchLoading(false);
     }
@@ -352,6 +355,20 @@ export const HomeScreen = () => {
       </View>
 
       <View style={styles.hostedSummary}>
+        {sessionLoading ? (
+          <View style={styles.inlineStatusCard}>
+            <ActivityIndicator color={COLORS.gold.mid} />
+            <Text style={styles.inlineStatusText}>Checking account access…</Text>
+          </View>
+        ) : watchLoadError ? (
+          <View style={styles.inlineStatusCard}>
+            <Text style={styles.inlineStatusText}>{watchLoadError}</Text>
+            <TouchableOpacity onPress={fetchHostedContent} style={styles.inlineStatusAction}>
+              <Text style={styles.inlineStatusActionText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {!!continueWatching.length && (
           <View style={styles.continueSection}>
             <View style={styles.hostedHeader}>
@@ -1055,6 +1072,34 @@ const styles = StyleSheet.create({
   },
   hostedSummary: {
     marginBottom: 32,
+  },
+  inlineStatusCard: {
+    marginBottom: 16,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.22)',
+    backgroundColor: 'rgba(167,171,180,0.06)',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  inlineStatusText: {
+    color: COLORS.silver,
+    fontSize: 13,
+  },
+  inlineStatusAction: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.gold.mid,
+  },
+  inlineStatusActionText: {
+    color: COLORS.gold.mid,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   continueSection: {
     marginBottom: 24,

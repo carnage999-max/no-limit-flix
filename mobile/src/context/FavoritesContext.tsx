@@ -7,6 +7,8 @@ import { useSession } from './SessionContext';
 interface FavoritesContextType {
   favorites: MoviePick[];
   favoriteIds: string[];
+  loadingFavorites: boolean;
+  favoritesError: string | null;
   isFavorite: (movieId: string, assetId?: string) => boolean;
   toggleFavorite: (movie: MoviePick) => Promise<boolean>;
   refreshFavorites: () => Promise<void>;
@@ -15,15 +17,19 @@ interface FavoritesContextType {
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
 
 export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useSession();
+  const { user, token } = useSession();
   const [favorites, setFavorites] = useState<MoviePick[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [favoritesError, setFavoritesError] = useState<string | null>(null);
 
   const refreshFavorites = useCallback(async () => {
+    setLoadingFavorites(true);
     try {
-      if (!user) {
+      if (!user || !token) {
         setFavorites([]);
         setFavoriteIds([]);
+        setFavoritesError(null);
         return;
       }
       const data = await apiClient.getFavorites(1, 100);
@@ -36,6 +42,8 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             year: favorite.video.releaseYear || 0,
             runtime: favorite.video.duration ? Math.floor(favorite.video.duration / 60) : 0,
             genres: favorite.video.genre ? [favorite.video.genre] : [],
+            explanation: '',
+            watchProviders: [],
             playable: true,
             assetId: favorite.video.id,
             cloudfrontUrl: favorite.video.s3Url,
@@ -48,16 +56,22 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           year: 0,
           runtime: 0,
           genres: [],
+          explanation: '',
+          watchProviders: [],
           playable: false,
         } as MoviePick;
       });
       const ids = (data?.favorites || []).map((favorite: any) => favorite.videoId || favorite.tmdbId || favorite.video?.id || favorite.id);
       setFavorites(mapped);
       setFavoriteIds(ids);
+      setFavoritesError(null);
     } catch (error) {
       console.error('Error refreshing favorites:', error);
+      setFavoritesError('Unable to load favorites. Pull to retry.');
+    } finally {
+      setLoadingFavorites(false);
     }
-  }, [user]);
+  }, [user, token]);
 
   useEffect(() => {
     refreshFavorites();
@@ -124,6 +138,8 @@ export const FavoritesProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       value={{
         favorites,
         favoriteIds,
+        loadingFavorites,
+        favoritesError,
         isFavorite,
         toggleFavorite,
         refreshFavorites,

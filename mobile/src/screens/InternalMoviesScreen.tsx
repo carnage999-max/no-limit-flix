@@ -36,12 +36,13 @@ interface Movie {
 
 export const InternalMoviesScreen = () => {
     const navigation = useNavigation<any>();
-    const { user } = useSession();
+    const { user, loading: sessionLoading } = useSession();
     const { showToast } = useToast();
     const insets = useSafeAreaInsets();
     const { progressMap, statusMap, lastWatchedMap } = useWatchProgress();
     const [movies, setMovies] = useState<Movie[]>([]);
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
     const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -52,15 +53,32 @@ export const InternalMoviesScreen = () => {
     const [activeDropdown, setActiveDropdown] = useState<'genre' | 'year' | 'status' | 'sort' | null>(null);
 
     useEffect(() => {
+        if (sessionLoading) {
+            setLoading(true);
+            return;
+        }
+        if (!user) {
+            setLoading(false);
+            setMovies([]);
+            setFetchError(null);
+            return;
+        }
         fetchMovies();
-    }, []);
+    }, [sessionLoading, user]);
 
     const fetchMovies = async () => {
+        if (!user) {
+            setLoading(false);
+            setRefreshing(false);
+            return;
+        }
         try {
+            setFetchError(null);
             const data = await apiClient.getInternalMovies();
             setMovies(data.movies || []);
         } catch (error) {
             console.error(error);
+            setFetchError('Unable to load hosted movies. Check your connection and retry.');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -188,9 +206,31 @@ export const InternalMoviesScreen = () => {
                 </TouchableOpacity>
             </View>
 
-            {loading && !refreshing ? (
+            {sessionLoading ? (
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color={COLORS.gold.mid} />
+                    <Text style={styles.helperText}>Checking account access…</Text>
+                </View>
+            ) : !user ? (
+                <View style={styles.center}>
+                    <Text style={styles.emptyText}>Sign in to browse hosted movies.</Text>
+                    <TouchableOpacity
+                        style={styles.stateAction}
+                        onPress={() => navigation.navigate('Auth', { tab: 'login' })}
+                    >
+                        <Text style={styles.stateActionText}>Sign in</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : loading && !refreshing ? (
+                <View style={styles.center}>
+                    <ActivityIndicator size="large" color={COLORS.gold.mid} />
+                </View>
+            ) : fetchError ? (
+                <View style={styles.center}>
+                    <Text style={styles.emptyText}>{fetchError}</Text>
+                    <TouchableOpacity onPress={fetchMovies} style={styles.stateAction}>
+                        <Text style={styles.stateActionText}>Retry</Text>
+                    </TouchableOpacity>
                 </View>
             ) : movies.length > 0 ? (
                 <FlatList
@@ -393,6 +433,28 @@ const styles = StyleSheet.create({
     emptyText: {
         color: COLORS.silver,
         fontSize: 16,
+        textAlign: 'center',
+        marginHorizontal: 24,
+    },
+    helperText: {
+        color: COLORS.silver,
+        fontSize: 13,
+        marginTop: 10,
+    },
+    stateAction: {
+        marginTop: 16,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: COLORS.gold.mid,
+    },
+    stateActionText: {
+        color: COLORS.gold.mid,
+        fontSize: 12,
+        fontWeight: '700',
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
     },
     floatingButton: {
         position: 'absolute',

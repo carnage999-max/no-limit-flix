@@ -9,7 +9,7 @@ const baseStyles = {
 };
 
 const APP_URL = (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://nolimitflix.com').replace(/\/$/, '');
-const LOGO_URL = `${APP_URL}/no-limit-flix-logo.png`;
+const LOGO_URL = 'https://www.nolimitflix.com/no-limit-flix-logo.png';
 
 const wrapEmail = (title: string, body: string) => {
     return `
@@ -172,6 +172,32 @@ export const buildIssueInternalEmail = (details: { issueId: string; issue: strin
           ${details.name ? buildInfoRow('Name', details.name) : ''}
           ${details.email ? buildInfoRow('Email', details.email) : ''}
           ${buildInfoRow('Summary', details.issue)}
+        `
+    );
+};
+
+export const buildIssueInternalEmailWithAttachments = (details: {
+    issueId: string;
+    issue: string;
+    name?: string;
+    email?: string;
+    userId?: string;
+    attachments?: Array<{ name: string; url: string }>;
+}) => {
+    const attachmentRows = (details.attachments || [])
+        .map((file) => buildInfoRow('Attachment', `<a href="${file.url}" style="color:#D4AF37; text-decoration:none;">${file.name}</a>`))
+        .join('');
+
+    return wrapEmail(
+        'New issue report',
+        `
+          <p style="margin: 0 0 12px;">A new issue was reported in No Limit Flix.</p>
+          ${buildInfoRow('Issue ID', details.issueId)}
+          ${details.userId ? buildInfoRow('User ID', details.userId) : ''}
+          ${details.name ? buildInfoRow('Name', details.name) : ''}
+          ${details.email ? buildInfoRow('Email', details.email) : ''}
+          ${buildInfoRow('Summary', details.issue)}
+          ${attachmentRows}
         `
     );
 };

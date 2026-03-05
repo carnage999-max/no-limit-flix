@@ -90,7 +90,9 @@ export const apiClient = {
     });
     const data = await parseJson(response);
     if (!response.ok) {
-      throw new Error(data?.error || 'Session refresh failed');
+      const error: any = new Error(data?.error || 'Session refresh failed');
+      error.status = response.status;
+      throw error;
     }
     return data;
   },
@@ -112,7 +114,9 @@ export const apiClient = {
     const response = await authFetch(`${BASE_URL}/api/auth/session`);
     const data = await parseJson(response);
     if (!response.ok) {
-      throw new Error(data?.error || 'Session lookup failed');
+      const error: any = new Error(data?.error || 'Session lookup failed');
+      error.status = response.status;
+      throw error;
     }
     return data;
   },
@@ -146,6 +150,9 @@ export const apiClient = {
   getFavorites: async (page = 1, limit = 50) => {
     const response = await authFetch(`${BASE_URL}/api/favorites?page=${page}&limit=${limit}`);
     const data = await parseJson(response);
+    if (response.status === 401) {
+      return { favorites: [], pagination: { page, limit, total: 0, pages: 0 } };
+    }
     if (!response.ok) {
       throw new Error(data?.error || 'Failed to fetch favorites');
     }
@@ -277,6 +284,9 @@ export const apiClient = {
   getWatchHistory: async (page = 1, limit = 20) => {
     const response = await authFetch(`${BASE_URL}/api/watch-history?page=${page}&limit=${limit}`);
     const data = await parseJson(response);
+    if (response.status === 401) {
+      return { watchHistory: [], pagination: { page, limit, total: 0, pages: 0 } };
+    }
     if (!response.ok) {
       throw new Error(data?.error || 'Failed to fetch watch history');
     }
@@ -457,9 +467,13 @@ export const apiClient = {
 
   getInternalMovies: async () => {
     try {
-      const response = await fetch(`${BASE_URL}/api/library/movies`);
-      if (!response.ok) throw new Error('Failed to fetch internal movies');
-      return await response.json();
+      const response = await authFetch(`${BASE_URL}/api/library/movies`);
+      const data = await parseJson(response);
+      if (response.status === 401) {
+        return { movies: [] };
+      }
+      if (!response.ok) throw new Error(data?.error || 'Failed to fetch internal movies');
+      return data;
     } catch (error) {
       console.error('API Error (getInternalMovies):', error);
       throw error;
@@ -468,9 +482,13 @@ export const apiClient = {
 
   getInternalTv: async () => {
     try {
-      const response = await fetch(`${BASE_URL}/api/library/tv`);
-      if (!response.ok) throw new Error('Failed to fetch internal TV library');
-      return await response.json();
+      const response = await authFetch(`${BASE_URL}/api/library/tv`);
+      const data = await parseJson(response);
+      if (response.status === 401) {
+        return { series: [] };
+      }
+      if (!response.ok) throw new Error(data?.error || 'Failed to fetch internal TV library');
+      return data;
     } catch (error) {
       console.error('API Error (getInternalTv):', error);
       throw error;

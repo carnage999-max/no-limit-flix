@@ -21,7 +21,6 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import Constants from 'expo-constants';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -43,12 +42,9 @@ export const ProfileScreen = ({ navigation }: any) => {
   const reverseClientId = androidClientId
     ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
     : undefined;
-  const useProxy = Constants.appOwnership === 'expo';
-  const googleRedirectUri = useProxy
-    ? makeRedirectUri({ useProxy: true })
-    : reverseClientId
-      ? `${reverseClientId}:/oauth2redirect`
-      : makeRedirectUri({ scheme: 'nolimitflix' });
+  const googleRedirectUri = reverseClientId
+    ? `${reverseClientId}:/oauth2redirect`
+    : makeRedirectUri({ scheme: 'nolimitflix' });
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
     androidClientId,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
@@ -228,7 +224,7 @@ export const ProfileScreen = ({ navigation }: any) => {
           {!user?.googleId ? (
             <TouchableOpacity
               style={styles.googleButton}
-              onPress={() => promptGoogle?.({ useProxy })}
+              onPress={() => promptGoogle?.()}
               disabled={!googleRequest || linkingGoogle}
             >
               {linkingGoogle ? (

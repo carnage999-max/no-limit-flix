@@ -32,6 +32,19 @@ This is the Expo-based mobile application for No Limit Flix. It mirrors the desi
    npx expo start
    ```
 
+## Monitoring (Sentry)
+
+1. Install Sentry:
+   ```bash
+   pnpm add @sentry/react-native
+   ```
+2. Set DSN in `mobile/.env`:
+   ```bash
+   EXPO_PUBLIC_SENTRY_DSN=your_dsn_here
+   ```
+3. Set the same DSN in EAS profile env (`mobile/eas.json`) or EAS secrets.
+4. Rebuild the app (`eas build` or `expo run:android`) so native integration picks up changes.
+
 ## Project Structure
 - `src/theme/`: Visual design tokens and constants.
 - `src/components/`: Reusable premium UI components.

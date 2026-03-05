@@ -26,46 +26,54 @@ const CONTINUE_CARD_GAP = 14;
 
 export const LibraryScreen = () => {
   const navigation = useNavigation<any>();
-  const { favorites, refreshFavorites } = useFavorites();
+  const { favorites, refreshFavorites, loadingFavorites, favoritesError } = useFavorites();
   const { user } = useSession();
   const [continueWatching, setContinueWatching] = useState<any[]>([]);
   const [watchProgressMap, setWatchProgressMap] = useState<Record<string, number>>({});
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const mapHistoryItems = (entries: any[]) => (
+    (entries || []).map((entry: any) => {
+      const video = entry.video || {};
+      const rawGenre = video.genre || '';
+      const genres = rawGenre
+        .split(',')
+        .map((genre: string) => genre.trim())
+        .filter(Boolean);
+      return {
+        id: video.tmdbId ? String(video.tmdbId) : video.id || entry.videoId,
+        title: video.title || entry.videoTitle,
+        poster: transformToCloudFront(video.thumbnailUrl || entry.videoPoster) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
+        year: video.releaseYear || new Date().getFullYear(),
+        runtime: Math.floor((video.duration || 0) / 60),
+        genres,
+        playable: true,
+        assetId: video.id || entry.videoId,
+        cloudfrontUrl: transformToCloudFront(video.s3Url),
+        progress: Math.round(entry.completionPercent || 0),
+      };
+    })
+  );
 
   useEffect(() => {
     const loadHistory = async () => {
       if (!user) {
         setContinueWatching([]);
+        setHistoryError(null);
         return;
       }
       setLoadingHistory(true);
       try {
         const data = await apiClient.getWatchHistory(1, 10);
-        const historyItems = (data.watchHistory || []).map((entry: any) => {
-          const video = entry.video || {};
-          const rawGenre = video.genre || '';
-          const genres = rawGenre
-            .split(',')
-            .map((genre: string) => genre.trim())
-            .filter(Boolean);
-          return {
-            id: video.tmdbId ? String(video.tmdbId) : video.id || entry.videoId,
-            title: video.title || entry.videoTitle,
-            poster: transformToCloudFront(video.thumbnailUrl || entry.videoPoster) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
-            year: video.releaseYear || new Date().getFullYear(),
-            runtime: Math.floor((video.duration || 0) / 60),
-            genres,
-            playable: true,
-            assetId: video.id || entry.videoId,
-            cloudfrontUrl: transformToCloudFront(video.s3Url),
-            progress: Math.round(entry.completionPercent || 0),
-          };
-        });
+        const historyItems = mapHistoryItems(data.watchHistory || []);
         setWatchProgressMap(buildWatchProgressMap(data.watchHistory || []));
         setContinueWatching(historyItems.slice(0, 5));
+        setHistoryError(null);
       } catch (error) {
         setContinueWatching([]);
+        setHistoryError('Unable to load watch history.');
       } finally {
         setLoadingHistory(false);
       }
@@ -75,32 +83,18 @@ export const LibraryScreen = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
+    await Promise.allSettled([
       refreshFavorites(),
-      user ? apiClient.getWatchHistory(1, 10).then((data) => {
-        const historyItems = (data.watchHistory || []).map((entry: any) => {
-          const video = entry.video || {};
-          const rawGenre = video.genre || '';
-          const genres = rawGenre
-            .split(',')
-            .map((genre: string) => genre.trim())
-            .filter(Boolean);
-          return {
-            id: video.tmdbId ? String(video.tmdbId) : video.id || entry.videoId,
-            title: video.title || entry.videoTitle,
-            poster: transformToCloudFront(video.thumbnailUrl || entry.videoPoster) || 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400',
-            year: video.releaseYear || new Date().getFullYear(),
-            runtime: Math.floor((video.duration || 0) / 60),
-            genres,
-            playable: true,
-            assetId: video.id || entry.videoId,
-            cloudfrontUrl: transformToCloudFront(video.s3Url),
-            progress: Math.round(entry.completionPercent || 0),
-          };
-        });
-        setWatchProgressMap(buildWatchProgressMap(data.watchHistory || []));
-        setContinueWatching(historyItems.slice(0, 5));
-      }) : Promise.resolve(),
+      user
+        ? apiClient.getWatchHistory(1, 10).then((data) => {
+            const historyItems = mapHistoryItems(data.watchHistory || []);
+            setWatchProgressMap(buildWatchProgressMap(data.watchHistory || []));
+            setContinueWatching(historyItems.slice(0, 5));
+            setHistoryError(null);
+          }).catch(() => {
+            setHistoryError('Unable to load watch history.');
+          })
+        : Promise.resolve(),
     ]);
     setRefreshing(false);
   };
@@ -131,7 +125,19 @@ export const LibraryScreen = () => {
         </Text>
 
         {/* Favorites Section */}
-        {favorites.length > 0 && (
+        {loadingFavorites ? (
+          <View style={styles.favoritesStatusBox}>
+            <ActivityIndicator color={COLORS.gold.mid} />
+            <Text style={styles.favoritesStatusText}>Loading favorites…</Text>
+          </View>
+        ) : favoritesError ? (
+          <View style={styles.favoritesStatusBox}>
+            <Text style={styles.favoritesStatusText}>{favoritesError}</Text>
+            <TouchableOpacity onPress={refreshFavorites} style={styles.retryButton}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : favorites.length > 0 ? (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>My Favorites</Text>
@@ -153,7 +159,7 @@ export const LibraryScreen = () => {
               ))}
             </ScrollView>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -164,6 +170,13 @@ export const LibraryScreen = () => {
           </View>
           {loadingHistory ? (
             <ActivityIndicator color={COLORS.gold.mid} style={{ marginTop: 12 }} />
+          ) : historyError ? (
+            <View style={styles.favoritesStatusBox}>
+              <Text style={styles.favoritesStatusText}>{historyError}</Text>
+              <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
           ) : continueWatching.length > 0 ? (
             <ScrollView
               horizontal
@@ -208,7 +221,7 @@ export const LibraryScreen = () => {
           </View>
         )}
 
-        {user && favorites.length === 0 && (
+        {user && !loadingFavorites && !favoritesError && favorites.length === 0 && (
           <View style={styles.emptyFavorites}>
             <Ionicons name="heart-outline" size={64} color={COLORS.silver} style={{ opacity: 0.3 }} />
             <Text style={styles.emptyTitle}>No Favorites Yet</Text>
@@ -516,6 +529,34 @@ const styles = StyleSheet.create({
   actionSubtitle: {
     fontSize: 13,
     color: COLORS.silver,
+  },
+  favoritesStatusBox: {
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.22)',
+    backgroundColor: 'rgba(167,171,180,0.06)',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  favoritesStatusText: {
+    color: COLORS.silver,
+    fontSize: 13,
+  },
+  retryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.gold.mid,
+  },
+  retryButtonText: {
+    color: COLORS.gold.mid,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   libraryGateGrid: {
     flexDirection: 'row',

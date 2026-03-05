@@ -29,6 +29,8 @@ import * as SecureStore from 'expo-secure-store';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useDerivedValue } from 'react-native-reanimated';
 
+const VLCPlayerAny = VLCPlayer as any;
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -535,14 +537,15 @@ const NativePlayerUI = ({
 
     useEffect(() => {
         const sub = player.addListener('statusChange', (event) => {
-            if (event.status === 'error') {
+            const status = (event as any)?.status;
+            if (status === 'error') {
                 onSwitchToVlc();
                 return;
             }
-            if (event.status === 'playing') {
+            if (status === 'playing') {
                 setNativePlaying(true);
             }
-            if (event.status === 'paused' || event.status === 'stopped' || event.status === 'idle') {
+            if (status === 'paused' || status === 'stopped' || status === 'idle') {
                 setNativePlaying(false);
             }
         });
@@ -735,6 +738,25 @@ export const WatchScreen = () => {
     const lastSeekRef = useRef(0);
     const forceVlcLoadedRef = useRef(false);
 
+    const reportProgress = useCallback((time: number, total: number, force = false) => {
+        if (!assetId || !user) return;
+        const safeTotal = Number.isFinite(total) ? total : 0;
+        const safeTime = Number.isFinite(time) ? time : 0;
+        if (safeTotal <= 0 || safeTime <= 0) return;
+
+        const now = Date.now();
+        if (!force && now - lastReportRef.current < 15000) return;
+        lastReportRef.current = now;
+
+        apiClient.recordWatchHistory({
+            videoId: assetId,
+            watchedDuration: Math.floor(safeTime),
+            totalDuration: Math.floor(safeTotal),
+            title: title || params.title,
+            poster: params.poster,
+        }).catch(() => null);
+    }, [assetId, params.poster, params.title, title, user]);
+
     useEffect(() => {
         const loadPreference = async () => {
             try {
@@ -902,25 +924,6 @@ export const WatchScreen = () => {
         setTimeout(() => setIndicatorType(null), 1000);
     };
 
-    const reportProgress = useCallback((time: number, total: number, force = false) => {
-        if (!assetId || !user) return;
-        const safeTotal = Number.isFinite(total) ? total : 0;
-        const safeTime = Number.isFinite(time) ? time : 0;
-        if (safeTotal <= 0 || safeTime <= 0) return;
-
-        const now = Date.now();
-        if (!force && now - lastReportRef.current < 15000) return;
-        lastReportRef.current = now;
-
-        apiClient.recordWatchHistory({
-            videoId: assetId,
-            watchedDuration: Math.floor(safeTime),
-            totalDuration: Math.floor(safeTotal),
-            title: title || params.title,
-            poster: params.poster,
-        }).catch(() => null);
-    }, [assetId, params.poster, params.title, title, user]);
-
     // VLC Control Helpers
     const handleSeek = (pos: number) => {
         if (!vlcPlayerRef.current || duration <= 0) return;
@@ -1070,7 +1073,7 @@ export const WatchScreen = () => {
                         <GestureDetector gesture={composedGesture}>
                             <View style={{ flex: 1 }}>
                                 {/* @ts-ignore - props not in definition */}
-                                <VLCPlayer
+                                <VLCPlayerAny
                                     key={videoUrl}
                                     ref={vlcPlayerRef}
                                     style={styles.vlcPlayer}

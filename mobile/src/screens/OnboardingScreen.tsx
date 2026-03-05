@@ -50,7 +50,7 @@ export const OnboardingScreen = () => {
     await SecureStore.setItemAsync('@nolimitflix_onboarding_completed', 'true');
     await SecureStore.setItemAsync('@nolimitflix_pref_genres', JSON.stringify(selectedGenres));
     await SecureStore.setItemAsync('@nolimitflix_pref_moods', JSON.stringify(selectedMoods));
-    navigation.reset({ index: 0, routes: [{ name: user ? 'MainTabs' : 'Welcome' }] });
+    navigation.replace(user ? 'MainTabs' : 'Welcome');
   };
 
   return (
