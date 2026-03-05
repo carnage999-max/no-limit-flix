@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
                     attachments: uploadedAttachments,
                 },
             }
-            });
+            );
         }
 
         await sendEmail({
