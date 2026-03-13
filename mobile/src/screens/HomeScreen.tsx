@@ -40,6 +40,8 @@ import { buildWatchProgressMap } from '../hooks/useWatchProgress';
 const { height, width } = Dimensions.get('window');
 const CONTINUE_CARD_WIDTH = 180;
 const CONTINUE_CARD_GAP = 14;
+const PREF_GENRES_KEY = 'nolimitflix_pref_genres';
+const PREF_MOODS_KEY = 'nolimitflix_pref_moods';
 
 export const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -109,14 +111,14 @@ export const HomeScreen = () => {
   useEffect(() => {
     const loadPreferences = async () => {
       try {
-        const storedMoods = await SecureStore.getItemAsync('@nolimitflix_pref_moods');
+        const storedMoods = await SecureStore.getItemAsync(PREF_MOODS_KEY);
         if (storedMoods && selectedMoods.length === 0) {
           const parsed = JSON.parse(storedMoods);
           if (Array.isArray(parsed)) {
             setSelectedMoods(parsed.slice(0, 6));
           }
         }
-        const storedGenres = await SecureStore.getItemAsync('@nolimitflix_pref_genres');
+        const storedGenres = await SecureStore.getItemAsync(PREF_GENRES_KEY);
         if (storedGenres) {
           const parsedGenres = JSON.parse(storedGenres);
           if (Array.isArray(parsedGenres)) {

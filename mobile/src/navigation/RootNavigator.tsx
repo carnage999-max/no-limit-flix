@@ -31,6 +31,7 @@ import { CustomTabBar } from '../components/CustomTabBar';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
+const ONBOARDING_COMPLETED_KEY = 'nolimitflix_onboarding_completed';
 
 const linking = {
   prefixes: ['nolimitflix://'],
@@ -76,7 +77,7 @@ export function RootNavigator() {
   useEffect(() => {
     const bootstrap = async () => {
       try {
-        const completed = await SecureStore.getItemAsync('@nolimitflix_onboarding_completed');
+        const completed = await SecureStore.getItemAsync(ONBOARDING_COMPLETED_KEY);
         setShowOnboarding(completed !== 'true');
       } finally {
         setReady(true);
@@ -162,16 +163,17 @@ export function RootNavigator() {
   }, [navigationReady, user, showOnboarding]);
 
   useEffect(() => {
-    if (!user || showOnboarding) return;
+    if (!user) return;
     const nav = navRef.current;
     if (!nav?.isReady?.()) return;
     const currentRoute = nav.getCurrentRoute?.();
     const currentName = currentRoute?.name;
     if (currentName === 'Auth' || currentName === 'Welcome') {
+      const targetRoute = showOnboarding ? 'Onboarding' : 'MainTabs';
       nav.dispatch(
         CommonActions.reset({
           index: 0,
-          routes: [{ name: 'MainTabs' }],
+          routes: [{ name: targetRoute }],
         })
       );
     }

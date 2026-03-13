@@ -10,9 +10,16 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 const prisma = new PrismaClient();
 const appleJWKS = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
 const DEFAULT_APPLE_BUNDLE_ID = 'com.nolimitflix.app';
+const EXPO_GO_APPLE_AUDIENCE = 'host.exp.Exponent';
 const APPLE_SYNTHETIC_EMAIL_DOMAIN = 'users.nolimitflix.local';
 
 const verifyAppleIdentityToken = async (identityToken: string) => {
+    const extraAudiences = (process.env.APPLE_EXTRA_AUDIENCES || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+    const allowExpoGoAudience = process.env.NODE_ENV !== 'production'
+        || process.env.APPLE_ALLOW_EXPO_GO_AUDIENCE === 'true';
     const audiences = Array.from(
         new Set(
             [
@@ -20,6 +27,8 @@ const verifyAppleIdentityToken = async (identityToken: string) => {
                 process.env.APPLE_SERVICE_ID,
                 process.env.APPLE_CLIENT_ID,
                 DEFAULT_APPLE_BUNDLE_ID,
+                ...(allowExpoGoAudience ? [EXPO_GO_APPLE_AUDIENCE] : []),
+                ...extraAudiences,
             ].filter(Boolean) as string[]
         )
     );

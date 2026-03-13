@@ -6,6 +6,10 @@ import { COLORS, SPACING } from '../theme/tokens';
 import { MOOD_OPTIONS } from '../lib/constants';
 import { useSession } from '../context/SessionContext';
 
+const ONBOARDING_COMPLETED_KEY = 'nolimitflix_onboarding_completed';
+const PREF_GENRES_KEY = 'nolimitflix_pref_genres';
+const PREF_MOODS_KEY = 'nolimitflix_pref_moods';
+
 const GENRES = [
   'Action',
   'Adventure',
@@ -47,9 +51,9 @@ export const OnboardingScreen = () => {
   };
 
   const handleFinish = async () => {
-    await SecureStore.setItemAsync('@nolimitflix_onboarding_completed', 'true');
-    await SecureStore.setItemAsync('@nolimitflix_pref_genres', JSON.stringify(selectedGenres));
-    await SecureStore.setItemAsync('@nolimitflix_pref_moods', JSON.stringify(selectedMoods));
+    await SecureStore.setItemAsync(ONBOARDING_COMPLETED_KEY, 'true');
+    await SecureStore.setItemAsync(PREF_GENRES_KEY, JSON.stringify(selectedGenres));
+    await SecureStore.setItemAsync(PREF_MOODS_KEY, JSON.stringify(selectedMoods));
     navigation.replace(user ? 'MainTabs' : 'Welcome');
   };
 
