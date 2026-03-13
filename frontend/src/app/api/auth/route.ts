@@ -9,13 +9,20 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const prisma = new PrismaClient();
 const appleJWKS = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
+const DEFAULT_APPLE_BUNDLE_ID = 'com.nolimitflix.app';
+const APPLE_SYNTHETIC_EMAIL_DOMAIN = 'users.nolimitflix.local';
 
 const verifyAppleIdentityToken = async (identityToken: string) => {
-    const audiences = [
-        process.env.APPLE_BUNDLE_ID,
-        process.env.APPLE_SERVICE_ID,
-        process.env.APPLE_CLIENT_ID,
-    ].filter(Boolean) as string[];
+    const audiences = Array.from(
+        new Set(
+            [
+                process.env.APPLE_BUNDLE_ID,
+                process.env.APPLE_SERVICE_ID,
+                process.env.APPLE_CLIENT_ID,
+                DEFAULT_APPLE_BUNDLE_ID,
+            ].filter(Boolean) as string[]
+        )
+    );
     if (!audiences.length) return null;
 
     try {
@@ -494,11 +501,23 @@ export async function POST(request: NextRequest) {
             const normalizedAppleName = typeof appleName === 'string' && appleName.trim().length > 0
                 ? appleName.trim()
                 : null;
-            const resolvedEmail = tokenInfo?.email || normalizedAppleEmail;
+            const syntheticEmail = `apple-${crypto.createHash('sha256').update(appleId).digest('hex').slice(0, 24)}@${APPLE_SYNTHETIC_EMAIL_DOMAIN}`;
+            const resolvedEmail = tokenInfo?.email || normalizedAppleEmail || syntheticEmail;
+            const isSyntheticEmail = resolvedEmail.endsWith(`@${APPLE_SYNTHETIC_EMAIL_DOMAIN}`);
 
             let user = await prisma.user.findFirst({
                 where: { appleId }
             });
+
+            if (user && tokenInfo?.email && user.email.endsWith(`@${APPLE_SYNTHETIC_EMAIL_DOMAIN}`)) {
+                const conflictUser = await prisma.user.findUnique({ where: { email: tokenInfo.email } });
+                if (!conflictUser || conflictUser.id === user.id) {
+                    user = await prisma.user.update({
+                        where: { id: user.id },
+                        data: { email: tokenInfo.email },
+                    });
+                }
+            }
 
             if (!user && resolvedEmail) {
                 const byEmail = await prisma.user.findUnique({ where: { email: resolvedEmail } });
@@ -517,12 +536,6 @@ export async function POST(request: NextRequest) {
             }
 
             if (!user) {
-                if (!resolvedEmail) {
-                    return NextResponse.json(
-                        { error: 'Apple did not return an email. Try again and allow email sharing.' },
-                        { status: 400 }
-                    );
-                }
                 const baseUsername = (normalizedAppleName || resolvedEmail.split('@')[0] || 'appleuser')
                     .replace(/[^a-zA-Z0-9]/g, '')
                     .slice(0, 16) || 'appleuser';
@@ -548,11 +561,13 @@ export async function POST(request: NextRequest) {
                 });
 
                 try {
-                    await sendEmail({
-                        to: user.email,
-                        subject: 'Welcome to No Limit Flix',
-                        html: buildWelcomeEmail(),
-                    });
+                    if (!isSyntheticEmail) {
+                        await sendEmail({
+                            to: user.email,
+                            subject: 'Welcome to No Limit Flix',
+                            html: buildWelcomeEmail(),
+                        });
+                    }
                 } catch (err) {
                     console.warn('Signup email failed', err);
                 }

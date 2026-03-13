@@ -115,7 +115,13 @@ export const AuthScreen = ({ route }: any) => {
         return;
       }
       showToast({
-        message: getUserFacingError(error, ['apple login failed', 'missing apple token', 'apple token invalid']),
+        message: getUserFacingError(error, [
+          'apple login failed',
+          'missing apple token',
+          'apple token invalid',
+          'account is already linked to a different apple profile',
+          'maximum active devices reached',
+        ]),
         type: 'error',
       });
     } finally {
