@@ -40,6 +40,7 @@ export async function getSessionUser(request: NextRequest) {
             showWelcomeScreen: true,
             role: true,
             googleId: true,
+            appleId: true,
         }
     });
 

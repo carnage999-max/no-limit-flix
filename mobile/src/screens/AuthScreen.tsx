@@ -24,6 +24,7 @@ import { getUserFacingError } from '../lib/errors';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -45,7 +46,7 @@ export const AuthScreen = ({ route }: any) => {
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
   const scrollRef = useRef<ScrollView | null>(null);
   const sliderWidth = (width - SPACING.xl * 2 - 8) / 2;
-  const { signIn, signUp, signInWithGoogle } = useSession();
+  const { signIn, signUp, signInWithGoogle, signInWithApple } = useSession();
   const { showToast } = useToast();
   const scrollX = useRef(new Animated.Value(initialTab === 'signup' ? width : 0)).current;
   const insets = useSafeAreaInsets();
@@ -58,6 +59,7 @@ export const AuthScreen = ({ route }: any) => {
   const [loading, setLoading] = useState(false);
   const [secureLogin, setSecureLogin] = useState(true);
   const [secureSignup, setSecureSignup] = useState(true);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
@@ -81,6 +83,45 @@ export const AuthScreen = ({ route }: any) => {
   const handleGoogleUnavailable = useCallback(() => {
     showToast({ message: 'Google sign-in is unavailable right now.', type: 'info' });
   }, [showToast]);
+
+  const handleAppleLogin = useCallback(async () => {
+    if (Platform.OS !== 'ios' || !appleAvailable) {
+      showToast({ message: 'Apple sign-in is unavailable on this device.', type: 'info' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      if (!credential.identityToken) {
+        throw new Error('Apple did not return a sign-in token.');
+      }
+      const fullName = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      await signInWithApple(
+        credential.identityToken,
+        credential.email || null,
+        fullName || null
+      );
+      showToast({ message: 'Signed in with Apple.', type: 'success' });
+    } catch (error: any) {
+      if (error?.code === 'ERR_REQUEST_CANCELED') {
+        return;
+      }
+      showToast({
+        message: getUserFacingError(error, ['apple login failed', 'missing apple token', 'apple token invalid']),
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [appleAvailable, showToast, signInWithApple]);
 
   const handleTabChange = (tab: 'login' | 'signup') => {
     setActiveTab(tab);
@@ -159,6 +200,21 @@ export const AuthScreen = ({ route }: any) => {
     };
   }, []);
 
+  React.useEffect(() => {
+    let mounted = true;
+    if (Platform.OS !== 'ios') return;
+    AppleAuthentication.isAvailableAsync()
+      .then((available) => {
+        if (mounted) setAppleAvailable(available);
+      })
+      .catch(() => {
+        if (mounted) setAppleAvailable(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.centerWrap, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 24 }]}>
@@ -215,10 +271,11 @@ export const AuthScreen = ({ route }: any) => {
         <View style={styles.page}>
           <ScrollView
             style={styles.pageScroll}
-            contentContainerStyle={styles.form}
+            contentContainerStyle={[styles.form, { paddingBottom: Math.max(30, insets.bottom + 18) }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             bounces={false}
+            contentInsetAdjustmentBehavior="always"
           >
             <Text style={styles.formLabel}>Email</Text>
             <TextInput
@@ -253,16 +310,20 @@ export const AuthScreen = ({ route }: any) => {
               onSuccess={handleGoogleSuccess}
               onUnavailable={handleGoogleUnavailable}
             />
+            {Platform.OS === 'ios' && (
+              <AppleAuthButton enabled={appleAvailable} loading={loading} onPress={handleAppleLogin} />
+            )}
           </ScrollView>
         </View>
 
         <View style={styles.page}>
           <ScrollView
             style={styles.pageScroll}
-            contentContainerStyle={styles.form}
+            contentContainerStyle={[styles.form, { paddingBottom: Math.max(30, insets.bottom + 18) }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             bounces={false}
+            contentInsetAdjustmentBehavior="always"
           >
             <Text style={styles.formLabel}>Username</Text>
             <TextInput
@@ -306,6 +367,9 @@ export const AuthScreen = ({ route }: any) => {
               onSuccess={handleGoogleSuccess}
               onUnavailable={handleGoogleUnavailable}
             />
+            {Platform.OS === 'ios' && (
+              <AppleAuthButton enabled={appleAvailable} loading={loading} onPress={handleAppleLogin} />
+            )}
           </ScrollView>
         </View>
         </Animated.ScrollView>
@@ -375,6 +439,32 @@ const GoogleAuthButton = ({
       <Image source={googleLogo} style={styles.googleIcon} resizeMode="contain" />
       <Text style={styles.googleButtonText}>Continue with Google</Text>
     </TouchableOpacity>
+  );
+};
+
+const AppleAuthButton = ({
+  enabled,
+  loading,
+  onPress,
+}: {
+  enabled: boolean;
+  loading: boolean;
+  onPress: () => void;
+}) => {
+  if (!enabled) return null;
+
+  return (
+    <View style={[styles.appleButtonWrap, loading && styles.appleButtonWrapDisabled]}>
+      <AppleAuthentication.AppleAuthenticationButton
+        buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+        cornerRadius={12}
+        style={styles.appleButton}
+        onPress={() => {
+          if (!loading) onPress();
+        }}
+      />
+    </View>
   );
 };
 
@@ -541,5 +631,15 @@ const styles = StyleSheet.create({
   googleIcon: {
     width: 18,
     height: 18,
+  },
+  appleButton: {
+    width: '100%',
+    height: 44,
+  },
+  appleButtonWrap: {
+    marginTop: 12,
+  },
+  appleButtonWrapDisabled: {
+    opacity: 0.6,
   },
 });

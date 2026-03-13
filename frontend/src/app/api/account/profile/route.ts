@@ -43,6 +43,7 @@ export async function PUT(request: NextRequest) {
                 showWelcomeScreen: true,
                 role: true,
                 googleId: true,
+                appleId: true,
             }
         });
 

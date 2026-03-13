@@ -75,6 +75,7 @@ model User {
   username          String   @unique
   password          String
   googleId          String?  @unique
+  appleId           String?  @unique
   avatar            String?
   showWelcomeScreen Boolean  @default(true)
   maxDevices        Int      @default(5)

@@ -19,6 +19,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nolimitflix.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Allow No Limit Flix to access your photos so you can choose a profile picture.",
         "LSApplicationQueriesSchemes": [
@@ -59,6 +60,7 @@
     },
     "plugins": [
       "expo-web-browser",
+      "expo-apple-authentication",
       "expo-video",
       "expo-secure-store",
       [

@@ -17,6 +17,7 @@ export interface SessionUser {
   showWelcomeScreen?: boolean;
   role?: string;
   googleId?: string | null;
+  appleId?: string | null;
 }
 
 interface SessionContextType {
@@ -29,6 +30,7 @@ interface SessionContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, username: string, password: string) => Promise<void>;
   signInWithGoogle: (idToken: string) => Promise<void>;
+  signInWithApple: (identityToken: string, appleEmail?: string | null, appleName?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
   refreshSession: () => Promise<void>;
   updateProfile: (payload: { username?: string; email?: string; avatar?: string | null; showWelcomeScreen?: boolean }) => Promise<SessionUser>;
@@ -412,6 +414,42 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   };
 
+  const signInWithApple = async (identityToken: string, appleEmail?: string | null, appleName?: string | null) => {
+    try {
+      const data = await apiClient.appleLogin(identityToken, appleEmail, appleName);
+      const nextToken = data?.token as string | undefined;
+      const nextRefresh = data?.refreshToken as string | undefined;
+      if (!nextToken) {
+        throw new Error('Apple login failed');
+      }
+      if (nextToken) {
+        await applyToken(nextToken);
+      }
+      if (nextRefresh) {
+        await applyRefreshToken(nextRefresh);
+      }
+      setUser(data?.user || null);
+      triggerWelcome(
+        data?.user?.username || data?.user?.email?.split('@')[0] || 'Guest',
+        data?.user?.showWelcomeScreen !== false
+      );
+    } catch (error: any) {
+      captureMonitoringMessage(
+        'AUTH_APPLE_LOGIN_FAILED',
+        'Apple login attempt failed',
+        {
+          status: error?.status ?? null,
+          network: isNetworkLikeError(error),
+          auth: isAuthLikeError(error),
+        },
+        {
+          hasEmail: Boolean(appleEmail),
+        }
+      );
+      throw error;
+    }
+  };
+
   const signOut = async () => {
     try {
       await apiClient.logout();
@@ -463,6 +501,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       signIn,
       signUp,
       signInWithGoogle,
+      signInWithApple,
       signOut,
       refreshSession,
       updateProfile,

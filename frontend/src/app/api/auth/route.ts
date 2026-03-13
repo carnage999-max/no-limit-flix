@@ -5,12 +5,48 @@ import { hashPassword, verifyPassword, createSessionToken, generateRefreshToken,
 import { parseUserAgent, lookupLocation } from '@/lib/device';
 import { sendEmail } from '@/lib/email';
 import { buildBlockedDeviceEmail, buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const prisma = new PrismaClient();
+const appleJWKS = createRemoteJWKSet(new URL('https://appleid.apple.com/auth/keys'));
+
+const verifyAppleIdentityToken = async (identityToken: string) => {
+    const audiences = [
+        process.env.APPLE_BUNDLE_ID,
+        process.env.APPLE_SERVICE_ID,
+        process.env.APPLE_CLIENT_ID,
+    ].filter(Boolean) as string[];
+    if (!audiences.length) return null;
+
+    try {
+        const { payload } = await jwtVerify(identityToken, appleJWKS, {
+            issuer: 'https://appleid.apple.com',
+            audience: audiences,
+        });
+        const appleId = typeof payload.sub === 'string' ? payload.sub : null;
+        const email = typeof payload.email === 'string' ? payload.email.toLowerCase() : null;
+        const emailVerified = payload.email_verified === true || payload.email_verified === 'true';
+        if (!appleId) return null;
+        return { appleId, email, emailVerified };
+    } catch {
+        return null;
+    }
+};
 
 export async function POST(request: NextRequest) {
     try {
-        const { action, email, password, username, deviceId, deviceName, idToken } = await request.json();
+        const {
+            action,
+            email,
+            password,
+            username,
+            deviceId,
+            deviceName,
+            idToken,
+            identityToken,
+            appleEmail,
+            appleName,
+        } = await request.json();
         const normalizedDeviceId = typeof deviceId === 'string' && deviceId.trim().length > 0
             ? deviceId.trim()
             : null;
@@ -227,6 +263,7 @@ export async function POST(request: NextRequest) {
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,
+                    appleId: user.appleId,
                 }
             });
 
@@ -286,6 +323,7 @@ export async function POST(request: NextRequest) {
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,
+                    appleId: user.appleId,
                 }
             });
 
@@ -419,6 +457,136 @@ export async function POST(request: NextRequest) {
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,
+                    appleId: user.appleId,
+                }
+            });
+
+            response.cookies.set(SESSION_COOKIE_NAME, token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: SESSION_COOKIE_AGE,
+                path: '/'
+            });
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: REFRESH_TOKEN_AGE,
+                path: '/'
+            });
+
+            return response;
+        } else if (action === 'apple') {
+            if (!identityToken || typeof identityToken !== 'string') {
+                return NextResponse.json({ error: 'Missing Apple token' }, { status: 400 });
+            }
+
+            const tokenInfo = await verifyAppleIdentityToken(identityToken);
+            const appleId = tokenInfo?.appleId || null;
+            if (!appleId) {
+                return NextResponse.json({ error: 'Apple token invalid' }, { status: 401 });
+            }
+
+            const normalizedAppleEmail = typeof appleEmail === 'string' && appleEmail.trim().length > 0
+                ? appleEmail.trim().toLowerCase()
+                : null;
+            const normalizedAppleName = typeof appleName === 'string' && appleName.trim().length > 0
+                ? appleName.trim()
+                : null;
+            const resolvedEmail = tokenInfo?.email || normalizedAppleEmail;
+
+            let user = await prisma.user.findFirst({
+                where: { appleId }
+            });
+
+            if (!user && resolvedEmail) {
+                const byEmail = await prisma.user.findUnique({ where: { email: resolvedEmail } });
+                if (byEmail) {
+                    if (byEmail.appleId && byEmail.appleId !== appleId) {
+                        return NextResponse.json(
+                            { error: 'Account is already linked to a different Apple profile.' },
+                            { status: 409 }
+                        );
+                    }
+                    user = await prisma.user.update({
+                        where: { id: byEmail.id },
+                        data: { appleId }
+                    });
+                }
+            }
+
+            if (!user) {
+                if (!resolvedEmail) {
+                    return NextResponse.json(
+                        { error: 'Apple did not return an email. Try again and allow email sharing.' },
+                        { status: 400 }
+                    );
+                }
+                const baseUsername = (normalizedAppleName || resolvedEmail.split('@')[0] || 'appleuser')
+                    .replace(/[^a-zA-Z0-9]/g, '')
+                    .slice(0, 16) || 'appleuser';
+                let candidate = baseUsername;
+                let attempts = 0;
+                while (attempts < 5) {
+                    const exists = await prisma.user.findUnique({ where: { username: candidate } });
+                    if (!exists) break;
+                    candidate = `${baseUsername}${Math.floor(Math.random() * 9999)}`;
+                    attempts += 1;
+                }
+
+                const hashedPassword = hashPassword(crypto.randomUUID());
+                user = await prisma.user.create({
+                    data: {
+                        email: resolvedEmail,
+                        username: candidate,
+                        password: hashedPassword,
+                        appleId,
+                        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${candidate}`,
+                        role: 'user'
+                    }
+                });
+
+                try {
+                    await sendEmail({
+                        to: user.email,
+                        subject: 'Welcome to No Limit Flix',
+                        html: buildWelcomeEmail(),
+                    });
+                } catch (err) {
+                    console.warn('Signup email failed', err);
+                }
+            }
+
+            let token: string;
+            let refreshToken: string;
+            try {
+                const sessionTokens = await upsertSession(user.id, user.role, user.email);
+                token = sessionTokens.accessToken;
+                refreshToken = sessionTokens.refreshToken;
+            } catch (err: any) {
+                if (err?.message === 'MAX_DEVICES_REACHED') {
+                    return NextResponse.json(
+                        { error: 'Maximum active devices reached. Log out another device to continue.' },
+                        { status: 403 }
+                    );
+                }
+                throw err;
+            }
+
+            const response = NextResponse.json({
+                success: true,
+                token,
+                refreshToken,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    username: user.username,
+                    avatar: user.avatar,
+                    showWelcomeScreen: user.showWelcomeScreen,
+                    role: user.role,
+                    googleId: user.googleId,
+                    appleId: user.appleId,
                 }
             });
 

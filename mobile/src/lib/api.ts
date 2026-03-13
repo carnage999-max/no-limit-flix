@@ -81,6 +81,26 @@ export const apiClient = {
     return data;
   },
 
+  appleLogin: async (identityToken: string, appleEmail?: string | null, appleName?: string | null) => {
+    const response = await fetch(`${BASE_URL}/api/auth`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'apple',
+        identityToken,
+        appleEmail: appleEmail || null,
+        appleName: appleName || null,
+        deviceId,
+        deviceName,
+      }),
+    });
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Apple login failed');
+    }
+    return data;
+  },
+
   refreshSession: async (overrideToken?: string | null) => {
     const tokenToUse = overrideToken || refreshToken;
     const response = await fetch(`${BASE_URL}/api/auth/refresh`, {

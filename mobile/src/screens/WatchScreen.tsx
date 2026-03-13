@@ -9,7 +9,6 @@ import {
     Platform,
     useWindowDimensions,
     Alert,
-    Modal,
     Pressable,
     Switch,
     UIManager,
@@ -23,14 +22,18 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { transformToCloudFront } from '../lib/utils';
 import { apiClient } from '../lib/api';
 import { useSession } from '../context/SessionContext';
-// @ts-ignore - Native module without types
-import { VLCPlayer } from 'react-native-vlc-media-player';
 import * as SecureStore from 'expo-secure-store';
 
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, runOnJS, useDerivedValue } from 'react-native-reanimated';
 
-const VLCPlayerAny = VLCPlayer as any;
+let VLCPlayerAny: any = null;
+try {
+    // Optional module in this app: when unavailable or not linked, always fall back to native player.
+    VLCPlayerAny = require('react-native-vlc-media-player')?.VLCPlayer ?? null;
+} catch {
+    VLCPlayerAny = null;
+}
 
 const styles = StyleSheet.create({
     container: {
@@ -275,10 +278,11 @@ const styles = StyleSheet.create({
         fontVariant: ['tabular-nums'],
     },
     settingsModal: {
-        flex: 1,
+        ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.85)',
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 220,
     },
     settingsContent: {
         width: 300,
@@ -511,6 +515,29 @@ const styles = StyleSheet.create({
     },
 });
 
+class VlcRenderBoundary extends React.Component<
+    { onError: () => void; children: React.ReactNode },
+    { hasError: boolean }
+> {
+    constructor(props: { onError: () => void; children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    componentDidCatch() {
+        this.props.onError();
+    }
+
+    render() {
+        if (this.state.hasError) return null;
+        return this.props.children;
+    }
+}
+
 // Separate component to isolate Native Player lifecycle
 const NativePlayerUI = ({
     url,
@@ -708,7 +735,7 @@ export const WatchScreen = () => {
     const [error, setError] = useState<string | null>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
-    const [activeEngine, setActiveEngine] = useState<'native' | 'vlc'>('vlc');
+    const [activeEngine, setActiveEngine] = useState<'native' | 'vlc'>('native');
     const [videoUrl, setVideoUrl] = useState<string>('');
     const [hlsCookieHeader, setHlsCookieHeader] = useState<string>('');
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
@@ -744,6 +771,7 @@ export const WatchScreen = () => {
     const forceVlcLoadedRef = useRef(false);
     const isVlcSupported = useMemo(() => {
         try {
+            if (!VLCPlayerAny) return false;
             return Boolean((UIManager as any).getViewManagerConfig?.('RCTVLCPlayer'));
         } catch {
             return false;
@@ -1042,6 +1070,17 @@ export const WatchScreen = () => {
         reportProgress(time, total);
     }, [reportProgress]);
 
+    const handleOpenSettings = useCallback(() => {
+        setIsSettingsOpen(true);
+    }, []);
+
+    const handleVlcUnavailable = useCallback(() => {
+        setForceVlc(false);
+        setActiveEngine('native');
+        setIsSettingsOpen(false);
+        Alert.alert('Beta player unavailable', 'This iOS build cannot load the beta player. Switched to native playback.');
+    }, []);
+
     return (
         <View style={styles.container}>
             <StatusBar hidden={isPlaying && !showControls} />
@@ -1077,7 +1116,7 @@ export const WatchScreen = () => {
                 )}
                 <TouchableOpacity
                     style={styles.settingsOverlayButton}
-                    onPress={() => setIsSettingsOpen(true)}
+                    onPress={handleOpenSettings}
                 >
                     <Ionicons name="settings-sharp" size={18} color="#fff" />
                 </TouchableOpacity>
@@ -1099,9 +1138,10 @@ export const WatchScreen = () => {
                 )}
 
                 {activeEngine === 'vlc' && videoUrl && isVlcSupported && (
-                    <GestureHandlerRootView style={styles.vlcPlayerContainer}>
-                        <GestureDetector gesture={composedGesture}>
-                            <View style={{ flex: 1 }}>
+                    <VlcRenderBoundary onError={handleVlcUnavailable}>
+                        <GestureHandlerRootView style={styles.vlcPlayerContainer}>
+                            <GestureDetector gesture={composedGesture}>
+                                <View style={{ flex: 1 }}>
                                 {/* @ts-ignore - props not in definition */}
                                 <VLCPlayerAny
                                     key={videoUrl}
@@ -1238,7 +1278,7 @@ export const WatchScreen = () => {
                                                 {title}
                                             </Text>
 
-                                            <TouchableOpacity onPress={() => setIsSettingsOpen(true)} style={styles.backButton}>
+                                            <TouchableOpacity onPress={handleOpenSettings} style={styles.backButton}>
                                                 <Ionicons name="settings-sharp" size={22} color="#fff" />
                                             </TouchableOpacity>
                                         </View>
@@ -1278,9 +1318,10 @@ export const WatchScreen = () => {
                                         </View>
                                     </View>
                                 )}
-                            </View>
-                        </GestureDetector>
-                    </GestureHandlerRootView>
+                                </View>
+                            </GestureDetector>
+                        </GestureHandlerRootView>
+                    </VlcRenderBoundary>
                 )}
 
                 {(!isPlaying && !isBuffering && activeEngine === 'vlc' && isVlcSupported) && (
@@ -1326,7 +1367,7 @@ export const WatchScreen = () => {
                 )}
 
                 {/* Settings Modal */}
-                <Modal visible={isSettingsOpen} transparent animationType="fade">
+                {isSettingsOpen && (
                     <View style={styles.settingsModal}>
                         <View style={styles.settingsContent}>
                             <Text style={styles.settingsHeader}>Playback Settings</Text>
@@ -1347,7 +1388,7 @@ export const WatchScreen = () => {
                                 <Switch
                                     disabled={!isVlcSupported}
                                     value={forceVlc}
-                                    onValueChange={setForceVlc}
+                                    onValueChange={(next) => setForceVlc(next && isVlcSupported)}
                                     trackColor={{ false: 'rgba(148, 163, 184, 0.4)', true: COLORS.gold.mid }}
                                     thumbColor={forceVlc ? COLORS.gold.light : '#f4f3f4'}
                                 />
@@ -1389,7 +1430,7 @@ export const WatchScreen = () => {
                             </TouchableOpacity>
                         </View>
                     </View>
-                </Modal>
+                )}
             </View>
         </View>
     );
