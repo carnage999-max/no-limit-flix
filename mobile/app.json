@@ -4,13 +4,13 @@
     "slug": "no-limit-flix",
     "scheme": [
       "nolimitflix",
-      "com.googleusercontent.apps.200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2"
+      "com.googleusercontent.apps.200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2",
+      "com.googleusercontent.apps.200339607199-chpctcu36kegq5ll0jjp0od0i8ca3fpr"
     ],
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -20,6 +20,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.nolimitflix.app",
       "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow No Limit Flix to access your photos so you can choose a profile picture.",
         "LSApplicationQueriesSchemes": [
           "vlc",
           "infuse"
@@ -29,7 +30,6 @@
     "android": {
       "package": "com.nolimitflix.app",
       "versionCode": 2,
-      "minSdkVersion": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -67,6 +67,15 @@
           "android": {
             "minSdkVersion": 26
           }
+        }
+      ],
+      "expo-font",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "nolimitflix",
+          "organization": "nolimitflix"
         }
       ]
     ],

@@ -23,7 +23,7 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const translateY = useRef(new Animated.Value(40)).current;
   const translateX = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
-  const hideTimer = useRef<NodeJS.Timeout | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const insets = useSafeAreaInsets();
 
   const showToast = ({ message, type = 'info', duration = 2400 }: ToastOptions) => {

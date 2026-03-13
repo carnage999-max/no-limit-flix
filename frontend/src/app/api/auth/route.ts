@@ -319,6 +319,7 @@ export async function POST(request: NextRequest) {
                 const validAudiences = [
                     process.env.GOOGLE_WEB_CLIENT_ID,
                     process.env.GOOGLE_ANDROID_CLIENT_ID,
+                    process.env.GOOGLE_IOS_CLIENT_ID,
                 ].filter(Boolean);
                 if (!validAudiences.length || !validAudiences.includes(data.aud)) {
                     return null;

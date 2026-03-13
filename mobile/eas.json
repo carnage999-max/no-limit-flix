@@ -11,6 +11,7 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://www.nolimitflix.com",
         "EXPO_PUBLIC_CLOUDFRONT_URL": "https://d3716xz37ie3f5.cloudfront.net",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "200339607199-4gvbgjmqjb1j53p280g1094ceu2me0h9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "200339607199-chpctcu36kegq5ll0jjp0od0i8ca3fpr.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2.apps.googleusercontent.com",
         "EXPO_PUBLIC_SENTRY_DSN": "https://8b6f4582b73fb2f83c31422aa6aa80cc@o4510989403095040.ingest.us.sentry.io/4510990254276608"
       }
@@ -24,6 +25,7 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://www.nolimitflix.com",
         "EXPO_PUBLIC_CLOUDFRONT_URL": "https://d3716xz37ie3f5.cloudfront.net",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "200339607199-4gvbgjmqjb1j53p280g1094ceu2me0h9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "200339607199-chpctcu36kegq5ll0jjp0od0i8ca3fpr.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2.apps.googleusercontent.com",
         "EXPO_PUBLIC_SENTRY_DSN": "https://8b6f4582b73fb2f83c31422aa6aa80cc@o4510989403095040.ingest.us.sentry.io/4510990254276608"
       }
@@ -37,6 +39,7 @@
         "EXPO_PUBLIC_API_BASE_URL": "https://www.nolimitflix.com",
         "EXPO_PUBLIC_CLOUDFRONT_URL": "https://d3716xz37ie3f5.cloudfront.net",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "200339607199-4gvbgjmqjb1j53p280g1094ceu2me0h9.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "200339607199-chpctcu36kegq5ll0jjp0od0i8ca3fpr.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2.apps.googleusercontent.com",
         "EXPO_PUBLIC_SENTRY_DSN": "https://8b6f4582b73fb2f83c31422aa6aa80cc@o4510989403095040.ingest.us.sentry.io/4510990254276608"
       }

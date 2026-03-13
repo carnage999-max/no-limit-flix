@@ -18,6 +18,21 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: false,
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 WebBrowser.maybeCompleteAuthSession();
 initMonitoring();
@@ -130,4 +145,4 @@ const ConnectivityGate = () => {
   return null;
 };
 
-export default wrapAppWithMonitoring(App);
+export default Sentry.wrap(wrapAppWithMonitoring(App));

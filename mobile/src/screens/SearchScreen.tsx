@@ -31,7 +31,7 @@ export const SearchScreen = () => {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [internalResults, setInternalResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [debounceTimeout, setDebounceTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { progressMap } = useWatchProgress();
 

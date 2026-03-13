@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -30,6 +30,16 @@ WebBrowser.maybeCompleteAuthSession();
 const { width } = Dimensions.get('window');
 const googleLogo = require('../../assets/Google_logo.png');
 
+const extractGoogleIdToken = (response: any): string | null => {
+  if (!response) return null;
+  return (
+    response?.params?.id_token
+    || response?.params?.idToken
+    || response?.authentication?.idToken
+    || null
+  );
+};
+
 export const AuthScreen = ({ route }: any) => {
   const initialTab = route?.params?.tab === 'signup' ? 'signup' : 'login';
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
@@ -48,11 +58,13 @@ export const AuthScreen = ({ route }: any) => {
   const [loading, setLoading] = useState(false);
   const [secureLogin, setSecureLogin] = useState(true);
   const [secureSignup, setSecureSignup] = useState(true);
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  const googleEnabled = Boolean(androidClientId && webClientId);
+  const platformClientId = Platform.OS === 'ios' ? iosClientId : androidClientId;
+  const googleEnabled = Boolean(platformClientId && webClientId);
 
-  const handleGoogleSuccess = async (idToken: string) => {
+  const handleGoogleSuccess = useCallback(async (idToken: string) => {
     setLoading(true);
     try {
       await signInWithGoogle(idToken);
@@ -65,7 +77,10 @@ export const AuthScreen = ({ route }: any) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showToast, signInWithGoogle]);
+  const handleGoogleUnavailable = useCallback(() => {
+    showToast({ message: 'Google sign-in is unavailable right now.', type: 'info' });
+  }, [showToast]);
 
   const handleTabChange = (tab: 'login' | 'signup') => {
     setActiveTab(tab);
@@ -183,10 +198,13 @@ export const AuthScreen = ({ route }: any) => {
         </View>
 
         <Animated.ScrollView
+          style={styles.pager}
           ref={scrollRef}
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          directionalLockEnabled
           onMomentumScrollEnd={handleScroll}
           onScroll={Animated.event(
             [{ nativeEvent: { contentOffset: { x: scrollX } } }],
@@ -195,7 +213,13 @@ export const AuthScreen = ({ route }: any) => {
           scrollEventThrottle={16}
         >
         <View style={styles.page}>
-          <View style={styles.form}>
+          <ScrollView
+            style={styles.pageScroll}
+            contentContainerStyle={styles.form}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             <Text style={styles.formLabel}>Email</Text>
             <TextInput
               style={styles.input}
@@ -227,13 +251,19 @@ export const AuthScreen = ({ route }: any) => {
               enabled={googleEnabled}
               loading={loading}
               onSuccess={handleGoogleSuccess}
-              onUnavailable={() => showToast({ message: 'Google sign-in is unavailable right now.', type: 'info' })}
+              onUnavailable={handleGoogleUnavailable}
             />
-          </View>
+          </ScrollView>
         </View>
 
         <View style={styles.page}>
-          <View style={styles.form}>
+          <ScrollView
+            style={styles.pageScroll}
+            contentContainerStyle={styles.form}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+          >
             <Text style={styles.formLabel}>Username</Text>
             <TextInput
               style={styles.input}
@@ -274,9 +304,9 @@ export const AuthScreen = ({ route }: any) => {
               enabled={googleEnabled}
               loading={loading}
               onSuccess={handleGoogleSuccess}
-              onUnavailable={() => showToast({ message: 'Google sign-in is unavailable right now.', type: 'info' })}
+              onUnavailable={handleGoogleUnavailable}
             />
-          </View>
+          </ScrollView>
         </View>
         </Animated.ScrollView>
       </View>
@@ -304,28 +334,37 @@ const GoogleAuthButton = ({
     );
   }
 
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
-  const reverseClientId = androidClientId
-    ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
+  const platformClientId = Platform.OS === 'ios' ? iosClientId : androidClientId;
+  const reverseClientId = platformClientId
+    ? `com.googleusercontent.apps.${platformClientId.replace('.apps.googleusercontent.com', '')}`
     : undefined;
   const googleRedirectUri = reverseClientId
     ? `${reverseClientId}:/oauth2redirect`
     : makeRedirectUri({ scheme: 'nolimitflix' });
 
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    iosClientId,
     androidClientId,
     webClientId,
     redirectUri: googleRedirectUri,
     scopes: ['profile', 'email'],
   });
+  const handledGoogleTokenRef = useRef<string | null>(null);
 
   React.useEffect(() => {
     if (googleResponse?.type !== 'success') return;
-    const idToken = googleResponse.params?.id_token;
-    if (!idToken) return;
+    const idToken = extractGoogleIdToken(googleResponse);
+    if (!idToken) {
+      onUnavailable();
+      return;
+    }
+    if (handledGoogleTokenRef.current === idToken) return;
+    handledGoogleTokenRef.current = idToken;
     onSuccess(idToken);
-  }, [googleResponse, onSuccess]);
+  }, [googleResponse, onSuccess, onUnavailable]);
 
   return (
     <TouchableOpacity
@@ -346,7 +385,7 @@ const styles = StyleSheet.create({
   },
   centerWrap: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
   },
   background: {
     ...StyleSheet.absoluteFillObject,
@@ -369,27 +408,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(139, 92, 246, 0.2)',
   },
   header: {
-    paddingTop: 20,
+    paddingTop: 8,
     paddingHorizontal: SPACING.xl,
-    paddingBottom: 20,
+    paddingBottom: 12,
     alignItems: 'center',
   },
   logo: {
-    width: 120,
-    height: 120,
-    marginBottom: 8,
+    width: 88,
+    height: 88,
+    marginBottom: 6,
     borderRadius: 20,
     overflow: 'hidden',
   },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
     color: COLORS.text,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtitle: {
     color: COLORS.silver,
-    marginBottom: 24,
+    marginBottom: 14,
     textAlign: 'center',
   },
   tabToggle: {
@@ -419,12 +458,20 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: COLORS.background,
   },
+  pager: {
+    flex: 1,
+  },
   page: {
     width,
+    flex: 1,
     paddingHorizontal: SPACING.xl,
   },
+  pageScroll: {
+    flex: 1,
+  },
   form: {
-    marginTop: 24,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
   formLabel: {
     color: COLORS.silver,

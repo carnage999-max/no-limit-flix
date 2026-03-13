@@ -9,6 +9,7 @@ import {
   Image,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
@@ -26,6 +27,16 @@ WebBrowser.maybeCompleteAuthSession();
 
 const googleLogo = require('../../assets/Google_logo.png');
 
+const extractGoogleIdToken = (response: any): string | null => {
+  if (!response) return null;
+  return (
+    response?.params?.id_token
+    || response?.params?.idToken
+    || response?.authentication?.idToken
+    || null
+  );
+};
+
 export const ProfileScreen = ({ navigation }: any) => {
   const { user, updateProfile, refreshSession } = useSession();
   const { showToast } = useToast();
@@ -38,24 +49,33 @@ export const ProfileScreen = ({ navigation }: any) => {
   const [unlinkConfirmOpen, setUnlinkConfirmOpen] = useState(false);
   const [removeAvatarConfirmOpen, setRemoveAvatarConfirmOpen] = useState(false);
 
+  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
   const androidClientId = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID;
-  const reverseClientId = androidClientId
-    ? `com.googleusercontent.apps.${androidClientId.replace('.apps.googleusercontent.com', '')}`
+  const platformClientId = Platform.OS === 'ios' ? iosClientId : androidClientId;
+  const reverseClientId = platformClientId
+    ? `com.googleusercontent.apps.${platformClientId.replace('.apps.googleusercontent.com', '')}`
     : undefined;
   const googleRedirectUri = reverseClientId
     ? `${reverseClientId}:/oauth2redirect`
     : makeRedirectUri({ scheme: 'nolimitflix' });
   const [googleRequest, googleResponse, promptGoogle] = Google.useIdTokenAuthRequest({
+    iosClientId,
     androidClientId,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
     redirectUri: googleRedirectUri,
     scopes: ['profile', 'email'],
   });
+  const handledGoogleTokenRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (googleResponse?.type !== 'success') return;
-    const idToken = googleResponse.params?.id_token;
-    if (!idToken) return;
+    const idToken = extractGoogleIdToken(googleResponse);
+    if (!idToken) {
+      showToast({ message: 'Google sign-in failed. Please try again.', type: 'error' });
+      return;
+    }
+    if (handledGoogleTokenRef.current === idToken) return;
+    handledGoogleTokenRef.current = idToken;
     (async () => {
       setLinkingGoogle(true);
       showToast({ message: 'Linking Google account...', type: 'info' });
@@ -69,7 +89,7 @@ export const ProfileScreen = ({ navigation }: any) => {
         setLinkingGoogle(false);
       }
     })();
-  }, [googleResponse]);
+  }, [googleResponse, refreshSession, showToast]);
 
   const handleSave = async () => {
     setSaving(true);

@@ -12,6 +12,7 @@ import {
     Modal,
     Pressable,
     Switch,
+    UIManager,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -514,12 +515,14 @@ const styles = StyleSheet.create({
 const NativePlayerUI = ({
     url,
     onSwitchToVlc,
+    canUseVlc,
     resumeTime,
     onTimeUpdate,
     onBack,
 }: {
     url: string;
     onSwitchToVlc: () => void;
+    canUseVlc: boolean;
     resumeTime?: number;
     onTimeUpdate?: (time: number, duration: number) => void;
     onBack: () => void;
@@ -642,9 +645,11 @@ const NativePlayerUI = ({
                         <Ionicons name="chevron-back" size={22} color="#fff" />
                     </TouchableOpacity>
                     <View style={styles.nativeTopRight}>
-                        <TouchableOpacity onPress={onSwitchToVlc} style={styles.nativePillButton}>
-                            <Text style={styles.nativePillText}>Try beta player</Text>
-                        </TouchableOpacity>
+                        {canUseVlc ? (
+                            <TouchableOpacity onPress={onSwitchToVlc} style={styles.nativePillButton}>
+                                <Text style={styles.nativePillText}>Try beta player</Text>
+                            </TouchableOpacity>
+                        ) : null}
                     </View>
                     <View style={styles.nativeCenterControls}>
                         <TouchableOpacity style={styles.nativeCircleButton} onPress={() => seekTo(nativeCurrent - 10)}>
@@ -737,6 +742,13 @@ export const WatchScreen = () => {
     const nativeDurationRef = useRef(0);
     const lastSeekRef = useRef(0);
     const forceVlcLoadedRef = useRef(false);
+    const isVlcSupported = useMemo(() => {
+        try {
+            return Boolean((UIManager as any).getViewManagerConfig?.('RCTVLCPlayer'));
+        } catch {
+            return false;
+        }
+    }, []);
 
     const reportProgress = useCallback((time: number, total: number, force = false) => {
         if (!assetId || !user) return;
@@ -777,6 +789,12 @@ export const WatchScreen = () => {
         if (!forceVlcLoadedRef.current) return;
         SecureStore.setItemAsync('nolimitflix_force_vlc', forceVlc ? 'true' : 'false').catch(() => null);
     }, [forceVlc]);
+
+    useEffect(() => {
+        if (!isVlcSupported && forceVlc) {
+            setForceVlc(false);
+        }
+    }, [forceVlc, isVlcSupported]);
 
     // Fetch signed playback URL on mount
     useEffect(() => {
@@ -849,6 +867,11 @@ export const WatchScreen = () => {
 
     // Determine which player engine to use based on playback type
     useEffect(() => {
+        if (!isVlcSupported) {
+            console.log('🎬 [Watch] VLC unavailable, using native player');
+            setActiveEngine('native');
+            return;
+        }
         if (forceVlc) {
             setActiveEngine('vlc');
             return;
@@ -862,7 +885,7 @@ export const WatchScreen = () => {
             console.log('🎬 [Watch] Using native engine for MP4');
             setActiveEngine('native');
         }
-    }, [playbackType, forceVlc]);
+    }, [playbackType, forceVlc, isVlcSupported]);
 
     useEffect(() => {
         const lock = async () => {
@@ -1061,14 +1084,21 @@ export const WatchScreen = () => {
                 {activeEngine === 'native' && videoUrl && (
                     <NativePlayerUI
                         url={videoUrl}
-                        onSwitchToVlc={() => setActiveEngine('vlc')}
+                        onSwitchToVlc={() => {
+                            if (!isVlcSupported) {
+                                Alert.alert('Beta player unavailable', 'This beta player is not available in Expo Go on this device.');
+                                return;
+                            }
+                            setActiveEngine('vlc');
+                        }}
+                        canUseVlc={isVlcSupported}
                         resumeTime={resumeTime}
                         onTimeUpdate={handleNativeTimeUpdate}
                         onBack={() => navigation.goBack()}
                     />
                 )}
 
-                {activeEngine === 'vlc' && videoUrl && (
+                {activeEngine === 'vlc' && videoUrl && isVlcSupported && (
                     <GestureHandlerRootView style={styles.vlcPlayerContainer}>
                         <GestureDetector gesture={composedGesture}>
                             <View style={{ flex: 1 }}>
@@ -1253,7 +1283,7 @@ export const WatchScreen = () => {
                     </GestureHandlerRootView>
                 )}
 
-                {(!isPlaying && !isBuffering && activeEngine === 'vlc') && (
+                {(!isPlaying && !isBuffering && activeEngine === 'vlc' && isVlcSupported) && (
                     <TouchableOpacity
                         activeOpacity={1}
                         onPress={() => {
@@ -1311,8 +1341,11 @@ export const WatchScreen = () => {
                             </TouchableOpacity>
 
                             <View style={styles.settingItem}>
-                                <Text style={styles.settingLabel}>Try beta video player (unstable)</Text>
+                                <Text style={styles.settingLabel}>
+                                    {isVlcSupported ? 'Try beta video player (unstable)' : 'Beta video player unavailable'}
+                                </Text>
                                 <Switch
+                                    disabled={!isVlcSupported}
                                     value={forceVlc}
                                     onValueChange={setForceVlc}
                                     trackColor={{ false: 'rgba(148, 163, 184, 0.4)', true: COLORS.gold.mid }}
