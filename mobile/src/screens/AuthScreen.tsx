@@ -25,6 +25,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { useNavigation } from '@react-navigation/native';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -42,11 +43,12 @@ const extractGoogleIdToken = (response: any): string | null => {
 };
 
 export const AuthScreen = ({ route }: any) => {
+  const navigation = useNavigation<any>();
   const initialTab = route?.params?.tab === 'signup' ? 'signup' : 'login';
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
   const scrollRef = useRef<ScrollView | null>(null);
   const sliderWidth = (width - SPACING.xl * 2 - 8) / 2;
-  const { signIn, signUp, signInWithGoogle, signInWithApple } = useSession();
+  const { user, signIn, signUp, signInWithGoogle, signInWithApple } = useSession();
   const { showToast } = useToast();
   const scrollX = useRef(new Animated.Value(initialTab === 'signup' ? width : 0)).current;
   const insets = useSafeAreaInsets();
@@ -220,6 +222,19 @@ export const AuthScreen = ({ route }: any) => {
       mounted = false;
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!user) return;
+    setLoading(false);
+    const id = setTimeout(() => {
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+        return;
+      }
+      navigation.navigate('MainTabs');
+    }, 0);
+    return () => clearTimeout(id);
+  }, [navigation, user]);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

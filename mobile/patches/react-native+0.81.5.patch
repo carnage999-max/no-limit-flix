@@ -1,0 +1,29 @@
+diff --git a/node_modules/react-native/sdks/hermes-engine/utils/build-hermes-xcode.sh b/node_modules/react-native/sdks/hermes-engine/utils/build-hermes-xcode.sh
+index b1ac920..d7ab590 100755
+--- a/node_modules/react-native/sdks/hermes-engine/utils/build-hermes-xcode.sh
++++ b/node_modules/react-native/sdks/hermes-engine/utils/build-hermes-xcode.sh
+@@ -92,6 +92,16 @@ echo "Build Apple framework"
+   --target libhermes \
+   -j "$(sysctl -n hw.ncpu)"
+ 
++echo "Generate dSYM for Apple framework"
++xcrun dsymutil \
++  "${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework/hermes" \
++  -o "${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM"
++
++echo "Ensure MinimumOSVersion exists in Hermes framework Info.plist"
++hermes_plist="${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework/Info.plist"
++/usr/libexec/PlistBuddy -c "Set :MinimumOSVersion ${deployment_target}" "${hermes_plist}" 2>/dev/null || \
++  /usr/libexec/PlistBuddy -c "Add :MinimumOSVersion string ${deployment_target}" "${hermes_plist}"
++
+ echo "Copy Apple framework to destroot/Library/Frameworks"
+ 
+ platform_copy_destination=$(get_platform_copy_destination $PLATFORM_NAME)
+@@ -99,3 +109,7 @@ platform_copy_destination=$(get_platform_copy_destination $PLATFORM_NAME)
+ cp -pfR \
+   "${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework" \
+   "${PODS_ROOT}/hermes-engine/destroot/Library/Frameworks/${platform_copy_destination}"
++
++cp -pfR \
++  "${PODS_ROOT}/hermes-engine/build/${PLATFORM_NAME}/API/hermes/hermes.framework.dSYM" \
++  "${PODS_ROOT}/hermes-engine/destroot/Library/Frameworks/${platform_copy_destination}"

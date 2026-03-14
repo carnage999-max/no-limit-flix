@@ -118,17 +118,25 @@ export function RootNavigator() {
   const handleQuickDeepLink = (url: string) => {
     if (!url) return;
     let route = '';
+    const normalizeRoute = (value: string) => {
+      const clean = `${value || ''}`.toLowerCase().replace(/^\/+|\/+$/g, '');
+      if (clean === 'search') return 'quick/search';
+      if (clean === 'library') return 'quick/library';
+      if (clean === 'collections') return 'quick/collections';
+      if (clean === 'watch-history') return 'quick/watch-history';
+      return clean;
+    };
     try {
       const normalizedUrl = url.includes('://') ? url : `nolimitflix://${url.replace(/^\/+/, '')}`;
       const parsedUrl = new URL(normalizedUrl);
       const host = `${parsedUrl.hostname || ''}`.toLowerCase();
       const path = `${parsedUrl.pathname || ''}`.toLowerCase().replace(/^\/+|\/+$/g, '');
-      route = [host, path].filter(Boolean).join('/');
+      route = normalizeRoute([host, path].filter(Boolean).join('/'));
     } catch {
       const parsed = Linking.parse(url);
       const host = `${parsed.hostname || ''}`.toLowerCase();
       const path = `${parsed.path || ''}`.toLowerCase().replace(/^\/+|\/+$/g, '');
-      route = [host, path].filter(Boolean).join('/');
+      route = normalizeRoute([host, path].filter(Boolean).join('/'));
     }
     if (!route) {
       const lower = url.toLowerCase();
@@ -209,7 +217,7 @@ export function RootNavigator() {
           <Stack.Screen name="Welcome" component={LoggedOutScreen} />
         )}
 
-        <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />
+        {!user && <Stack.Screen name="Auth" component={AuthScreen} options={{ presentation: 'modal' }} />}
         <Stack.Screen name="WebView" component={WebViewScreen} />
       </Stack.Navigator>
     </NavigationContainer>

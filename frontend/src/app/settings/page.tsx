@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Info, ShieldCheck, FileText, ChevronRight, LogOut, UserX, Monitor, History, Flag } from 'lucide-react';
+import { Info, ShieldCheck, FileText, LifeBuoy, ChevronRight, LogOut, UserX, Monitor, History, Flag } from 'lucide-react';
 import { ConfirmModal } from '@/components';
 import { useSession } from '@/context/SessionContext';
 
@@ -24,6 +24,12 @@ const menuItems = [
         subtitle: 'Rules, rights, and responsibilities',
         href: '/terms',
         icon: FileText,
+    },
+    {
+        title: 'Support',
+        subtitle: 'Get help with app or account issues',
+        href: '/support',
+        icon: LifeBuoy,
     },
     {
         title: 'Delete Account',

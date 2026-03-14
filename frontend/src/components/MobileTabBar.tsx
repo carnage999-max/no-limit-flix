@@ -113,7 +113,7 @@ export default function MobileTabBar() {
                             if (tab.key === 'collections') return pathname.startsWith('/collections');
                             if (tab.key === 'library') return pathname.startsWith('/account/favorites');
                             if (tab.key === 'settings') {
-                                return pathname.startsWith('/settings') || pathname.startsWith('/about') || pathname.startsWith('/privacy') || pathname.startsWith('/terms');
+                                return pathname.startsWith('/settings') || pathname.startsWith('/about') || pathname.startsWith('/privacy') || pathname.startsWith('/terms') || pathname.startsWith('/support');
                             }
                             return false;
                         })();
