@@ -20,7 +20,7 @@ const {
     updateVideoPoster,
     updateVideoMetadata
 } = require('./db');
-const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
+const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl, isTranscoderAvailable } = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
 const ADMIN_SECRET = process.env.INGEST_WORKER_SECRET;
@@ -209,6 +209,12 @@ const deriveTitleFromFileName = (fileName) => {
     return base.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
+const toMp4Name = (fileName) => {
+    if (!fileName) return 'video.mp4';
+    const base = fileName.replace(/\.[a-z0-9]+$/i, '');
+    return `${base}.mp4`;
+};
+
 const deriveTitleFromIdentifiers = (archiveIdentifier, s3KeyPlayback) => {
     let fileName = null;
     if (archiveIdentifier && archiveIdentifier.includes(':')) {
@@ -302,7 +308,10 @@ const parseSeasonEpisode = (value) => {
 };
 
 app.get('/health', (_req, res) => {
-    res.json({ ok: true });
+    res.json({
+        ok: true,
+        ffmpegAvailable: isTranscoderAvailable()
+    });
 });
 
 app.get('/jobs', (req, res) => {
@@ -971,6 +980,11 @@ app.post('/reels/import', async (req, res) => {
             minDurationSeconds,
             Number(req.body?.maxDurationSeconds) || DEFAULT_REEL_MAX_DURATION_SECONDS
         );
+        const compress = req.body?.compress !== false;
+        const compressMinBytes = Math.max(
+            0,
+            Number(req.body?.compressMinBytes) || (15 * 1024 * 1024)
+        );
 
         const providedItems = Array.isArray(req.body?.items)
             ? req.body.items
@@ -987,11 +1001,21 @@ app.post('/reels/import', async (req, res) => {
                 .filter(Boolean)
             : [];
 
+        const usesSearchDiscovery = providedItems.length === 0 && providedIdentifiers.length === 0;
+        const requestedCount = limit;
+        const candidateMultiplier = Math.min(
+            Math.max(Number(req.body?.candidateMultiplier) || 6, 1),
+            10
+        );
+        const candidateSearchLimit = usesSearchDiscovery
+            ? Math.min(200, Math.max(requestedCount, requestedCount * candidateMultiplier))
+            : requestedCount;
+
         const itemsToProcess = providedItems.length > 0
             ? providedItems
             : (providedIdentifiers.length > 0
                 ? providedIdentifiers.map((identifier) => ({ identifier, fileName: null }))
-                : (await searchArchiveIdentifiers(query, limit))
+                : (await searchArchiveIdentifiers(query, candidateSearchLimit))
                     .map((identifier) => ({ identifier, fileName: null })));
 
         const selectBestReelFile = (files, metadata, preferredFileName) => {
@@ -1029,6 +1053,14 @@ app.post('/reels/import', async (req, res) => {
 
         const runReelImport = async (job) => {
             const results = [];
+            const skippedReasons = {};
+            const failedReasons = {};
+            let successCount = 0;
+
+            const addReason = (bucket, value) => {
+                const key = String(value || 'Unknown reason').trim().slice(0, 180);
+                bucket[key] = (bucket[key] || 0) + 1;
+            };
 
             for (const item of itemsToProcess) {
                 const identifier = item.identifier;
@@ -1062,8 +1094,18 @@ app.post('/reels/import', async (req, res) => {
                     const duration = picked.duration || parseDurationSeconds(bestFile.length) || null;
                     const hasAudio = picked.audioSignal;
                     const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
-                    const s3KeyPlayback = buildS3Key(identifier, bestFile.name, 'reels');
-                    const { s3Url, contentType: uploadedContentType } = await uploadToS3(playbackUrl, s3KeyPlayback, bestFile);
+                    const sourceFileSize = parseMaybeNumber(bestFile.size);
+                    const shouldCompress = compress && (!sourceFileSize || sourceFileSize >= compressMinBytes);
+                    const outputFileName = shouldCompress ? toMp4Name(bestFile.name) : bestFile.name;
+                    const s3KeyPlayback = buildS3Key(identifier, outputFileName, 'reels');
+                    const { s3Url, contentType: uploadedContentType, transcoded } = await uploadToS3(
+                        playbackUrl,
+                        s3KeyPlayback,
+                        bestFile,
+                        {
+                            transcode: shouldCompress
+                        }
+                    );
                     const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                     let title = stringifyMetadata(metadata?.title) || deriveTitleFromFileName(bestFile.name) || identifier;
@@ -1096,7 +1138,7 @@ app.post('/reels/import', async (req, res) => {
                     const dbRow = await upsertReel({
                         title,
                         description,
-                        fileName: bestFile.name,
+                        fileName: outputFileName,
                         thumbnailUrl,
                         playbackType: 'mp4',
                         s3KeyPlayback,
@@ -1123,12 +1165,13 @@ app.post('/reels/import', async (req, res) => {
                     });
 
                     result.title = dbRow.title;
-                    result.fileName = bestFile.name;
+                    result.fileName = outputFileName;
                     result.duration = duration;
                     result.hasAudio = hasAudio;
                     result.playbackUrl = s3Url;
                     result.thumbnailUrl = thumbnailUrl;
                     result.sourcePageUrl = sourcePageUrl;
+                    result.transcoded = transcoded;
                     result.status = dbRow.inserted ? 'imported' : 'updated';
                 } catch (error) {
                     result.status = 'failed';
@@ -1145,17 +1188,47 @@ app.post('/reels/import', async (req, res) => {
                     if (result.status === 'failed') job.failed += 1;
                     job.lastUpdatedAt = Date.now();
                 }
+
+                if (result.status === 'skipped') {
+                    addReason(skippedReasons, result.reason);
+                }
+                if (result.status === 'failed') {
+                    addReason(failedReasons, result.reason);
+                }
+                if (result.status === 'imported' || result.status === 'updated') {
+                    successCount += 1;
+                }
+
+                if (usesSearchDiscovery && successCount >= requestedCount) {
+                    break;
+                }
             }
 
+            const importedCount = results.filter((r) => r.status === 'imported').length;
+            const updatedCount = results.filter((r) => r.status === 'updated').length;
+            const skippedCount = results.filter((r) => r.status === 'skipped').length;
+            const failedCount = results.filter((r) => r.status === 'failed').length;
+            const transcodedCount = results.filter((r) => r.transcoded === true).length;
+            const uploadedOriginalCount = results.filter((r) => r.transcoded === false && (r.status === 'imported' || r.status === 'updated')).length;
+
             const summary = {
-                requested: itemsToProcess.length,
-                imported: results.filter((r) => r.status === 'imported').length,
-                updated: results.filter((r) => r.status === 'updated').length,
-                skipped: results.filter((r) => r.status === 'skipped').length,
-                failed: results.filter((r) => r.status === 'failed').length,
+                requested: requestedCount,
+                candidatesQueued: itemsToProcess.length,
+                candidatesProcessed: results.length,
+                imported: importedCount,
+                updated: updatedCount,
+                skipped: skippedCount,
+                failed: failedCount,
                 minDurationSeconds,
                 maxDurationSeconds,
-                requireAudio
+                requireAudio,
+                compress,
+                compressMinBytes,
+                ffmpegAvailable: isTranscoderAvailable(),
+                transcoded: transcodedCount,
+                uploadedOriginal: uploadedOriginalCount,
+                skippedReasons,
+                failedReasons
             };
 
             return { summary, results };
@@ -1200,11 +1273,14 @@ app.post('/reels/import', async (req, res) => {
                 message: 'Reels import queued',
                 jobId,
                 summary: {
-                    requested: itemsToProcess.length,
+                    requested: requestedCount,
                     queued: itemsToProcess.length,
+                    candidateMultiplier: usesSearchDiscovery ? candidateMultiplier : 1,
                     minDurationSeconds,
                     maxDurationSeconds,
-                    requireAudio
+                    requireAudio,
+                    compress,
+                    compressMinBytes
                 }
             });
         }

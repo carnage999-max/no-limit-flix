@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import prisma from '@/lib/db';
 import {
   generateCloudFrontSignedCookie,
@@ -8,7 +9,8 @@ import { transformToCloudFront } from '@/lib/utils';
 import { getSessionUser } from '@/lib/auth-server';
 
 interface WatchStartRequest {
-  assetId: string;
+  assetId?: string;
+  reelId?: string;
 }
 
 interface WatchStartResponse {
@@ -18,6 +20,50 @@ interface WatchStartResponse {
   expiresAt: string;
   cookieHeader?: string; // For browser-based playback
 }
+
+const safeEqual = (a: string, b: string) => {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
+};
+
+const hasValidReelsClientHeaders = (request: NextRequest) => {
+  const expectedId = process.env.REELS_CLIENT_ID || '';
+  const expectedSecret = process.env.REELS_CLIENT_SECRET || '';
+  if (!expectedId || !expectedSecret) return false;
+
+  const providedId = request.headers.get('x-reels-client-id')
+    || request.headers.get('x-client-id')
+    || '';
+  const providedSecret = request.headers.get('x-reels-client-secret')
+    || request.headers.get('x-client-secret')
+    || '';
+
+  if (!providedId || !providedSecret) return false;
+  return safeEqual(providedId, expectedId) && safeEqual(providedSecret, expectedSecret);
+};
+
+const normalizeResourcePath = (rawPath: string) => {
+  let resourcePath = rawPath;
+  if (resourcePath.startsWith('http')) {
+    try {
+      resourcePath = new URL(resourcePath).pathname;
+    } catch {
+      // keep as-is below
+    }
+  }
+  if (!resourcePath.startsWith('/')) {
+    resourcePath = `/${resourcePath}`;
+  }
+  return resourcePath;
+};
+
+const getCloudFrontDomain = () => {
+  const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || process.env.CLOUDFRONT_URL;
+  if (!cloudfrontUrl) return null;
+  return cloudfrontUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+};
 
 /**
  * POST /api/watch/start
@@ -39,24 +85,124 @@ interface WatchStartResponse {
  */
 export async function POST(request: NextRequest) {
   try {
-    const sessionUser = await getSessionUser(request);
-    if (!sessionUser) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const body = (await request.json()) as WatchStartRequest;
+    const assetId = body?.assetId || null;
+    const reelId = body?.reelId || null;
+    const reelsClientAuth = hasValidReelsClientHeaders(request);
+    let sessionUser = null;
+
+    // Only resolve session when needed; reel-client auth can bypass this for reel playback.
+    if (assetId || !reelsClientAuth) {
+      sessionUser = await getSessionUser(request);
     }
 
-    const body = (await request.json()) as WatchStartRequest;
-    const { assetId } = body;
-
-    if (!assetId) {
+    if (!assetId && !reelId) {
       return NextResponse.json(
-        { error: 'assetId is required' },
+        { error: 'assetId or reelId is required' },
         { status: 400 }
       );
     }
 
+    if (assetId && !sessionUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (reelId && !sessionUser && !reelsClientAuth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    if (reelId) {
+      const reel = await prisma.reel.findUnique({
+        where: { id: reelId },
+        select: {
+          id: true,
+          status: true,
+          playbackType: true,
+          cloudfrontPath: true,
+          s3Url: true,
+        }
+      });
+
+      if (!reel) {
+        return NextResponse.json(
+          { error: 'Reel not found' },
+          { status: 404 }
+        );
+      }
+
+      if (reel.status !== 'completed') {
+        return NextResponse.json(
+          { error: 'Reel is not ready for playback' },
+          { status: 403 }
+        );
+      }
+
+      const cloudfrontDomain = getCloudFrontDomain();
+      if (!cloudfrontDomain) {
+        return NextResponse.json(
+          { error: 'Playback configuration error' },
+          { status: 500 }
+        );
+      }
+
+      let resourcePath = reel.cloudfrontPath || '';
+      if (!resourcePath && reel.s3Url) {
+        const transformed = transformToCloudFront(reel.s3Url);
+        if (transformed) {
+          try {
+            resourcePath = new URL(transformed).pathname;
+          } catch {
+            resourcePath = transformed;
+          }
+        }
+      }
+
+      if (!resourcePath) {
+        return NextResponse.json(
+          { error: 'Playback URL missing for reel asset' },
+          { status: 500 }
+        );
+      }
+
+      resourcePath = normalizeResourcePath(resourcePath);
+      const playbackType = (reel.playbackType || 'mp4') as 'mp4' | 'hls';
+
+      let playbackUrl = '';
+      let cookieHeader: string | undefined;
+      let expiresAt: Date;
+
+      if (playbackType === 'hls') {
+        const cookie = generateCloudFrontSignedCookie(
+          `https://${cloudfrontDomain}${resourcePath}*`,
+          10
+        );
+        playbackUrl = `https://${cloudfrontDomain}${resourcePath}`;
+        cookieHeader = cookie.cookieValue;
+        expiresAt = cookie.expiresAt;
+      } else {
+        const signed = generateCloudFrontSignedURL(
+          cloudfrontDomain,
+          resourcePath,
+          10
+        );
+        playbackUrl = signed.url;
+        expiresAt = signed.expiresAt;
+      }
+
+      const response: WatchStartResponse = {
+        success: true,
+        playbackUrl,
+        playbackType,
+        expiresAt: expiresAt.toISOString(),
+        ...(cookieHeader && { cookieHeader }),
+      };
+
+      return NextResponse.json(response, { status: 200 });
+    }
+
     // Fetch video from database
     const video = await prisma.video.findUnique({
-      where: { id: assetId },
+      where: { id: assetId! },
     });
 
     if (!video) {
@@ -127,7 +273,7 @@ export async function POST(request: NextRequest) {
       try {
         const url = new URL(resourcePath);
         resourcePath = url.pathname;
-      } catch (e) {
+      } catch {
         console.warn('Invalid URL in cloudfrontPath, using as-is:', resourcePath);
       }
     }
@@ -188,13 +334,14 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   const assetId = request.nextUrl.searchParams.get('assetId');
+  const reelId = request.nextUrl.searchParams.get('reelId');
 
-  if (!assetId) {
+  if (!assetId && !reelId) {
     return NextResponse.json(
-      { error: 'assetId query parameter is required' },
+      { error: 'assetId or reelId query parameter is required' },
       { status: 400 }
     );
   }
 
-  return POST(new NextRequest(request, { body: JSON.stringify({ assetId }) }));
+  return POST(new NextRequest(request, { body: JSON.stringify({ assetId: assetId || undefined, reelId: reelId || undefined }) }));
 }

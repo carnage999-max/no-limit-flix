@@ -21,6 +21,8 @@ type ReelsJob = {
     finishedAt?: number | null;
     summary?: {
         requested?: number;
+        candidatesQueued?: number;
+        candidatesProcessed?: number;
         imported?: number;
         updated?: number;
         skipped?: number;
@@ -28,6 +30,8 @@ type ReelsJob = {
         minDurationSeconds?: number;
         maxDurationSeconds?: number;
         requireAudio?: boolean;
+        skippedReasons?: Record<string, number>;
+        failedReasons?: Record<string, number>;
     };
 };
 
@@ -67,6 +71,14 @@ const formatSize = (value?: string | null) => {
     return `${bytes} B`;
 };
 
+const formatReasonMap = (value?: Record<string, number>) => {
+    if (!value) return [];
+    return Object.entries(value)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([reason, count]) => `${reason} (${count})`);
+};
+
 export default function AdminReelsPage() {
     const [query, setQuery] = useState(DEFAULT_QUERY);
     const [limit, setLimit] = useState(20);
@@ -89,6 +101,15 @@ export default function AdminReelsPage() {
         if (!jobStatus?.total || !jobStatus.processed) return 0;
         return Math.min(100, Math.round((jobStatus.processed / jobStatus.total) * 100));
     }, [jobStatus]);
+
+    const topSkippedReasons = useMemo(
+        () => formatReasonMap(jobStatus?.summary?.skippedReasons),
+        [jobStatus?.summary?.skippedReasons]
+    );
+    const topFailedReasons = useMemo(
+        () => formatReasonMap(jobStatus?.summary?.failedReasons),
+        [jobStatus?.summary?.failedReasons]
+    );
 
     const loadItems = useCallback(async () => {
         setLoadingList(true);
@@ -430,11 +451,24 @@ export default function AdminReelsPage() {
                     </div>
                     <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', color: '#A7ABB4', fontSize: '0.75rem' }}>
                         <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? 0}</span>
+                        {typeof jobStatus?.summary?.requested === 'number' && (
+                            <span>Requested: {jobStatus.summary.requested}</span>
+                        )}
                         <span>Imported: {jobStatus?.imported ?? 0}</span>
                         <span>Updated: {jobStatus?.updated ?? 0}</span>
                         <span>Skipped: {jobStatus?.skipped ?? 0}</span>
                         <span>Failed: {jobStatus?.failed ?? 0}</span>
                     </div>
+                    {(topSkippedReasons.length > 0 || topFailedReasons.length > 0) && (
+                        <div style={{ marginTop: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.35rem', color: '#A7ABB4', fontSize: '0.75rem' }}>
+                            {topSkippedReasons.length > 0 && (
+                                <span>Top skipped: {topSkippedReasons.join(' | ')}</span>
+                            )}
+                            {topFailedReasons.length > 0 && (
+                                <span>Top failed: {topFailedReasons.join(' | ')}</span>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 
