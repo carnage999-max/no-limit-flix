@@ -35,21 +35,46 @@ app.use(express.json({ limit: '2mb' }));
 const jobs = new Map();
 
 const parseYear = (value) => {
-    if (!value) return null;
-    const match = value.match(/\d{4}/);
+    if (value === null || value === undefined) return null;
+    if (Array.isArray(value)) {
+        for (const entry of value) {
+            const parsed = parseYear(entry);
+            if (parsed) return parsed;
+        }
+        return null;
+    }
+    const match = String(value).match(/\d{4}/);
     return match ? Number(match[0]) : null;
 };
 
 const parseDurationSeconds = (value) => {
-    if (!value) return null;
-    if (value.includes(':')) {
-        const parts = value.split(':').map((part) => Number(part));
-        if (parts.some((p) => Number.isNaN(p))) return null;
-        const [h, m, s] = parts.length === 3 ? parts : [0, parts[0], parts[1] || 0];
-        return h * 3600 + m * 60 + s;
+    if (value === null || value === undefined || value === '') return null;
+
+    if (Array.isArray(value)) {
+        for (const entry of value) {
+            const parsed = parseDurationSeconds(entry);
+            if (parsed) return parsed;
+        }
+        return null;
     }
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : null;
+
+    if (typeof value === 'number') {
+        return Number.isFinite(value) && value > 0 ? value : null;
+    }
+
+    const normalized = String(value).trim();
+    if (!normalized) return null;
+
+    if (normalized.includes(':')) {
+        const parts = normalized.split(':').map((part) => Number.parseFloat(part));
+        if (parts.some((part) => Number.isNaN(part))) return null;
+        const [h, m, s] = parts.length === 3 ? parts : [0, parts[0], parts[1] || 0];
+        const total = (h * 3600) + (m * 60) + s;
+        return Number.isFinite(total) && total > 0 ? total : null;
+    }
+
+    const numeric = Number.parseFloat(normalized.replace(/,/g, ''));
+    return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 };
 
 const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
@@ -68,10 +93,25 @@ const EXCLUDED_TITLE_KEYWORDS = [
     'sample'
 ];
 
+const REEL_EXCLUDED_TITLE_KEYWORDS = [
+    'trailer',
+    'preview',
+    'teaser',
+    'promo',
+    'commercial',
+    'sample'
+];
+
 const isExcludedTitle = (value) => {
     if (!value) return false;
     const lower = value.toLowerCase();
     return EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
+
+const isExcludedReelTitle = (value) => {
+    if (!value) return false;
+    const lower = value.toLowerCase();
+    return REEL_EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
 };
 
 const stringifyValue = (value) => {
@@ -84,6 +124,41 @@ const parseMaybeNumber = (value) => {
     if (value === null || value === undefined || value === '') return null;
     const numeric = Number(value);
     return Number.isFinite(numeric) ? numeric : null;
+};
+
+const resolveDurationSeconds = (file, metadata) => {
+    const candidates = [
+        file?.length,
+        file?.duration,
+        file?.runtime,
+        metadata?.length,
+        metadata?.runtime,
+        metadata?.duration,
+        metadata?.avg_length
+    ];
+
+    for (const candidate of candidates) {
+        const parsed = parseDurationSeconds(candidate);
+        if (parsed) return parsed;
+    }
+
+    return null;
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const withRetry = async (operation, attempts = 3, baseDelayMs = 400) => {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            if (attempt >= attempts) break;
+            await sleep(baseDelayMs * attempt);
+        }
+    }
+    throw lastError;
 };
 
 const detectAudioSignal = (file, metadata) => {
@@ -966,11 +1041,16 @@ app.post('/reels/import', async (req, res) => {
 
         const allowMkv = Boolean(req.body?.allowMkv);
         const requireAudio = req.body?.requireAudio !== false;
-        const query = String(
-            req.body?.query
-            || req.body?.presetQuery
-            || '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR collection:(short_films)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)'
-        );
+        const allowUnknownDuration = req.body?.allowUnknownDuration === true;
+        const providedQuery = req.body?.query || req.body?.presetQuery;
+        const discoveryQueries = providedQuery
+            ? [String(providedQuery)]
+            : [
+                '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR description:(short)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
+                '(mediatype:(movies)) AND (subject:("short films") OR subject:(shorts) OR collection:(short_films)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
+                '(mediatype:(movies)) AND (collection:(prelinger OR classic_tv OR opensource_movies OR community_video OR fedflix)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
+                '(mediatype:(movies)) AND (subject:("public domain") OR rights:("public domain") OR licenseurl:(creativecommons.org)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)'
+            ];
         const limit = Math.min(Math.max(Number(req.body?.limit) || 20, 1), 200);
         const minDurationSeconds = Math.max(
             1,
@@ -980,6 +1060,7 @@ app.post('/reels/import', async (req, res) => {
             minDurationSeconds,
             Number(req.body?.maxDurationSeconds) || DEFAULT_REEL_MAX_DURATION_SECONDS
         );
+        const targetDurationSeconds = Math.round((minDurationSeconds + maxDurationSeconds) / 2);
         const compress = req.body?.compress !== false;
         const compressMinBytes = Math.max(
             0,
@@ -1004,18 +1085,47 @@ app.post('/reels/import', async (req, res) => {
         const usesSearchDiscovery = providedItems.length === 0 && providedIdentifiers.length === 0;
         const requestedCount = limit;
         const candidateMultiplier = Math.min(
-            Math.max(Number(req.body?.candidateMultiplier) || 6, 1),
+            Math.max(Number(req.body?.candidateMultiplier) || 8, 1),
             10
         );
         const candidateSearchLimit = usesSearchDiscovery
-            ? Math.min(200, Math.max(requestedCount, requestedCount * candidateMultiplier))
+            ? Math.min(500, Math.max(requestedCount, requestedCount * candidateMultiplier))
             : requestedCount;
+
+        const discoverIdentifiers = async () => {
+            const collected = [];
+            const seen = new Set();
+            const perQueryLimit = Math.min(
+                1000,
+                Math.max(
+                    candidateSearchLimit,
+                    Math.ceil((candidateSearchLimit * 2) / Math.max(discoveryQueries.length, 1))
+                )
+            );
+
+            for (const query of discoveryQueries) {
+                if (collected.length >= candidateSearchLimit) break;
+                const identifiers = await withRetry(
+                    () => searchArchiveIdentifiers(query, perQueryLimit),
+                    2,
+                    350
+                );
+                for (const identifier of identifiers) {
+                    if (!identifier || seen.has(identifier)) continue;
+                    seen.add(identifier);
+                    collected.push(identifier);
+                    if (collected.length >= candidateSearchLimit) break;
+                }
+            }
+
+            return collected;
+        };
 
         const itemsToProcess = providedItems.length > 0
             ? providedItems
             : (providedIdentifiers.length > 0
                 ? providedIdentifiers.map((identifier) => ({ identifier, fileName: null }))
-                : (await searchArchiveIdentifiers(query, candidateSearchLimit))
+                : (await discoverIdentifiers())
                     .map((identifier) => ({ identifier, fileName: null })));
 
         const selectBestReelFile = (files, metadata, preferredFileName) => {
@@ -1027,8 +1137,11 @@ app.post('/reels/import', async (req, res) => {
 
             const candidates = ranked
                 .map((file) => {
-                    const duration = parseDurationSeconds(file.length) || 0;
-                    if (duration && (duration < minDurationSeconds || duration > maxDurationSeconds)) {
+                    const duration = resolveDurationSeconds(file, metadata);
+                    if (duration === null && usesSearchDiscovery && !allowUnknownDuration) {
+                        return null;
+                    }
+                    if (duration !== null && (duration < minDurationSeconds || duration > maxDurationSeconds)) {
                         return null;
                     }
                     const audioSignal = detectAudioSignal(file, metadata);
@@ -1047,6 +1160,13 @@ app.post('/reels/import', async (req, res) => {
             const ordered = requireAudio
                 ? [...withAudio, ...unknownAudio]
                 : [...withAudio, ...unknownAudio, ...silent];
+
+            ordered.sort((a, b) => {
+                const aDistance = a.duration === null ? Number.POSITIVE_INFINITY : Math.abs(a.duration - targetDurationSeconds);
+                const bDistance = b.duration === null ? Number.POSITIVE_INFINITY : Math.abs(b.duration - targetDurationSeconds);
+                if (!Number.isFinite(aDistance) && !Number.isFinite(bDistance)) return 0;
+                return aDistance - bDistance;
+            });
 
             return ordered[0] || null;
         };
@@ -1074,7 +1194,11 @@ app.post('/reels/import', async (req, res) => {
                 };
 
                 try {
-                    const { metadata, files } = await fetchArchiveMetadata(identifier);
+                    const { metadata, files } = await withRetry(
+                        () => fetchArchiveMetadata(identifier),
+                        2,
+                        350
+                    );
                     if (metadata?.mediatype && String(metadata.mediatype).toLowerCase() !== 'movies') {
                         result.status = 'skipped';
                         result.reason = `Mediatype ${metadata.mediatype} not movies`;
@@ -1091,33 +1215,38 @@ app.post('/reels/import', async (req, res) => {
                     }
 
                     const bestFile = picked.file;
-                    const duration = picked.duration || parseDurationSeconds(bestFile.length) || null;
+                    const duration = picked.duration;
                     const hasAudio = picked.audioSignal;
-                    const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
-                    const sourceFileSize = parseMaybeNumber(bestFile.size);
-                    const shouldCompress = compress && (!sourceFileSize || sourceFileSize >= compressMinBytes);
-                    const outputFileName = shouldCompress ? toMp4Name(bestFile.name) : bestFile.name;
-                    const s3KeyPlayback = buildS3Key(identifier, outputFileName, 'reels');
-                    const { s3Url, contentType: uploadedContentType, transcoded } = await uploadToS3(
-                        playbackUrl,
-                        s3KeyPlayback,
-                        bestFile,
-                        {
-                            transcode: shouldCompress
-                        }
-                    );
-                    const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                     let title = stringifyMetadata(metadata?.title) || deriveTitleFromFileName(bestFile.name) || identifier;
-                    if (isGenericBundleTitle(title) || isExcludedTitle(title)) {
+                    if (isGenericBundleTitle(title) || isExcludedReelTitle(title)) {
                         title = deriveTitleFromFileName(bestFile.name) || identifier;
                     }
-                    if (isExcludedTitle(bestFile.name)) {
+                    if (isExcludedReelTitle(title) || isExcludedReelTitle(bestFile.name)) {
                         result.status = 'skipped';
                         result.reason = 'Excluded by title keywords';
                         results.push(result);
                         continue;
                     }
+
+                    const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
+                    const sourceFileSize = parseMaybeNumber(bestFile.size);
+                    const shouldCompress = compress && (!sourceFileSize || sourceFileSize >= compressMinBytes);
+                    const outputFileName = shouldCompress ? toMp4Name(bestFile.name) : bestFile.name;
+                    const s3KeyPlayback = buildS3Key(identifier, outputFileName, 'reels');
+                    const { s3Url, contentType: uploadedContentType, transcoded } = await withRetry(
+                        () => uploadToS3(
+                            playbackUrl,
+                            s3KeyPlayback,
+                            bestFile,
+                            {
+                                transcode: shouldCompress
+                            }
+                        ),
+                        2,
+                        500
+                    );
+                    const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                     const metadataDescription = stringifyMetadata(metadata?.description);
                     const description = metadataDescription && metadataDescription.trim().length > 0
@@ -1221,9 +1350,12 @@ app.post('/reels/import', async (req, res) => {
                 failed: failedCount,
                 minDurationSeconds,
                 maxDurationSeconds,
+                targetDurationSeconds,
                 requireAudio,
+                allowUnknownDuration,
                 compress,
                 compressMinBytes,
+                searchQueries: discoveryQueries,
                 ffmpegAvailable: isTranscoderAvailable(),
                 transcoded: transcodedCount,
                 uploadedOriginal: uploadedOriginalCount,
@@ -1276,9 +1408,12 @@ app.post('/reels/import', async (req, res) => {
                     requested: requestedCount,
                     queued: itemsToProcess.length,
                     candidateMultiplier: usesSearchDiscovery ? candidateMultiplier : 1,
+                    searchQueries: discoveryQueries,
                     minDurationSeconds,
                     maxDurationSeconds,
+                    targetDurationSeconds,
                     requireAudio,
+                    allowUnknownDuration,
                     compress,
                     compressMinBytes
                 }

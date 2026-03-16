@@ -80,26 +80,46 @@ const buildArchiveDownloadUrl = (identifier, fileName) => {
     return `${IA_BASE}/download/${identifier}/${encodedName}`;
 };
 
-async function searchArchiveIdentifiers(query, limit) {
-    const rows = Math.min(Math.max(limit, 1), 100);
-    const url = new URL(`${IA_BASE}/advancedsearch.php`);
-    url.searchParams.set('q', query);
-    url.searchParams.set('fl[]', 'identifier');
-    url.searchParams.set('rows', rows.toString());
-    url.searchParams.set('page', '1');
-    url.searchParams.set('output', 'json');
+async function searchArchiveIdentifiers(query, limit, page = 1) {
+    const target = Math.min(Math.max(limit, 1), 1000);
+    const rows = Math.min(100, target);
+    const identifiers = [];
+    const seen = new Set();
+    let currentPage = Math.max(1, Number(page) || 1);
 
-    const response = await fetch(url.toString(), {
-        headers: { 'Accept': 'application/json' }
-    });
+    while (identifiers.length < target) {
+        const url = new URL(`${IA_BASE}/advancedsearch.php`);
+        url.searchParams.set('q', query);
+        url.searchParams.set('fl[]', 'identifier');
+        url.searchParams.set('rows', rows.toString());
+        url.searchParams.set('page', String(currentPage));
+        url.searchParams.set('output', 'json');
 
-    if (!response.ok) {
-        throw new Error(`Internet Archive search failed (${response.status})`);
+        const response = await fetch(url.toString(), {
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Internet Archive search failed (${response.status})`);
+        }
+
+        const data = await response.json();
+        const docs = data?.response?.docs || [];
+        if (docs.length === 0) break;
+
+        for (const doc of docs) {
+            const identifier = doc?.identifier;
+            if (!identifier || seen.has(identifier)) continue;
+            seen.add(identifier);
+            identifiers.push(identifier);
+            if (identifiers.length >= target) break;
+        }
+
+        if (docs.length < rows) break;
+        currentPage += 1;
     }
 
-    const data = await response.json();
-    const docs = data?.response?.docs || [];
-    return docs.map((doc) => doc.identifier).filter(Boolean);
+    return identifiers;
 }
 
 async function fetchArchiveMetadata(identifier) {

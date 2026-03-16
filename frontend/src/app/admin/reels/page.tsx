@@ -53,7 +53,7 @@ type ReelsListItem = {
     createdAt: string;
 };
 
-const DEFAULT_QUERY = '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR collection:(short_films)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)';
+const DEFAULT_QUERY = '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR description:(short)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)';
 
 const formatDuration = (seconds?: number | null) => {
     if (!seconds || !Number.isFinite(seconds)) return '—';
