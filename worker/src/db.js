@@ -134,8 +134,113 @@ async function upsertVideo(payload) {
     return result.rows[0];
 }
 
+async function upsertReel(payload) {
+    const now = new Date();
+    const query = `
+        INSERT INTO "Reel" (
+            "id",
+            "title",
+            "description",
+            "fileName",
+            "thumbnailUrl",
+            "playbackType",
+            "s3KeyPlayback",
+            "cloudfrontPath",
+            "s3Url",
+            "duration",
+            "fileSize",
+            "mimeType",
+            "width",
+            "height",
+            "resolution",
+            "hasAudio",
+            "status",
+            "sourceType",
+            "sourceProvider",
+            "sourceIdentifier",
+            "sourcePageUrl",
+            "archiveIdentifier",
+            "sourceRights",
+            "sourceLicenseUrl",
+            "sourceMetadata",
+            "tags",
+            "language",
+            "createdAt",
+            "updatedAt"
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+            $21, $22, $23, $24, $25::jsonb, $26, $27, $28, $29
+        )
+        ON CONFLICT ("archiveIdentifier") DO UPDATE SET
+            "title" = EXCLUDED."title",
+            "description" = EXCLUDED."description",
+            "fileName" = EXCLUDED."fileName",
+            "thumbnailUrl" = EXCLUDED."thumbnailUrl",
+            "playbackType" = EXCLUDED."playbackType",
+            "s3KeyPlayback" = EXCLUDED."s3KeyPlayback",
+            "cloudfrontPath" = EXCLUDED."cloudfrontPath",
+            "s3Url" = EXCLUDED."s3Url",
+            "duration" = EXCLUDED."duration",
+            "fileSize" = EXCLUDED."fileSize",
+            "mimeType" = EXCLUDED."mimeType",
+            "width" = EXCLUDED."width",
+            "height" = EXCLUDED."height",
+            "resolution" = EXCLUDED."resolution",
+            "hasAudio" = EXCLUDED."hasAudio",
+            "status" = EXCLUDED."status",
+            "sourceType" = EXCLUDED."sourceType",
+            "sourceProvider" = EXCLUDED."sourceProvider",
+            "sourceIdentifier" = EXCLUDED."sourceIdentifier",
+            "sourcePageUrl" = EXCLUDED."sourcePageUrl",
+            "sourceRights" = EXCLUDED."sourceRights",
+            "sourceLicenseUrl" = EXCLUDED."sourceLicenseUrl",
+            "sourceMetadata" = EXCLUDED."sourceMetadata",
+            "tags" = EXCLUDED."tags",
+            "language" = EXCLUDED."language",
+            "updatedAt" = EXCLUDED."updatedAt"
+        RETURNING "id", "title", (xmax = 0) AS inserted;
+    `;
+
+    const values = [
+        cuid(),
+        payload.title,
+        payload.description,
+        payload.fileName,
+        payload.thumbnailUrl,
+        payload.playbackType || 'mp4',
+        payload.s3KeyPlayback,
+        payload.cloudfrontPath,
+        payload.s3Url,
+        payload.duration,
+        payload.fileSize,
+        payload.mimeType,
+        payload.width,
+        payload.height,
+        payload.resolution,
+        payload.hasAudio,
+        payload.status || 'completed',
+        payload.sourceType,
+        payload.sourceProvider,
+        payload.sourceIdentifier,
+        payload.sourcePageUrl,
+        payload.archiveIdentifier,
+        payload.sourceRights,
+        payload.sourceLicenseUrl,
+        payload.sourceMetadata,
+        payload.tags,
+        payload.language,
+        now,
+        now
+    ];
+
+    const result = await pool.query(query, values);
+    return result.rows[0];
+}
+
 module.exports = {
     upsertVideo,
+    upsertReel,
     pool,
     updateVideoPoster: async (id, thumbnailUrl, tmdbId) => {
         const result = await pool.query(
@@ -174,6 +279,13 @@ module.exports = {
     findVideoByS3KeyPlayback: async (s3KeyPlayback) => {
         const result = await pool.query(
             'SELECT id, "archiveIdentifier" FROM "Video" WHERE "s3KeyPlayback" = $1 LIMIT 1',
+            [s3KeyPlayback]
+        );
+        return result.rows[0] || null;
+    },
+    findReelByS3KeyPlayback: async (s3KeyPlayback) => {
+        const result = await pool.query(
+            'SELECT id, "archiveIdentifier" FROM "Reel" WHERE "s3KeyPlayback" = $1 LIMIT 1',
             [s3KeyPlayback]
         );
         return result.rows[0] || null;

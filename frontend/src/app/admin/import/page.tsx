@@ -274,20 +274,36 @@ export default function AdminImportPage() {
                         Import From Internet Archive
                     </h1>
                 </div>
-                <Link
-                    href="/admin/upload"
-                    style={{
-                        textDecoration: 'none',
-                        color: '#A7ABB4',
-                        fontSize: '0.875rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem'
-                    }}
-                >
-                    <Film className="w-4 h-4" />
-                    Upload Library
-                </Link>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+                    <Link
+                        href="/admin/reels"
+                        style={{
+                            textDecoration: 'none',
+                            color: '#A7ABB4',
+                            fontSize: '0.875rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        <Film className="w-4 h-4" />
+                        Reels Import
+                    </Link>
+                    <Link
+                        href="/admin/upload"
+                        style={{
+                            textDecoration: 'none',
+                            color: '#A7ABB4',
+                            fontSize: '0.875rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem'
+                        }}
+                    >
+                        <Film className="w-4 h-4" />
+                        Upload Library
+                    </Link>
+                </div>
             </div>
 
             <div style={{

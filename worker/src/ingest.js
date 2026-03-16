@@ -33,7 +33,11 @@ const sanitizeFileName = (name) => {
     return name.replace(/[\\/]+/g, '_').trim();
 };
 
-const buildS3Key = (identifier, fileName) => {
+const buildS3Key = (identifier, fileName, kind = '') => {
+    const normalizedKind = String(kind || '').replace(/[^a-z0-9_-]/gi, '').toLowerCase();
+    if (normalizedKind) {
+        return `ia/${normalizedKind}/${identifier}/${sanitizeFileName(fileName)}`;
+    }
     return `ia/${identifier}/${sanitizeFileName(fileName)}`;
 };
 

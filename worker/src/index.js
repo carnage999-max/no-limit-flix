@@ -5,12 +5,21 @@ const cuid = require('cuid');
 const {
     searchArchiveIdentifiers,
     fetchArchiveMetadata,
+    rankPlayableFiles,
     pickBestPlayableFile,
     buildArchiveDownloadUrl,
     inferMimeType
 } = require('./internet-archive');
 const { findBestPoster, resolveOmdbDetails } = require('./catalog');
-const { upsertVideo, findVideoByS3KeyPlayback, pool, updateVideoPoster, updateVideoMetadata } = require('./db');
+const {
+    upsertVideo,
+    upsertReel,
+    findVideoByS3KeyPlayback,
+    findReelByS3KeyPlayback,
+    pool,
+    updateVideoPoster,
+    updateVideoMetadata
+} = require('./db');
 const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl } = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -45,6 +54,8 @@ const parseDurationSeconds = (value) => {
 
 const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
 const MIN_SERIES_DURATION_SECONDS = 5 * 60;
+const DEFAULT_REEL_MAX_DURATION_SECONDS = 150;
+const DEFAULT_REEL_MIN_DURATION_SECONDS = 8;
 const EXCLUDED_TITLE_KEYWORDS = [
     'trailer',
     'preview',
@@ -61,6 +72,63 @@ const isExcludedTitle = (value) => {
     if (!value) return false;
     const lower = value.toLowerCase();
     return EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
+
+const stringifyValue = (value) => {
+    if (value === null || value === undefined) return '';
+    if (Array.isArray(value)) return value.join(' ');
+    return String(value);
+};
+
+const parseMaybeNumber = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+};
+
+const detectAudioSignal = (file, metadata) => {
+    const candidateValues = [
+        file?.sound,
+        file?.audio,
+        file?.audio_channels,
+        file?.track,
+        file?.format,
+        file?.title,
+        file?.name,
+        metadata?.sound,
+        metadata?.audio,
+        metadata?.description
+    ].map(stringifyValue).join(' ').toLowerCase();
+
+    if (!candidateValues) return null;
+
+    const explicitNo = [
+        'no audio',
+        'without audio',
+        'silent',
+        'mute',
+        'muted'
+    ];
+    if (explicitNo.some((token) => candidateValues.includes(token))) {
+        return false;
+    }
+
+    const audioChannels = parseMaybeNumber(file?.audio_channels);
+    if (audioChannels && audioChannels > 0) return true;
+
+    const explicitYes = [
+        'audio',
+        'sound',
+        'stereo',
+        'mono',
+        'aac',
+        'mp3'
+    ];
+    if (explicitYes.some((token) => candidateValues.includes(token))) {
+        return true;
+    }
+
+    return null;
 };
 
 const fetchVideosNeedingPoster = async (limit) => {
@@ -877,6 +945,275 @@ app.post('/import', async (req, res) => {
     } catch (error) {
         console.error('Worker import error:', error);
         return res.status(500).json({ error: 'Worker import failed', details: error.message });
+    }
+});
+
+app.post('/reels/import', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const allowMkv = Boolean(req.body?.allowMkv);
+        const requireAudio = req.body?.requireAudio !== false;
+        const query = String(
+            req.body?.query
+            || req.body?.presetQuery
+            || '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR collection:(short_films)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)'
+        );
+        const limit = Math.min(Math.max(Number(req.body?.limit) || 20, 1), 200);
+        const minDurationSeconds = Math.max(
+            1,
+            Number(req.body?.minDurationSeconds) || DEFAULT_REEL_MIN_DURATION_SECONDS
+        );
+        const maxDurationSeconds = Math.max(
+            minDurationSeconds,
+            Number(req.body?.maxDurationSeconds) || DEFAULT_REEL_MAX_DURATION_SECONDS
+        );
+
+        const providedItems = Array.isArray(req.body?.items)
+            ? req.body.items
+                .map((item) => ({
+                    identifier: String(item?.identifier || '').trim(),
+                    fileName: item?.fileName ? String(item.fileName).trim() : null
+                }))
+                .filter((item) => item.identifier)
+            : [];
+
+        const providedIdentifiers = Array.isArray(req.body?.identifiers)
+            ? req.body.identifiers
+                .map((identifier) => String(identifier || '').trim())
+                .filter(Boolean)
+            : [];
+
+        const itemsToProcess = providedItems.length > 0
+            ? providedItems
+            : (providedIdentifiers.length > 0
+                ? providedIdentifiers.map((identifier) => ({ identifier, fileName: null }))
+                : (await searchArchiveIdentifiers(query, limit))
+                    .map((identifier) => ({ identifier, fileName: null })));
+
+        const selectBestReelFile = (files, metadata, preferredFileName) => {
+            let ranked = rankPlayableFiles(files, allowMkv);
+            if (preferredFileName) {
+                ranked = ranked.filter((file) => file?.name === preferredFileName);
+            }
+            if (ranked.length === 0) return null;
+
+            const candidates = ranked
+                .map((file) => {
+                    const duration = parseDurationSeconds(file.length) || 0;
+                    if (duration && (duration < minDurationSeconds || duration > maxDurationSeconds)) {
+                        return null;
+                    }
+                    const audioSignal = detectAudioSignal(file, metadata);
+                    if (requireAudio && audioSignal === false) {
+                        return null;
+                    }
+                    return { file, duration, audioSignal };
+                })
+                .filter(Boolean);
+
+            if (candidates.length === 0) return null;
+
+            const withAudio = candidates.filter((item) => item.audioSignal === true);
+            const unknownAudio = candidates.filter((item) => item.audioSignal === null);
+            const silent = candidates.filter((item) => item.audioSignal === false);
+            const ordered = requireAudio
+                ? [...withAudio, ...unknownAudio]
+                : [...withAudio, ...unknownAudio, ...silent];
+
+            return ordered[0] || null;
+        };
+
+        const runReelImport = async (job) => {
+            const results = [];
+
+            for (const item of itemsToProcess) {
+                const identifier = item.identifier;
+                const result = {
+                    identifier,
+                    title: identifier,
+                    fileName: item.fileName || null,
+                    duration: null,
+                    hasAudio: null,
+                    status: 'failed'
+                };
+
+                try {
+                    const { metadata, files } = await fetchArchiveMetadata(identifier);
+                    if (metadata?.mediatype && String(metadata.mediatype).toLowerCase() !== 'movies') {
+                        result.status = 'skipped';
+                        result.reason = `Mediatype ${metadata.mediatype} not movies`;
+                        results.push(result);
+                        continue;
+                    }
+
+                    const picked = selectBestReelFile(files, metadata, item.fileName);
+                    if (!picked) {
+                        result.status = 'skipped';
+                        result.reason = 'No short playable file matched duration/audio constraints';
+                        results.push(result);
+                        continue;
+                    }
+
+                    const bestFile = picked.file;
+                    const duration = picked.duration || parseDurationSeconds(bestFile.length) || null;
+                    const hasAudio = picked.audioSignal;
+                    const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
+                    const s3KeyPlayback = buildS3Key(identifier, bestFile.name, 'reels');
+                    const { s3Url, contentType: uploadedContentType } = await uploadToS3(playbackUrl, s3KeyPlayback, bestFile);
+                    const sourcePageUrl = `https://archive.org/details/${identifier}`;
+
+                    let title = stringifyMetadata(metadata?.title) || deriveTitleFromFileName(bestFile.name) || identifier;
+                    if (isGenericBundleTitle(title) || isExcludedTitle(title)) {
+                        title = deriveTitleFromFileName(bestFile.name) || identifier;
+                    }
+                    if (isExcludedTitle(bestFile.name)) {
+                        result.status = 'skipped';
+                        result.reason = 'Excluded by title keywords';
+                        results.push(result);
+                        continue;
+                    }
+
+                    const metadataDescription = stringifyMetadata(metadata?.description);
+                    const description = metadataDescription && metadataDescription.trim().length > 0
+                        ? metadataDescription
+                        : 'Public domain short-form video from Internet Archive.';
+                    const fileSize = bestFile.size ? BigInt(bestFile.size).toString() : null;
+                    const width = bestFile.width ? Number(bestFile.width) : null;
+                    const height = bestFile.height ? Number(bestFile.height) : null;
+                    const resolution = height ? `${height}p` : null;
+                    const mimeType = normalizeMimeType(bestFile) || uploadedContentType || inferMimeType(bestFile);
+                    const thumbnailUrl = findThumbnailForFile(files, identifier, bestFile.name) || `https://archive.org/services/img/${identifier}`;
+                    let archiveIdentifier = `${identifier}:${bestFile.name}`;
+                    const existingByKey = await findReelByS3KeyPlayback(s3KeyPlayback);
+                    if (existingByKey?.archiveIdentifier && existingByKey.archiveIdentifier !== archiveIdentifier) {
+                        archiveIdentifier = existingByKey.archiveIdentifier;
+                    }
+
+                    const dbRow = await upsertReel({
+                        title,
+                        description,
+                        fileName: bestFile.name,
+                        thumbnailUrl,
+                        playbackType: 'mp4',
+                        s3KeyPlayback,
+                        cloudfrontPath: `/${s3KeyPlayback}`,
+                        s3Url,
+                        duration,
+                        fileSize,
+                        mimeType,
+                        width,
+                        height,
+                        resolution,
+                        hasAudio,
+                        status: 'completed',
+                        sourceType: 'external_legal',
+                        sourceProvider: 'internet_archive',
+                        sourceIdentifier: identifier,
+                        sourcePageUrl,
+                        archiveIdentifier,
+                        sourceRights: stringifyMetadata(metadata?.rights),
+                        sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                        sourceMetadata: JSON.stringify(metadata),
+                        tags: stringifyMetadata(metadata?.subject || metadata?.keywords || metadata?.tags),
+                        language: stringifyMetadata(metadata?.language)
+                    });
+
+                    result.title = dbRow.title;
+                    result.fileName = bestFile.name;
+                    result.duration = duration;
+                    result.hasAudio = hasAudio;
+                    result.playbackUrl = s3Url;
+                    result.thumbnailUrl = thumbnailUrl;
+                    result.sourcePageUrl = sourcePageUrl;
+                    result.status = dbRow.inserted ? 'imported' : 'updated';
+                } catch (error) {
+                    result.status = 'failed';
+                    result.reason = error?.message || 'Failed to ingest reel';
+                }
+
+                results.push(result);
+
+                if (job) {
+                    job.processed += 1;
+                    if (result.status === 'imported') job.imported += 1;
+                    if (result.status === 'updated') job.updated += 1;
+                    if (result.status === 'skipped') job.skipped += 1;
+                    if (result.status === 'failed') job.failed += 1;
+                    job.lastUpdatedAt = Date.now();
+                }
+            }
+
+            const summary = {
+                requested: itemsToProcess.length,
+                imported: results.filter((r) => r.status === 'imported').length,
+                updated: results.filter((r) => r.status === 'updated').length,
+                skipped: results.filter((r) => r.status === 'skipped').length,
+                failed: results.filter((r) => r.status === 'failed').length,
+                minDurationSeconds,
+                maxDurationSeconds,
+                requireAudio
+            };
+
+            return { summary, results };
+        };
+
+        const asyncMode = req.body?.async !== false;
+        if (asyncMode) {
+            const jobId = cuid();
+            const job = {
+                id: jobId,
+                type: 'reels_import',
+                status: 'running',
+                total: itemsToProcess.length,
+                processed: 0,
+                imported: 0,
+                updated: 0,
+                skipped: 0,
+                failed: 0,
+                startedAt: Date.now(),
+                lastUpdatedAt: Date.now(),
+                finishedAt: null
+            };
+            jobs.set(jobId, job);
+
+            setImmediate(async () => {
+                try {
+                    const data = await runReelImport(job);
+                    job.status = 'completed';
+                    job.finishedAt = Date.now();
+                    job.summary = data.summary;
+                    console.log(`Reels import job ${jobId} completed`, data.summary);
+                } catch (error) {
+                    job.status = 'failed';
+                    job.finishedAt = Date.now();
+                    job.error = error.message;
+                    console.error(`Reels import job ${jobId} failed`, error);
+                }
+            });
+
+            return res.status(202).json({
+                success: true,
+                message: 'Reels import queued',
+                jobId,
+                summary: {
+                    requested: itemsToProcess.length,
+                    queued: itemsToProcess.length,
+                    minDurationSeconds,
+                    maxDurationSeconds,
+                    requireAudio
+                }
+            });
+        }
+
+        const data = await runReelImport(null);
+        return res.json({ success: true, ...data });
+    } catch (error) {
+        console.error('Worker reels import error:', error);
+        return res.status(500).json({ error: 'Worker reels import failed', details: error.message });
     }
 });
 

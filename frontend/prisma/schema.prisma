@@ -213,3 +213,40 @@ model IssueReport {
   @@index([status])
   @@index([createdAt])
 }
+
+model Reel {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  fileName        String?
+  thumbnailUrl    String?
+  playbackType    String   @default("mp4")
+  s3KeyPlayback   String   @unique
+  cloudfrontPath  String
+  s3Url           String?
+  duration        Float?
+  fileSize        BigInt?
+  mimeType        String?
+  width           Int?
+  height          Int?
+  resolution      String?
+  hasAudio        Boolean?
+  status          String   @default("completed") // completed, failed, disabled
+  sourceType      String?
+  sourceProvider  String?
+  sourceIdentifier String
+  sourcePageUrl   String?
+  archiveIdentifier String @unique
+  sourceRights    String?
+  sourceLicenseUrl String?
+  sourceMetadata  Json?
+  tags            String?
+  language        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([sourceProvider])
+  @@index([sourceIdentifier])
+  @@index([duration])
+}

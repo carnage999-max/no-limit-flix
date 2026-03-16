@@ -118,7 +118,7 @@ async function fetchArchiveMetadata(identifier) {
     };
 }
 
-function pickBestPlayableFile(files, allowMkv) {
+function rankPlayableFiles(files, allowMkv) {
     const filtered = files.filter((file) => {
         if (!isVideoCandidate(file)) return false;
         if (isMp4(file)) return true;
@@ -160,13 +160,19 @@ function pickBestPlayableFile(files, allowMkv) {
     });
 
     candidates.sort((a, b) => b.score - a.score);
-    return candidates[0].file;
+    return candidates.map((candidate) => candidate.file);
+}
+
+function pickBestPlayableFile(files, allowMkv) {
+    const ranked = rankPlayableFiles(files, allowMkv);
+    return ranked[0] || null;
 }
 
 module.exports = {
     buildArchiveDownloadUrl,
     fetchArchiveMetadata,
     pickBestPlayableFile,
+    rankPlayableFiles,
     searchArchiveIdentifiers,
     inferMimeType
 };
