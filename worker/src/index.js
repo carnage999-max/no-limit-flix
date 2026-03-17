@@ -20,7 +20,7 @@ const {
     updateVideoPoster,
     updateVideoMetadata
 } = require('./db');
-const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl, isTranscoderAvailable } = require('./ingest');
+const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl, isTranscoderAvailable, DownloadFetchError } = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
 const ADMIN_SECRET = process.env.INGEST_WORKER_SECRET;
@@ -147,6 +147,10 @@ const REEL_LOW_ENGAGEMENT_KEYWORDS = [
     'ceremony'
 ];
 
+const REEL_RESTRICTED_IDENTIFIER_PREFIXES = [
+    'funny_or_die_video_'
+];
+
 const isExcludedTitle = (value) => {
     if (!value) return false;
     const lower = value.toLowerCase();
@@ -157,6 +161,12 @@ const isExcludedReelTitle = (value) => {
     if (!value) return false;
     const lower = value.toLowerCase();
     return REEL_EXCLUDED_TITLE_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
+
+const isRestrictedReelIdentifier = (identifier) => {
+    if (!identifier) return false;
+    const normalized = String(identifier).toLowerCase();
+    return REEL_RESTRICTED_IDENTIFIER_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 };
 
 const stringifyValue = (value) => {
@@ -210,6 +220,13 @@ const resolveDurationSeconds = (file, metadata) => {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const isRetryableError = (error) => {
+    const statusCode = Number(error?.statusCode);
+    if (!Number.isFinite(statusCode)) return true;
+    if (statusCode >= 500) return true;
+    return statusCode === 408 || statusCode === 409 || statusCode === 425 || statusCode === 429;
+};
+
 const withRetry = async (operation, attempts = 3, baseDelayMs = 400) => {
     let lastError;
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -217,6 +234,7 @@ const withRetry = async (operation, attempts = 3, baseDelayMs = 400) => {
             return await operation();
         } catch (error) {
             lastError = error;
+            if (!isRetryableError(error)) break;
             if (attempt >= attempts) break;
             await sleep(baseDelayMs * attempt);
         }
@@ -1279,6 +1297,13 @@ app.post('/reels/import', async (req, res) => {
                 };
 
                 try {
+                    if (isRestrictedReelIdentifier(identifier)) {
+                        result.status = 'skipped';
+                        result.reason = 'Source identifier is known to be access restricted';
+                        results.push(result);
+                        continue;
+                    }
+
                     const { metadata, files } = await withRetry(
                         () => fetchArchiveMetadata(identifier),
                         2,
@@ -1390,8 +1415,13 @@ app.post('/reels/import', async (req, res) => {
                     result.engagementScore = engagementScore;
                     result.status = dbRow.inserted ? 'imported' : 'updated';
                 } catch (error) {
-                    result.status = 'failed';
-                    result.reason = error?.message || 'Failed to ingest reel';
+                    if (error instanceof DownloadFetchError) {
+                        result.status = 'skipped';
+                        result.reason = `Source file unavailable or restricted (${error.statusCode})`;
+                    } else {
+                        result.status = 'failed';
+                        result.reason = error?.message || 'Failed to ingest reel';
+                    }
                 }
 
                 results.push(result);

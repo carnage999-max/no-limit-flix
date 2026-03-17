@@ -76,6 +76,14 @@ const toKbps = (value, fallback) => {
     return `${Math.round(numeric)}k`;
 };
 
+class DownloadFetchError extends Error {
+    constructor(statusCode, message) {
+        super(message);
+        this.name = 'DownloadFetchError';
+        this.statusCode = statusCode;
+    }
+}
+
 const toNodeReadable = (body) => {
     if (!body) return null;
     if (typeof body.pipe === 'function') return body;
@@ -94,7 +102,10 @@ const fetchDownload = async (downloadUrl) => {
     });
 
     if (!response.ok || !response.body) {
-        throw new Error(`Failed to download source file (${response.status})`);
+        throw new DownloadFetchError(
+            response.status,
+            `Failed to download source file (${response.status})`
+        );
     }
 
     return {
@@ -260,5 +271,6 @@ module.exports = {
     buildPublicUrl,
     uploadToS3,
     listS3Objects,
-    isTranscoderAvailable
+    isTranscoderAvailable,
+    DownloadFetchError
 };
