@@ -1,6 +1,7 @@
 const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 const { spawn, spawnSync } = require('child_process');
+const { Readable } = require('stream');
 
 const { inferMimeType } = require('./internet-archive');
 
@@ -75,7 +76,34 @@ const toKbps = (value, fallback) => {
     return `${Math.round(numeric)}k`;
 };
 
-const buildTranscodeArgs = (inputUrl, options = {}) => {
+const toNodeReadable = (body) => {
+    if (!body) return null;
+    if (typeof body.pipe === 'function') return body;
+    if (typeof Readable.fromWeb === 'function') {
+        return Readable.fromWeb(body);
+    }
+    throw new Error('Unable to convert response body to Node stream');
+};
+
+const fetchDownload = async (downloadUrl) => {
+    const response = await fetch(downloadUrl, {
+        headers: {
+            'Accept': '*/*',
+            'User-Agent': 'NoLimitFlix-Ingest/1.0'
+        }
+    });
+
+    if (!response.ok || !response.body) {
+        throw new Error(`Failed to download source file (${response.status})`);
+    }
+
+    return {
+        response,
+        stream: toNodeReadable(response.body)
+    };
+};
+
+const buildTranscodeArgs = (options = {}) => {
     const maxWidth = toPositiveInt(options.maxWidth || process.env.REELS_TRANSCODE_MAX_WIDTH, 1280);
     const crf = toPositiveInt(options.crf || process.env.REELS_TRANSCODE_CRF, 28);
     const preset = String(options.preset || process.env.REELS_TRANSCODE_PRESET || 'veryfast');
@@ -86,7 +114,7 @@ const buildTranscodeArgs = (inputUrl, options = {}) => {
     return [
         '-hide_banner',
         '-loglevel', 'error',
-        '-i', inputUrl,
+        '-i', 'pipe:0',
         '-map', '0:v:0',
         '-map', '0:a:0?',
         '-c:v', 'libx264',
@@ -94,7 +122,7 @@ const buildTranscodeArgs = (inputUrl, options = {}) => {
         '-crf', String(crf),
         '-maxrate', maxRate,
         '-bufsize', bufSize,
-        '-vf', `scale='min(${maxWidth},iw)':-2:force_original_aspect_ratio=decrease`,
+        '-vf', `scale='trunc(if(gt(iw,${maxWidth}),${maxWidth},iw)/2)*2':'-2'`,
         '-c:a', 'aac',
         '-b:a', audioBitrate,
         '-movflags', 'frag_keyframe+empty_moov',
@@ -107,8 +135,9 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
     const requestedTranscode = Boolean(options.transcode);
     if (requestedTranscode && checkFfmpegAvailable()) {
         let stderr = '';
-        const ffmpeg = spawn('ffmpeg', buildTranscodeArgs(downloadUrl, options), {
-            stdio: ['ignore', 'pipe', 'pipe']
+        let sourceStream = null;
+        const ffmpeg = spawn('ffmpeg', buildTranscodeArgs(options), {
+            stdio: ['pipe', 'pipe', 'pipe']
         });
 
         ffmpeg.stderr.on('data', (chunk) => {
@@ -118,6 +147,10 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
         });
 
         try {
+            const { stream } = await fetchDownload(downloadUrl);
+            sourceStream = stream;
+            sourceStream.pipe(ffmpeg.stdin);
+
             const upload = new Upload({
                 client: s3Client,
                 params: {
@@ -131,6 +164,9 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
             const uploadPromise = upload.done();
             const ffmpegPromise = new Promise((resolve, reject) => {
                 ffmpeg.on('error', reject);
+                if (sourceStream) {
+                    sourceStream.on('error', reject);
+                }
                 ffmpeg.on('close', (code) => {
                     if (code === 0) {
                         resolve(true);
@@ -149,6 +185,16 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
         } catch (error) {
             console.warn(`Transcode upload failed for ${key}; falling back to direct upload.`, error?.message || error);
             try {
+                if (sourceStream) sourceStream.destroy();
+            } catch {
+                // no-op
+            }
+            try {
+                ffmpeg.stdin.destroy();
+            } catch {
+                // no-op
+            }
+            try {
                 ffmpeg.kill('SIGKILL');
             } catch {
                 // no-op
@@ -158,10 +204,7 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
         console.warn(`ffmpeg unavailable; uploading original stream for ${key}`);
     }
 
-    const response = await fetch(downloadUrl);
-    if (!response.ok || !response.body) {
-        throw new Error(`Failed to download source file (${response.status})`);
-    }
+    const { response, stream } = await fetchDownload(downloadUrl);
 
     const contentType = inferMimeType(fileMeta) || response.headers.get('content-type') || 'application/octet-stream';
 
@@ -170,7 +213,7 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
         params: {
             Bucket: s3Bucket,
             Key: key,
-            Body: response.body,
+            Body: stream,
             ContentType: contentType
         }
     });
