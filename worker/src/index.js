@@ -102,6 +102,51 @@ const REEL_EXCLUDED_TITLE_KEYWORDS = [
     'sample'
 ];
 
+const REEL_ENGAGING_KEYWORDS = [
+    'funny',
+    'comedy',
+    'humor',
+    'humour',
+    'cartoon',
+    'animation',
+    'animated',
+    'gag',
+    'parody',
+    'satire',
+    'sketch',
+    'slapstick',
+    'blooper',
+    'bloopers',
+    'prank',
+    'vaudeville',
+    'musical',
+    'music',
+    'dance',
+    'sing',
+    'singing',
+    'performance',
+    'entertainment',
+    'novelty'
+];
+
+const REEL_LOW_ENGAGEMENT_KEYWORDS = [
+    'documentary',
+    'lecture',
+    'speech',
+    'interview',
+    'hearing',
+    'hearing room',
+    'news',
+    'newscast',
+    'instructional',
+    'training',
+    'education',
+    'educational',
+    'seminar',
+    'meeting',
+    'ceremony'
+];
+
 const isExcludedTitle = (value) => {
     if (!value) return false;
     const lower = value.toLowerCase();
@@ -118,6 +163,24 @@ const stringifyValue = (value) => {
     if (value === null || value === undefined) return '';
     if (Array.isArray(value)) return value.join(' ');
     return String(value);
+};
+
+const buildReelSearchText = (file, metadata) => {
+    return [
+        file?.name,
+        file?.title,
+        file?.format,
+        metadata?.title,
+        metadata?.description,
+        metadata?.subject,
+        metadata?.keywords,
+        metadata?.tags,
+        metadata?.collection,
+        metadata?.creator
+    ]
+        .map(stringifyValue)
+        .join(' ')
+        .toLowerCase();
 };
 
 const parseMaybeNumber = (value) => {
@@ -159,6 +222,24 @@ const withRetry = async (operation, attempts = 3, baseDelayMs = 400) => {
         }
     }
     throw lastError;
+};
+
+const scoreReelEngagement = (file, metadata) => {
+    const searchText = buildReelSearchText(file, metadata);
+    if (!searchText) return 0;
+
+    let score = 0;
+    for (const keyword of REEL_ENGAGING_KEYWORDS) {
+        if (searchText.includes(keyword)) score += 3;
+    }
+    for (const keyword of REEL_LOW_ENGAGEMENT_KEYWORDS) {
+        if (searchText.includes(keyword)) score -= 4;
+    }
+
+    if (searchText.includes('classic cartoon') || searchText.includes('comedy short')) score += 4;
+    if (searchText.includes('silent') && !searchText.includes('comedy')) score -= 2;
+
+    return score;
 };
 
 const detectAudioSignal = (file, metadata) => {
@@ -1046,10 +1127,10 @@ app.post('/reels/import', async (req, res) => {
         const discoveryQueries = providedQuery
             ? [String(providedQuery)]
             : [
-                '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR description:(short)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
-                '(mediatype:(movies)) AND (subject:("short films") OR subject:(shorts) OR collection:(short_films)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
-                '(mediatype:(movies)) AND (collection:(prelinger OR classic_tv OR opensource_movies OR community_video OR fedflix)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
-                '(mediatype:(movies)) AND (subject:("public domain") OR rights:("public domain") OR licenseurl:(creativecommons.org)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)'
+                '(mediatype:(movies)) AND (subject:(comedy OR funny OR humor OR humour OR cartoon OR animation OR gag OR parody OR sketch OR slapstick OR musical OR music OR dance OR novelty) OR title:(comedy OR funny OR cartoon OR animation OR parody OR gag OR musical) OR description:(comedy OR funny OR humorous OR cartoon OR animation OR musical)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
+                '(mediatype:(movies)) AND (subject:("short films" OR shorts OR "comedy shorts" OR cartoons) OR collection:(short_films OR classic_cartoons)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
+                '(mediatype:(movies)) AND (collection:(prelinger OR classic_tv OR opensource_movies OR community_video OR fedflix OR classic_cartoons) OR subject:(vaudeville OR entertainment OR performance)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)',
+                '(mediatype:(movies)) AND (subject:("public domain") OR rights:("public domain") OR licenseurl:(creativecommons.org)) AND (subject:(comedy OR cartoon OR animation OR musical OR novelty) OR description:(comedy OR funny OR entertaining)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)'
             ];
         const limit = Math.min(Math.max(Number(req.body?.limit) || 20, 1), 200);
         const minDurationSeconds = Math.max(
@@ -1145,10 +1226,11 @@ app.post('/reels/import', async (req, res) => {
                         return null;
                     }
                     const audioSignal = detectAudioSignal(file, metadata);
+                    const engagementScore = scoreReelEngagement(file, metadata);
                     if (requireAudio && audioSignal === false) {
                         return null;
                     }
-                    return { file, duration, audioSignal };
+                    return { file, duration, audioSignal, engagementScore };
                 })
                 .filter(Boolean);
 
@@ -1162,6 +1244,9 @@ app.post('/reels/import', async (req, res) => {
                 : [...withAudio, ...unknownAudio, ...silent];
 
             ordered.sort((a, b) => {
+                if (b.engagementScore !== a.engagementScore) {
+                    return b.engagementScore - a.engagementScore;
+                }
                 const aDistance = a.duration === null ? Number.POSITIVE_INFINITY : Math.abs(a.duration - targetDurationSeconds);
                 const bDistance = b.duration === null ? Number.POSITIVE_INFINITY : Math.abs(b.duration - targetDurationSeconds);
                 if (!Number.isFinite(aDistance) && !Number.isFinite(bDistance)) return 0;
@@ -1217,6 +1302,7 @@ app.post('/reels/import', async (req, res) => {
                     const bestFile = picked.file;
                     const duration = picked.duration;
                     const hasAudio = picked.audioSignal;
+                    const engagementScore = picked.engagementScore;
 
                     let title = stringifyMetadata(metadata?.title) || deriveTitleFromFileName(bestFile.name) || identifier;
                     if (isGenericBundleTitle(title) || isExcludedReelTitle(title)) {
@@ -1301,6 +1387,7 @@ app.post('/reels/import', async (req, res) => {
                     result.thumbnailUrl = thumbnailUrl;
                     result.sourcePageUrl = sourcePageUrl;
                     result.transcoded = transcoded;
+                    result.engagementScore = engagementScore;
                     result.status = dbRow.inserted ? 'imported' : 'updated';
                 } catch (error) {
                     result.status = 'failed';
@@ -1356,6 +1443,7 @@ app.post('/reels/import', async (req, res) => {
                 compress,
                 compressMinBytes,
                 searchQueries: discoveryQueries,
+                engagingKeywords: REEL_ENGAGING_KEYWORDS,
                 ffmpegAvailable: isTranscoderAvailable(),
                 transcoded: transcodedCount,
                 uploadedOriginal: uploadedOriginalCount,
@@ -1409,6 +1497,7 @@ app.post('/reels/import', async (req, res) => {
                     queued: itemsToProcess.length,
                     candidateMultiplier: usesSearchDiscovery ? candidateMultiplier : 1,
                     searchQueries: discoveryQueries,
+                    engagingKeywords: REEL_ENGAGING_KEYWORDS,
                     minDurationSeconds,
                     maxDurationSeconds,
                     targetDurationSeconds,

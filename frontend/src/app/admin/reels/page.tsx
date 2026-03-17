@@ -53,7 +53,7 @@ type ReelsListItem = {
     createdAt: string;
 };
 
-const DEFAULT_QUERY = '(mediatype:(movies)) AND (subject:(short) OR title:(short) OR description:(short)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)';
+const DEFAULT_QUERY = '(mediatype:(movies)) AND (subject:(comedy OR funny OR humor OR humour OR cartoon OR animation OR gag OR parody OR sketch OR slapstick OR musical OR music OR dance OR novelty) OR title:(comedy OR funny OR cartoon OR animation OR parody OR gag OR musical) OR description:(comedy OR funny OR humorous OR cartoon OR animation OR musical)) AND -title:(trailer OR preview OR teaser OR promo OR commercial OR sample)';
 
 const formatDuration = (seconds?: number | null) => {
     if (!seconds || !Number.isFinite(seconds)) return '—';
