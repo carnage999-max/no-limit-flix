@@ -16,8 +16,8 @@ export default function PrivacyPage() {
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">Introduction</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
               This Privacy Policy explains how <strong>No Limit Flix®</strong> collects, uses, and protects information when you use our website and mobile applications. We
-              are a streaming and discovery platform that delivers content directly from our infrastructure and licensed public sources. If you do not agree with this policy,
-              please do not use the Services.
+              are a streaming and discovery platform that delivers content directly from our infrastructure. Playback is limited to titles we upload ourselves or titles we
+              source from public-domain or otherwise authorized libraries. If you do not agree with this policy, please do not use the Services.
             </p>
           </section>
 
@@ -47,8 +47,8 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">3. Streaming & Content Sources</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              We stream content directly from our infrastructure (including S3 and CloudFront) and from public sources such as Internet Archive. We may store source
-              metadata such as rights, license URLs, and source pages for attribution and compliance.
+              We stream content directly from our infrastructure. When a title is sourced from a library such as Internet Archive, we retain source metadata such as rights,
+              license URLs, and source pages for attribution and compliance, and we limit playback availability to titles we believe we are authorized to distribute.
             </p>
           </section>
 

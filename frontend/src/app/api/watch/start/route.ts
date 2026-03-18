@@ -7,6 +7,7 @@ import {
 } from '@/lib/cloudfront-signed';
 import { transformToCloudFront } from '@/lib/utils';
 import { getSessionUser } from '@/lib/auth-server';
+import { isReviewSafeVideo } from '@/lib/review-safety';
 
 interface WatchStartRequest {
   assetId?: string;
@@ -208,6 +209,13 @@ export async function POST(request: NextRequest) {
     if (!video) {
       return NextResponse.json(
         { error: 'Video not found' },
+        { status: 404 }
+      );
+    }
+
+    if (!isReviewSafeVideo(video)) {
+      return NextResponse.json(
+        { error: 'Video not available for playback' },
         { status: 404 }
       );
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMovieDetails } from '@/lib/tmdb';
 import prisma from '@/lib/db';
+import { isReviewSafeVideo } from '@/lib/review-safety';
 
 export async function GET(
     request: NextRequest,
@@ -40,6 +41,13 @@ export async function GET(
             if (!video) {
                 return NextResponse.json(
                     { error: 'Title not found' },
+                    { status: 404 }
+                );
+            }
+
+            if (!isReviewSafeVideo(video)) {
+                return NextResponse.json(
+                    { error: 'Title not available' },
                     { status: 404 }
                 );
             }
@@ -114,9 +122,11 @@ export async function GET(
             }
         });
 
+        const safeAssets = assets.filter((asset) => isReviewSafeVideo(asset));
+
         return NextResponse.json({
             ...movie,
-            assets: assets.map((asset) => ({
+            assets: safeAssets.map((asset) => ({
                 id: asset.id,
                 title: asset.title,
                 playbackUrl: asset.s3Url,

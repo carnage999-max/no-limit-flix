@@ -20,11 +20,12 @@ export default function AboutPage() {
 
           <p className="text-[#A7ABB4] mb-6 leading-relaxed">
             Instead of endless rows and noisy recommendations, No Limit Flix® focuses on <strong className="text-white">mood, permanence, and explainability</strong>. 
-            You tell us how you're feeling—or what you enjoyed—and the platform surfaces titles that <em>feel right</em>, with a clear explanation of why they fit.
+            You tell us how you&apos;re feeling-or what you enjoyed-and the platform surfaces titles that <em>feel right</em>, with a clear explanation of why they fit.
           </p>
 
           <p className="text-[#A7ABB4] mb-8 leading-relaxed">
-            No Limit Flix® does not host or stream video content. We help you discover movies and shows, explore trailers, and find where to watch them across supported services.
+            No Limit Flix® combines discovery with a curated streaming library. Titles available for playback in the service are either uploaded by us directly or sourced
+            from public-domain or otherwise authorized libraries with attribution and rights metadata.
           </p>
 
           <h2 className="text-3xl font-bold mt-12 mb-6 text-[#D4AF37]">What makes No Limit Flix® different</h2>

@@ -1,5 +1,6 @@
 import prisma from './db';
 import { MoviePick } from '@/types';
+import { isReviewSafeVideo } from './review-safety';
 
 /**
  * Checks a list of movies against our internal SQL database (matched by tmdbId)
@@ -45,11 +46,12 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
             },
         });
 
+        const reviewSafeVideos = hostedVideos.filter((video: any) => isReviewSafeVideo(video));
         const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
 
         const hostedMap: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null; sourceProvider?: string; title?: string }> = {};
         const hostedByTitle: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null; sourceProvider?: string; title?: string }> = {};
-        for (const v of hostedVideos) {
+        for (const v of reviewSafeVideos) {
             if (v.tmdbId) {
                 let publicUrl = v.s3Url;
                 if (cloudFrontUrl) {

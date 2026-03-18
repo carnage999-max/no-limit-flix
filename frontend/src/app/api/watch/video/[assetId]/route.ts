@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { transformToCloudFront } from '@/lib/utils';
 import { getSessionUser } from '@/lib/auth-server';
+import { isReviewSafeVideo } from '@/lib/review-safety';
 
 export async function GET(
     request: NextRequest,
@@ -45,6 +46,13 @@ export async function GET(
         if (!video || video.status !== 'completed') {
             return NextResponse.json(
                 { error: 'Video not found or not ready for playback' },
+                { status: 404 }
+            );
+        }
+
+        if (!isReviewSafeVideo(video)) {
+            return NextResponse.json(
+                { error: 'Video not available' },
                 { status: 404 }
             );
         }

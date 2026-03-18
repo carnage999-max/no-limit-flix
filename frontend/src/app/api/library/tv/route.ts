@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { isReviewSafeVideo } from '@/lib/review-safety';
 
 /**
  * GET /api/library/tv
@@ -50,9 +51,11 @@ export async function GET() {
         const s3Pattern = /https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//;
         const cfPrefix = cfBase ? (cfBase.startsWith('http') ? cfBase : `https://${cfBase}`) : null;
 
+        const reviewSafeEpisodes = episodes.filter((episode: any) => isReviewSafeVideo(episode));
+
         // Group by seriesTitle so the mobile app can render a series list
         const seriesMap: Record<string, any> = {};
-        for (const ep of episodes) {
+        for (const ep of reviewSafeEpisodes) {
             let publicUrl = ep.s3Url;
             let publicThumb = ep.thumbnailUrl;
 

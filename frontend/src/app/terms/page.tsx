@@ -22,8 +22,9 @@ export default function TermsPage() {
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">2. Description of the Service</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              No Limit Flix® provides a streaming and discovery experience. Content may be delivered directly from our infrastructure (including S3 and CloudFront) or from
-              public sources such as Internet Archive. Availability of titles can change at any time.
+              No Limit Flix® provides a streaming and discovery experience. Content available for playback through the Service is delivered directly from our infrastructure
+              (including S3 and CloudFront) and is limited to titles we upload ourselves or titles we source from public-domain or otherwise authorized libraries.
+              Availability of titles can change at any time.
             </p>
           </section>
 
@@ -38,8 +39,8 @@ export default function TermsPage() {
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">4. Content Rights & Attribution</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              Some titles are sourced from public domain libraries such as Internet Archive and are provided with appropriate attribution and license metadata. You may not
-              copy, redistribute, or exploit content outside of the Services without proper rights.
+              Some titles are sourced from public-domain or otherwise authorized libraries such as Internet Archive and are provided with attribution, source references,
+              and license metadata where applicable. You may not copy, redistribute, or exploit content outside of the Services without proper rights.
             </p>
           </section>
 
@@ -68,7 +69,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-3xl font-bold mb-6 text-[#D4AF37]">8. Disclaimer</h2>
             <p className="text-[#A7ABB4] leading-relaxed">
-              The Services are provided "as is" and "as available." We do not guarantee uninterrupted streaming or availability of any title at any time.
+              The Services are provided &quot;as is&quot; and &quot;as available.&quot; We do not guarantee uninterrupted streaming or availability of any title at any time.
             </p>
           </section>
 

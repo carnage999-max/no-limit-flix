@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { isReviewSafeVideo } from '@/lib/review-safety';
 
 export async function GET(request: Request) {
     try {
@@ -52,7 +53,9 @@ export async function GET(request: Request) {
         const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
         const cfBase = cloudFrontUrl ? (cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`) : null;
 
-        const transformed = videos.map((video: any) => {
+        const transformed = videos
+        .filter((video: any) => isReviewSafeVideo(video))
+        .map((video: any) => {
             let publicUrl = video.s3Url;
             let publicThumb = video.thumbnailUrl;
             const isExternal = video.sourceProvider === 'internet_archive' || video.sourceType === 'external_legal';
