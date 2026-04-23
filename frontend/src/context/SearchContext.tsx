@@ -1,9 +1,19 @@
 'use client';
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import type { MoviePick, AIPickRequest } from '@/types';
+import type { MoviePick, AIPickRequest, ActorProfile } from '@/types';
 
-type SearchMode = 'vibe' | 'title' | 'actor';
+export type SearchMode = 'vibe' | 'title' | 'actor' | 'actor_mood';
+
+export interface ActorMoodResult {
+    hero: MoviePick;
+    alternates: MoviePick[];
+    explanationTokens: string[];
+    explanation?: string;
+    confidence_score?: number;
+    actorProfile?: Pick<ActorProfile, 'id' | 'name' | 'profilePath' | 'toneProfile' | 'pacingTendency'>;
+}
+
 interface SearchState {
     searchMode: SearchMode;
     setSearchMode: (mode: SearchMode) => void;
@@ -25,6 +35,12 @@ interface SearchState {
     setSessionId: (id: string | null) => void;
     onlyPlayable: boolean;
     setOnlyPlayable: (val: boolean) => void;
+    actorMoodResults: ActorMoodResult | null;
+    setActorMoodResults: (results: ActorMoodResult | null) => void;
+    activeActorName: string;
+    setActiveActorName: (name: string) => void;
+    activeActorTmdbId: string;
+    setActiveActorTmdbId: (id: string) => void;
 }
 
 const SearchContext = createContext<SearchState | undefined>(undefined);
@@ -40,6 +56,9 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     const [results, setResults] = useState<{ hero: MoviePick; alternates: MoviePick[]; explanationTokens?: string[] } | null>(null);
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [onlyPlayable, setOnlyPlayable] = useState(false);
+    const [actorMoodResults, setActorMoodResults] = useState<ActorMoodResult | null>(null);
+    const [activeActorName, setActiveActorName] = useState('');
+    const [activeActorTmdbId, setActiveActorTmdbId] = useState('');
 
     return (
         <SearchContext.Provider value={{
@@ -52,7 +71,10 @@ export function SearchProvider({ children }: { children: ReactNode }) {
             isLoading, setIsLoading,
             results, setResults,
             sessionId, setSessionId,
-            onlyPlayable, setOnlyPlayable
+            onlyPlayable, setOnlyPlayable,
+            actorMoodResults, setActorMoodResults,
+            activeActorName, setActiveActorName,
+            activeActorTmdbId, setActiveActorTmdbId,
         }}>
             {children}
         </SearchContext.Provider>
