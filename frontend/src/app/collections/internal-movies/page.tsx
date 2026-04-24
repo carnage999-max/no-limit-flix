@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CardViewToggle } from '@/components';
 import { useCardView } from '@/context/CardViewContext';
@@ -33,6 +33,7 @@ export default function InternalMoviesPage() {
     const [genreFilter, setGenreFilter] = useState('all');
     const [yearFilter, setYearFilter] = useState('all');
     const { viewSize } = useCardView();
+    const filtersRestored = useRef(false);
 
     useEffect(() => {
         try {
@@ -45,9 +46,11 @@ export default function InternalMoviesPage() {
         } catch {
             // ignore storage errors
         }
+        filtersRestored.current = true;
     }, []);
 
     useEffect(() => {
+        if (!filtersRestored.current) return;
         try {
             localStorage.setItem('nlf_internal_movie_filters', JSON.stringify({
                 genre: genreFilter,
@@ -57,6 +60,8 @@ export default function InternalMoviesPage() {
             // ignore storage errors
         }
     }, [genreFilter, yearFilter]);
+
+    const hasActiveFilters = genreFilter !== 'all' || yearFilter !== 'all';
 
     const gridStyle = {
         display: 'grid',
@@ -323,11 +328,25 @@ export default function InternalMoviesPage() {
                                 justifyContent: 'center',
                                 cursor: 'pointer',
                                 boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
-                                zIndex: 50
+                                zIndex: 50,
                             }}
                             aria-label="Filter library"
                         >
-                            <SlidersHorizontal className="w-4 h-4" />
+                            <span style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <SlidersHorizontal className="w-4 h-4" />
+                                {hasActiveFilters && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-5px',
+                                        right: '-5px',
+                                        width: '9px',
+                                        height: '9px',
+                                        borderRadius: '50%',
+                                        background: '#EF4444',
+                                        border: '1.5px solid #0B0B0D',
+                                    }} />
+                                )}
+                            </span>
                         </button>
                         {filterOpen && (
                             <div
