@@ -5,9 +5,9 @@ import { notFound, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal } from '@/components';
 import VideoPlayer from '@/components/VideoPlayer';
-import { getMovieDetails } from '@/lib/tmdb';
+import { getMovieDetails, getMovieCast } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
-import type { MoviePick } from '@/types';
+import type { MoviePick, CastMember } from '@/types';
 import { ExternalLink, Play, Smartphone } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { safeAtob } from '@/lib/base64';
@@ -18,6 +18,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
     const searchParams = useSearchParams();
     const [movie, setMovie] = useState<MoviePick | null>(null);
     const [tmdbData, setTmdbData] = useState<any>(null);
+    const [cast, setCast] = useState<CastMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
     const { user, loading: sessionLoading } = useSession();
@@ -41,11 +42,14 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                         const decodedData = JSON.parse(safeAtob(movieData));
                         setMovie(decodedData as MoviePick);
                         
-                        // Fetch TMDB data if tmdb_id is available
                         if (decodedData.tmdb_id) {
                             try {
-                                const details = await getMovieDetails(decodedData.tmdb_id);
+                                const [details, castData] = await Promise.all([
+                                    getMovieDetails(decodedData.tmdb_id),
+                                    getMovieCast(decodedData.tmdb_id),
+                                ]);
                                 setTmdbData(details);
+                                setCast(castData);
                             } catch (error) {
                                 console.warn('Failed to fetch TMDB data:', error);
                             }
@@ -58,9 +62,13 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                 }
 
                 // Otherwise, fetch from TMDB (TMDB content)
-                const details = await getMovieDetails(id);
+                const [details, castData] = await Promise.all([
+                    getMovieDetails(id),
+                    getMovieCast(id),
+                ]);
                 setMovie(details);
                 setTmdbData(details);
+                setCast(castData);
             } catch (e) {
                 console.warn('Failed to fetch from TMDB:', e);
                 setMovie(null);
@@ -490,6 +498,74 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                     Web browsing is for discovery only. No browser-based playback by design.
                                 </p>
                             </div>
+                            )}
+
+                            {/* Actor Chips */}
+                            {cast.length > 0 && (
+                                <div style={{ marginBottom: '2.5rem' }}>
+                                    <h3 style={{
+                                        fontSize: '0.75rem',
+                                        fontWeight: '800',
+                                        color: '#A7ABB4',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.2em',
+                                        marginBottom: '1rem',
+                                    }}>
+                                        Cast — Find Something Similar
+                                    </h3>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem' }}>
+                                        {cast.slice(0, 8).map(member => {
+                                            const params = new URLSearchParams({
+                                                actorName: member.name,
+                                                actorTmdbId: member.id.toString(),
+                                                ...(member.profilePath ? { profilePath: member.profilePath } : {}),
+                                            });
+                                            return (
+                                                <Link
+                                                    key={member.id}
+                                                    href={`/ai-pick?${params.toString()}`}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '0.5rem',
+                                                        padding: '0.4rem 0.875rem 0.4rem 0.4rem',
+                                                        borderRadius: '999px',
+                                                        background: 'rgba(167,171,180,0.06)',
+                                                        border: '1px solid rgba(167,171,180,0.15)',
+                                                        textDecoration: 'none',
+                                                        transition: 'all 0.15s',
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        e.currentTarget.style.borderColor = 'rgba(212,175,55,0.5)';
+                                                        e.currentTarget.style.background = 'rgba(212,175,55,0.08)';
+                                                    }}
+                                                    onMouseLeave={e => {
+                                                        e.currentTarget.style.borderColor = 'rgba(167,171,180,0.15)';
+                                                        e.currentTarget.style.background = 'rgba(167,171,180,0.06)';
+                                                    }}
+                                                >
+                                                    {member.profilePath ? (
+                                                        <img
+                                                            src={`https://image.tmdb.org/t/p/w45${member.profilePath}`}
+                                                            alt={member.name}
+                                                            style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                                                        />
+                                                    ) : (
+                                                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(212,175,55,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', color: '#D4AF37' }}>
+                                                            {member.name[0]}
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <div style={{ color: '#F3F4F6', fontSize: '0.8rem', fontWeight: '600', lineHeight: 1.2 }}>{member.name}</div>
+                                                        {member.character && (
+                                                            <div style={{ color: 'rgba(167,171,180,0.6)', fontSize: '0.68rem' }}>{member.character}</div>
+                                                        )}
+                                                    </div>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                             )}
 
                             {/* Trailer + Back buttons */}

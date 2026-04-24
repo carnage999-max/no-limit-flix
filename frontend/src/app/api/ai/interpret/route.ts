@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { OpenRouter } from '@openrouter/sdk';
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
 
@@ -107,21 +106,27 @@ Consider both the existing moods and this description to create a cohesive set o
 
 Return ONLY valid JSON.`;
 
-    const openrouter = new OpenRouter({
-        apiKey: OPENROUTER_API_KEY
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: 'deepseek/deepseek-r1-0528:free',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+            ],
+            temperature: 0.3,
+            max_tokens: 1000,
+        }),
+        signal: AbortSignal.timeout(15000),
     });
 
-    const completion = await openrouter.chat.send({
-        model: 'deepseek/deepseek-r1-0528:free',
-        messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.3,
-        maxTokens: 1000
-    });
-
-    const messageContent = completion.choices?.[0]?.message?.content;
+    if (!res.ok) throw new Error(`OpenRouter error: ${res.status}`);
+    const data = await res.json();
+    const messageContent = data.choices?.[0]?.message?.content;
     const content = typeof messageContent === 'string' ? messageContent : '{}';
 
     console.log("DeepSeek Raw Content:", content); // Debug logging

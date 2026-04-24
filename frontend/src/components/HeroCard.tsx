@@ -5,8 +5,8 @@ import Link from 'next/link';
 import ButtonPrimary from './ButtonPrimary';
 import ButtonSecondary from './ButtonSecondary';
 import TrailerModal from './TrailerModal';
-import { useState } from 'react';
-import type { MoviePick } from '@/types';
+import { useState, useEffect } from 'react';
+import type { MoviePick, CastMember } from '@/types';
 
 interface HeroCardProps {
     movie: MoviePick;
@@ -14,9 +14,32 @@ interface HeroCardProps {
 
 export default function HeroCard({ movie }: HeroCardProps) {
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
-    
-    // Determine if this is a series based on the explanation field (contains "episodes")
+    const [cast, setCast] = useState<CastMember[]>([]);
+
     const isSeries = movie.explanation?.toLowerCase().includes('episodes');
+    const tmdbId = movie.tmdb_id || movie.id;
+
+    useEffect(() => {
+        if (!tmdbId) return;
+        const apiKey = process.env.NEXT_PUBLIC_TMDB_API_KEY;
+        if (!apiKey) return;
+
+        fetch(`https://api.themoviedb.org/3/movie/${tmdbId}/credits?api_key=${apiKey}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data?.cast) return;
+                setCast(
+                    data.cast.slice(0, 6).map((c: any) => ({
+                        id: c.id,
+                        name: c.name,
+                        character: c.character,
+                        profilePath: c.profile_path || null,
+                        order: c.order,
+                    }))
+                );
+            })
+            .catch(() => {});
+    }, [tmdbId]);
 
     if (!movie) return null;
 
@@ -163,6 +186,65 @@ export default function HeroCard({ movie }: HeroCardProps) {
                             {movie.explanation}
                         </p>
                     </div>
+
+                    {/* Actor Chips */}
+                    {cast.length > 0 && (
+                        <div style={{ marginBottom: '1.5rem' }}>
+                            <p style={{ color: '#A7ABB4', fontSize: '0.65rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '0.625rem' }}>
+                                Find something similar by cast
+                            </p>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                {cast.map(member => {
+                                    const params = new URLSearchParams({
+                                        actorName: member.name,
+                                        actorTmdbId: member.id.toString(),
+                                        ...(member.profilePath ? { profilePath: member.profilePath } : {}),
+                                    });
+                                    return (
+                                        <Link
+                                            key={member.id}
+                                            href={`/ai-pick?${params.toString()}`}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.4rem',
+                                                padding: '0.3rem 0.75rem 0.3rem 0.3rem',
+                                                borderRadius: '999px',
+                                                background: 'rgba(11,11,13,0.6)',
+                                                border: '1px solid rgba(167,171,180,0.2)',
+                                                textDecoration: 'none',
+                                                backdropFilter: 'blur(8px)',
+                                                transition: 'border-color 0.15s, background 0.15s',
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.borderColor = 'rgba(212,175,55,0.5)';
+                                                e.currentTarget.style.background = 'rgba(212,175,55,0.1)';
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.borderColor = 'rgba(167,171,180,0.2)';
+                                                e.currentTarget.style.background = 'rgba(11,11,13,0.6)';
+                                            }}
+                                        >
+                                            {member.profilePath ? (
+                                                <img
+                                                    src={`https://image.tmdb.org/t/p/w45${member.profilePath}`}
+                                                    alt={member.name}
+                                                    style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }}
+                                                />
+                                            ) : (
+                                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'rgba(212,175,55,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: '#D4AF37' }}>
+                                                    {member.name[0]}
+                                                </div>
+                                            )}
+                                            <span style={{ color: '#F3F4F6', fontSize: '0.75rem', fontWeight: '600' }}>
+                                                {member.name}
+                                            </span>
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Action Buttons */}
                     <div
