@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     StyleSheet,
     View,
@@ -51,6 +52,71 @@ export const InternalMoviesScreen = () => {
     const [sortBy, setSortBy] = useState<'recent' | 'title' | 'year' | 'progress'>('recent');
     const [viewSize, setViewSize] = useState<'compact' | 'standard' | 'large'>('standard');
     const [activeDropdown, setActiveDropdown] = useState<'genre' | 'year' | 'status' | 'sort' | null>(null);
+
+    const hasActiveFilters = selectedGenre !== null || selectedYear !== null || watchFilter !== 'all' || sortBy !== 'recent';
+
+    useEffect(() => {
+        AsyncStorage.multiGet([
+            'internalMovies_viewSize',
+            'internalMovies_genre',
+            'internalMovies_year',
+            'internalMovies_watchFilter',
+            'internalMovies_sortBy',
+        ]).then(pairs => {
+            const map = Object.fromEntries(pairs.map(([k, v]) => [k, v]));
+            const vs = map['internalMovies_viewSize'];
+            if (vs === 'compact' || vs === 'standard' || vs === 'large') setViewSize(vs);
+            const genre = map['internalMovies_genre'];
+            if (genre) setSelectedGenre(genre);
+            const year = map['internalMovies_year'];
+            if (year) setSelectedYear(Number(year));
+            const wf = map['internalMovies_watchFilter'];
+            if (wf === 'all' || wf === 'watching' || wf === 'watched' || wf === 'unwatched') setWatchFilter(wf);
+            const sb = map['internalMovies_sortBy'];
+            if (sb === 'recent' || sb === 'title' || sb === 'year' || sb === 'progress') setSortBy(sb);
+        });
+    }, []);
+
+    const updateViewSize = useCallback((size: 'compact' | 'standard' | 'large') => {
+        setViewSize(size);
+        AsyncStorage.setItem('internalMovies_viewSize', size);
+    }, []);
+
+    const updateGenre = useCallback((genre: string | null) => {
+        setSelectedGenre(genre);
+        if (genre) AsyncStorage.setItem('internalMovies_genre', genre);
+        else AsyncStorage.removeItem('internalMovies_genre');
+    }, []);
+
+    const updateYear = useCallback((year: number | null) => {
+        setSelectedYear(year);
+        if (year) AsyncStorage.setItem('internalMovies_year', String(year));
+        else AsyncStorage.removeItem('internalMovies_year');
+    }, []);
+
+    const updateWatchFilter = useCallback((wf: 'all' | 'watching' | 'watched' | 'unwatched') => {
+        setWatchFilter(wf);
+        AsyncStorage.setItem('internalMovies_watchFilter', wf);
+    }, []);
+
+    const updateSortBy = useCallback((sb: 'recent' | 'title' | 'year' | 'progress') => {
+        setSortBy(sb);
+        AsyncStorage.setItem('internalMovies_sortBy', sb);
+    }, []);
+
+    const clearAllFilters = useCallback(() => {
+        setSelectedGenre(null);
+        setSelectedYear(null);
+        setWatchFilter('all');
+        setSortBy('recent');
+        setActiveDropdown(null);
+        AsyncStorage.multiRemove([
+            'internalMovies_genre',
+            'internalMovies_year',
+            'internalMovies_watchFilter',
+            'internalMovies_sortBy',
+        ]);
+    }, []);
 
     useEffect(() => {
         if (sessionLoading) {
@@ -191,9 +257,9 @@ export const InternalMoviesScreen = () => {
                 <Text style={styles.title}>Hosted Movies</Text>
                 <TouchableOpacity
                     onPress={() => {
-                        if (viewSize === 'standard') setViewSize('compact');
-                        else if (viewSize === 'compact') setViewSize('large');
-                        else setViewSize('standard');
+                        if (viewSize === 'standard') updateViewSize('compact');
+                        else if (viewSize === 'compact') updateViewSize('large');
+                        else updateViewSize('standard');
                     }}
                     style={styles.viewToggle}
                 >
@@ -261,28 +327,38 @@ export const InternalMoviesScreen = () => {
 
             <TouchableOpacity style={[styles.floatingButton, { bottom: insets.bottom + 24 }]} onPress={() => setFilterOpen(!filterOpen)}>
                 <Ionicons name="options-outline" size={22} color={COLORS.background} />
+                {hasActiveFilters && <View style={styles.filterDot} />}
             </TouchableOpacity>
 
             {filterOpen && (
                 <View style={[styles.filterPanel, { bottom: insets.bottom + 90 }]}>
+                    <View style={styles.filterPanelHeader}>
+                        <Text style={styles.filterPanelTitle}>Filters</Text>
+                        {hasActiveFilters && (
+                            <TouchableOpacity onPress={clearAllFilters} style={styles.clearAllBtn}>
+                                <Ionicons name="close-circle-outline" size={14} color="#ff4444" />
+                                <Text style={styles.clearAllText}>Clear all</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                     <TouchableOpacity
                         style={styles.filterRow}
                         onPress={() => setActiveDropdown(activeDropdown === 'genre' ? null : 'genre')}
                     >
-                        <Text style={styles.filterLabel}>Genre</Text>
+                        <Text style={[styles.filterLabel, selectedGenre && styles.filterLabelActive]}>Genre</Text>
                         <View style={styles.filterValueRow}>
-                            <Text style={styles.filterValue}>{selectedGenre || 'All'}</Text>
+                            <Text style={[styles.filterValue, selectedGenre && styles.filterValueActive]}>{selectedGenre || 'All'}</Text>
                             <Ionicons name={activeDropdown === 'genre' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
                         </View>
                     </TouchableOpacity>
                     {activeDropdown === 'genre' && (
                         <ScrollView style={styles.dropdownList}>
-                            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setSelectedGenre(null); setActiveDropdown(null); }}>
+                            <TouchableOpacity style={styles.dropdownItem} onPress={() => { updateGenre(null); setActiveDropdown(null); }}>
                                 <Text style={styles.dropdownText}>All</Text>
                             </TouchableOpacity>
                             {genres.map((genre) => (
-                                <TouchableOpacity key={genre} style={styles.dropdownItem} onPress={() => { setSelectedGenre(genre); setActiveDropdown(null); }}>
-                                    <Text style={styles.dropdownText}>{genre}</Text>
+                                <TouchableOpacity key={genre} style={styles.dropdownItem} onPress={() => { updateGenre(genre); setActiveDropdown(null); }}>
+                                    <Text style={[styles.dropdownText, selectedGenre === genre && styles.dropdownTextActive]}>{genre}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -291,20 +367,20 @@ export const InternalMoviesScreen = () => {
                         style={styles.filterRow}
                         onPress={() => setActiveDropdown(activeDropdown === 'year' ? null : 'year')}
                     >
-                        <Text style={styles.filterLabel}>Year</Text>
+                        <Text style={[styles.filterLabel, selectedYear && styles.filterLabelActive]}>Year</Text>
                         <View style={styles.filterValueRow}>
-                            <Text style={styles.filterValue}>{selectedYear || 'All'}</Text>
+                            <Text style={[styles.filterValue, selectedYear && styles.filterValueActive]}>{selectedYear || 'All'}</Text>
                             <Ionicons name={activeDropdown === 'year' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
                         </View>
                     </TouchableOpacity>
                     {activeDropdown === 'year' && (
                         <ScrollView style={styles.dropdownList}>
-                            <TouchableOpacity style={styles.dropdownItem} onPress={() => { setSelectedYear(null); setActiveDropdown(null); }}>
+                            <TouchableOpacity style={styles.dropdownItem} onPress={() => { updateYear(null); setActiveDropdown(null); }}>
                                 <Text style={styles.dropdownText}>All</Text>
                             </TouchableOpacity>
                             {years.map((year) => (
-                                <TouchableOpacity key={year} style={styles.dropdownItem} onPress={() => { setSelectedYear(year); setActiveDropdown(null); }}>
-                                    <Text style={styles.dropdownText}>{year}</Text>
+                                <TouchableOpacity key={year} style={styles.dropdownItem} onPress={() => { updateYear(year); setActiveDropdown(null); }}>
+                                    <Text style={[styles.dropdownText, selectedYear === year && styles.dropdownTextActive]}>{year}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -313,9 +389,9 @@ export const InternalMoviesScreen = () => {
                         style={styles.filterRow}
                         onPress={() => setActiveDropdown(activeDropdown === 'status' ? null : 'status')}
                     >
-                        <Text style={styles.filterLabel}>Watch status</Text>
+                        <Text style={[styles.filterLabel, watchFilter !== 'all' && styles.filterLabelActive]}>Watch status</Text>
                         <View style={styles.filterValueRow}>
-                            <Text style={styles.filterValue}>
+                            <Text style={[styles.filterValue, watchFilter !== 'all' && styles.filterValueActive]}>
                                 {watchFilter === 'all' ? 'All' : watchFilter === 'watching' ? 'Watching' : watchFilter === 'watched' ? 'Watched' : 'Unwatched'}
                             </Text>
                             <Ionicons name={activeDropdown === 'status' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
@@ -332,9 +408,9 @@ export const InternalMoviesScreen = () => {
                                 <TouchableOpacity
                                     key={option.value}
                                     style={styles.dropdownItem}
-                                    onPress={() => { setWatchFilter(option.value as any); setActiveDropdown(null); }}
+                                    onPress={() => { updateWatchFilter(option.value as any); setActiveDropdown(null); }}
                                 >
-                                    <Text style={styles.dropdownText}>{option.label}</Text>
+                                    <Text style={[styles.dropdownText, watchFilter === option.value && styles.dropdownTextActive]}>{option.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -343,9 +419,9 @@ export const InternalMoviesScreen = () => {
                         style={styles.filterRow}
                         onPress={() => setActiveDropdown(activeDropdown === 'sort' ? null : 'sort')}
                     >
-                        <Text style={styles.filterLabel}>Sort by</Text>
+                        <Text style={[styles.filterLabel, sortBy !== 'recent' && styles.filterLabelActive]}>Sort by</Text>
                         <View style={styles.filterValueRow}>
-                            <Text style={styles.filterValue}>
+                            <Text style={[styles.filterValue, sortBy !== 'recent' && styles.filterValueActive]}>
                                 {sortBy === 'recent' ? 'Recently watched' : sortBy === 'title' ? 'Title' : sortBy === 'year' ? 'Year' : 'Progress'}
                             </Text>
                             <Ionicons name={activeDropdown === 'sort' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
@@ -362,9 +438,9 @@ export const InternalMoviesScreen = () => {
                                 <TouchableOpacity
                                     key={option.value}
                                     style={styles.dropdownItem}
-                                    onPress={() => { setSortBy(option.value as any); setActiveDropdown(null); }}
+                                    onPress={() => { updateSortBy(option.value as any); setActiveDropdown(null); }}
                                 >
-                                    <Text style={styles.dropdownText}>{option.label}</Text>
+                                    <Text style={[styles.dropdownText, sortBy === option.value && styles.dropdownTextActive]}>{option.label}</Text>
                                 </TouchableOpacity>
                             ))}
                         </ScrollView>
@@ -471,6 +547,17 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
     },
+    filterDot: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        width: 9,
+        height: 9,
+        borderRadius: 5,
+        backgroundColor: '#ff4444',
+        borderWidth: 1.5,
+        borderColor: COLORS.gold.mid,
+    },
     filterPanel: {
         position: 'absolute',
         right: 24,
@@ -487,6 +574,37 @@ const styles = StyleSheet.create({
         shadowRadius: 12,
         elevation: 8,
     },
+    filterPanelHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+        paddingBottom: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.08)',
+    },
+    filterPanelTitle: {
+        color: COLORS.text,
+        fontSize: 13,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
+    clearAllBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: 'rgba(255,68,68,0.4)',
+    },
+    clearAllText: {
+        color: '#ff4444',
+        fontSize: 11,
+        fontWeight: '700',
+        letterSpacing: 0.5,
+    },
     filterRow: {
         paddingVertical: 8,
     },
@@ -497,6 +615,9 @@ const styles = StyleSheet.create({
         letterSpacing: 1.2,
         marginBottom: 6,
     },
+    filterLabelActive: {
+        color: COLORS.gold.mid,
+    },
     filterValueRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -506,6 +627,9 @@ const styles = StyleSheet.create({
         color: COLORS.text,
         fontSize: 13,
         fontWeight: '600',
+    },
+    filterValueActive: {
+        color: COLORS.gold.mid,
     },
     dropdownList: {
         maxHeight: 160,
@@ -519,5 +643,9 @@ const styles = StyleSheet.create({
     dropdownText: {
         color: COLORS.silver,
         fontSize: 13,
+    },
+    dropdownTextActive: {
+        color: COLORS.gold.mid,
+        fontWeight: '700',
     },
 });
