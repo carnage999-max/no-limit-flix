@@ -27,6 +27,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "resend": "^6.9.2",
+    "stripe": "^22.1.1",
     "uuid": "^13.0.0",
     "video.js": "^8.23.7",
     "videojs-http-source-selector": "^1.1.6"

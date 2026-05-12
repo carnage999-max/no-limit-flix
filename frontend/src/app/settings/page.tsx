@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import { Info, ShieldCheck, FileText, LifeBuoy, ChevronRight, LogOut, UserX, Monitor, History, Flag } from 'lucide-react';
+import { Info, ShieldCheck, FileText, LifeBuoy, ChevronRight, LogOut, UserX, Monitor, History, Flag, CreditCard } from 'lucide-react';
 import { ConfirmModal } from '@/components';
 import { useSession } from '@/context/SessionContext';
 
@@ -30,6 +30,12 @@ const menuItems = [
         subtitle: 'Get help with app or account issues',
         href: '/support',
         icon: LifeBuoy,
+    },
+    {
+        title: 'Billing',
+        subtitle: 'Manage subscription and renewal',
+        href: '/account/billing',
+        icon: CreditCard,
     },
     {
         title: 'Delete Account',

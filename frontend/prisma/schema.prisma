@@ -117,11 +117,16 @@ model User {
   password          String
   googleId          String?  @unique
   appleId           String?  @unique
+  stripeCustomerId  String?  @unique
   avatar            String?
   showWelcomeScreen Boolean  @default(true)
   maxDevices        Int      @default(5)
   primaryDeviceId   String?
   role              String   @default("user") // "user" or "admin"
+  subscriptionStatus             String    @default("inactive") // inactive | trialing | active | past_due | canceled | unpaid
+  subscriptionCurrentPeriodEnd   DateTime?
+  subscriptionCancelAtPeriodEnd  Boolean   @default(false)
+  trialUsedAt                    DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -132,10 +137,61 @@ model User {
   deletionRequests  AccountDeletionRequest[]
   issueReports      IssueReport[]
   sessions          UserSession[]
+  subscriptions     BillingSubscription[]
 
   @@index([email])
   @@index([username])
   @@index([role])
+  @@index([subscriptionStatus])
+}
+
+model BillingPlan {
+  id               String   @id @default(cuid())
+  slug             String   @unique @default("standard")
+  name             String   @default("Standard")
+  description      String?
+  amountCents      Int      @default(0)
+  currency         String   @default("usd")
+  interval         String   @default("month")
+  isActive         Boolean  @default(true)
+  isDefault        Boolean  @default(true)
+  stripeProductId  String?
+  stripePriceId    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  subscriptions    BillingSubscription[]
+
+  @@index([isActive])
+  @@index([isDefault])
+}
+
+model BillingSubscription {
+  id                     String   @id @default(cuid())
+  userId                 String
+  planId                 String?
+  stripeSubscriptionId   String   @unique
+  stripeCustomerId       String
+  stripePriceId          String?
+  status                 String
+  cancelAtPeriodEnd      Boolean  @default(false)
+  currentPeriodStart     DateTime?
+  currentPeriodEnd       DateTime?
+  trialStart             DateTime?
+  trialEnd               DateTime?
+  canceledAt             DateTime?
+  endedAt                DateTime?
+  metadata               Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan                   BillingPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([planId])
+  @@index([status])
+  @@index([stripeCustomerId])
 }
 
 model UserSession {

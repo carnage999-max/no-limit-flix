@@ -14,15 +14,21 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "No Limit Flix — Discover Your Next Watch",
-  description: "Premium mood-based movie discovery. Find what to watch, why it fits your mood, and where to watch it. Permanent library feel. No rotation.",
-  keywords: ["movies", "discovery", "mood-based", "watch", "streaming", "film"],
+  title: "No Limit Flix",
+  description: "Stream movies and series from a curated library, track devices and watch history, save favorites, and manage your membership from one account.",
+  applicationName: "No Limit Flix",
+  keywords: ["movie streaming", "series streaming", "subscription streaming", "watch history", "favorites", "curated library"],
   authors: [{ name: "No Limit Flix" }],
   openGraph: {
     type: "website",
-    title: "No Limit Flix — Discover Your Next Watch",
-    description: "Premium mood-based movie discovery experience",
+    title: "No Limit Flix",
+    description: "Subscription streaming with a curated library, device-aware accounts, favorites, and watch progress across screens.",
     siteName: "No Limit Flix",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "No Limit Flix",
+    description: "Subscription streaming with curated movies, favorites, watch history, and account-managed access.",
   },
 };
 
