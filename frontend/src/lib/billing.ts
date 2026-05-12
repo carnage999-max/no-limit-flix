@@ -20,7 +20,6 @@ export const hasActiveSubscriptionAccess = (user: {
     subscriptionCurrentPeriodEnd?: Date | string | null;
 } | null | undefined) => {
     if (!user) return false;
-    if (user.role === 'admin') return true;
 
     const status = (user.subscriptionStatus || 'inactive').toLowerCase();
     if (ACCESS_STATUSES.has(status)) return true;
