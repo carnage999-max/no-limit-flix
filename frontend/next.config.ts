@@ -6,8 +6,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  /* Use SWC for faster minification */
-  swcMinify: true,
   /* Disable source maps in production to save memory */
   productionBrowserSourceMaps: false,
 };

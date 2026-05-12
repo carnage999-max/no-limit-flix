@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CreditCard, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
@@ -45,7 +45,7 @@ const formatPrice = (amountCents: number, currency: string, interval: string) =>
     }).format(amount) + ` / ${interval}`;
 };
 
-export default function BillingPage() {
+function BillingPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, loading: sessionLoading, refresh } = useSession();
@@ -429,5 +429,28 @@ export default function BillingPage() {
                 )}
             </div>
         </main>
+    );
+}
+
+export default function BillingPage() {
+    return (
+        <Suspense
+            fallback={
+                <main
+                    style={{
+                        minHeight: '100vh',
+                        background: '#0B0B0D',
+                        paddingTop: '96px',
+                        paddingBottom: '4rem',
+                    }}
+                >
+                    <div style={{ padding: '4rem 0', display: 'flex', justifyContent: 'center' }}>
+                        <Loader2 className="w-6 h-6 animate-spin" color="#D4AF37" />
+                    </div>
+                </main>
+            }
+        >
+            <BillingPageContent />
+        </Suspense>
     );
 }
