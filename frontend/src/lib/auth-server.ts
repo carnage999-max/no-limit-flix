@@ -41,6 +41,11 @@ export async function getSessionUser(request: NextRequest) {
             role: true,
             googleId: true,
             appleId: true,
+            stripeCustomerId: true,
+            subscriptionStatus: true,
+            subscriptionCurrentPeriodEnd: true,
+            subscriptionCancelAtPeriodEnd: true,
+            trialUsedAt: true,
         }
     });
 

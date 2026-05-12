@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CheckCircle2, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, CreditCard, User as UserIcon } from 'lucide-react';
 
 interface User {
     id: string;
@@ -35,6 +35,16 @@ interface DeletionRequest {
     } | null;
 }
 
+interface BillingPlanSettings {
+    id: string;
+    name: string;
+    description?: string | null;
+    amountCents: number;
+    currency: string;
+    interval: string;
+    isActive: boolean;
+}
+
 export default function AdminSettingsPage() {
     const router = useRouter();
     const [users, setUsers] = useState<User[]>([]);
@@ -49,12 +59,38 @@ export default function AdminSettingsPage() {
     const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
     const [deletionLoading, setDeletionLoading] = useState(false);
     const [deletionError, setDeletionError] = useState('');
+    const [billingPlan, setBillingPlan] = useState<BillingPlanSettings | null>(null);
+    const [billingLoading, setBillingLoading] = useState(false);
+    const [billingSaving, setBillingSaving] = useState(false);
+    const [trialInfo, setTrialInfo] = useState<{ enabled: boolean; days: number } | null>(null);
     const pageSize = 10;
 
     useEffect(() => {
         fetchUsers(1);
         fetchDeletionRequests();
+        fetchBillingSettings();
     }, [router]);
+
+    const fetchBillingSettings = async () => {
+        try {
+            setBillingLoading(true);
+            const response = await fetch('/api/admin/billing');
+            if (response.status === 401) {
+                router.push('/admin?redirect=/admin/settings');
+                return;
+            }
+            if (!response.ok) {
+                throw new Error('Failed to fetch billing settings');
+            }
+            const data = await response.json();
+            setBillingPlan(data.plan || null);
+            setTrialInfo(data.trial || null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to fetch billing settings');
+        } finally {
+            setBillingLoading(false);
+        }
+    };
 
     const fetchDeletionRequests = async () => {
         try {
@@ -180,6 +216,32 @@ export default function AdminSettingsPage() {
         }, 300);
     };
 
+    const handleSaveBilling = async () => {
+        if (!billingPlan) return;
+
+        try {
+            setBillingSaving(true);
+            setError('');
+            setSuccessMessage('');
+            const response = await fetch('/api/admin/billing', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(billingPlan),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data?.error || 'Failed to update billing settings');
+            }
+            setBillingPlan(data.plan || billingPlan);
+            setTrialInfo(data.trial || trialInfo);
+            setSuccessMessage('Billing settings updated successfully.');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to update billing settings');
+        } finally {
+            setBillingSaving(false);
+        }
+    };
+
     return (
         <main style={{
             minHeight: '100vh',
@@ -261,6 +323,166 @@ export default function AdminSettingsPage() {
                         </span>
                     </div>
                 )}
+
+                <div style={{
+                    padding: '2rem',
+                    borderRadius: '1.25rem',
+                    background: 'rgba(167, 171, 180, 0.03)',
+                    border: '1px solid rgba(167, 171, 180, 0.1)',
+                    marginBottom: '2rem'
+                }}>
+                    <h2 style={{
+                        fontSize: '1.25rem',
+                        fontWeight: '700',
+                        color: '#F3F4F6',
+                        marginBottom: '1.5rem',
+                        paddingBottom: '1rem',
+                        borderBottom: '1px solid rgba(167, 171, 180, 0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.65rem',
+                    }}>
+                        <CreditCard className="w-5 h-5" />
+                        Subscription Plan
+                    </h2>
+
+                    {billingLoading || !billingPlan ? (
+                        <div style={{ color: '#A7ABB4' }}>Loading billing plan...</div>
+                    ) : (
+                        <div style={{ display: 'grid', gap: '1rem' }}>
+                            <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                <label style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>Plan name</label>
+                                <input
+                                    type="text"
+                                    value={billingPlan.name}
+                                    onChange={(e) => setBillingPlan((current) => current ? { ...current, name: e.target.value } : current)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem 1rem',
+                                        borderRadius: '0.5rem',
+                                        border: '1px solid rgba(167, 171, 180, 0.2)',
+                                        background: 'rgba(167, 171, 180, 0.05)',
+                                        color: '#F3F4F6',
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                <label style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>Description</label>
+                                <input
+                                    type="text"
+                                    value={billingPlan.description || ''}
+                                    onChange={(e) => setBillingPlan((current) => current ? { ...current, description: e.target.value } : current)}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.75rem 1rem',
+                                        borderRadius: '0.5rem',
+                                        border: '1px solid rgba(167, 171, 180, 0.2)',
+                                        background: 'rgba(167, 171, 180, 0.05)',
+                                        color: '#F3F4F6',
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '1rem' }}>
+                                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                    <label style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>Amount in cents</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        value={billingPlan.amountCents}
+                                        onChange={(e) => setBillingPlan((current) => current ? { ...current, amountCents: Number(e.target.value) || 0 } : current)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.75rem 1rem',
+                                            borderRadius: '0.5rem',
+                                            border: '1px solid rgba(167, 171, 180, 0.2)',
+                                            background: 'rgba(167, 171, 180, 0.05)',
+                                            color: '#F3F4F6',
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                    <label style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>Currency</label>
+                                    <input
+                                        type="text"
+                                        value={billingPlan.currency}
+                                        onChange={(e) => setBillingPlan((current) => current ? { ...current, currency: e.target.value } : current)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.75rem 1rem',
+                                            borderRadius: '0.5rem',
+                                            border: '1px solid rgba(167, 171, 180, 0.2)',
+                                            background: 'rgba(167, 171, 180, 0.05)',
+                                            color: '#F3F4F6',
+                                        }}
+                                    />
+                                </div>
+
+                                <div style={{ display: 'grid', gap: '0.5rem' }}>
+                                    <label style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>Interval</label>
+                                    <select
+                                        value={billingPlan.interval}
+                                        onChange={(e) => setBillingPlan((current) => current ? { ...current, interval: e.target.value } : current)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '0.75rem 1rem',
+                                            borderRadius: '0.5rem',
+                                            border: '1px solid rgba(167, 171, 180, 0.2)',
+                                            background: 'rgba(167, 171, 180, 0.05)',
+                                            color: '#F3F4F6',
+                                        }}
+                                    >
+                                        <option value="month">month</option>
+                                        <option value="year">year</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.65rem', color: '#F3F4F6' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={billingPlan.isActive}
+                                    onChange={(e) => setBillingPlan((current) => current ? { ...current, isActive: e.target.checked } : current)}
+                                />
+                                Plan is available for checkout
+                            </label>
+
+                            <div style={{
+                                padding: '0.9rem 1rem',
+                                borderRadius: '0.75rem',
+                                background: 'rgba(212, 175, 55, 0.08)',
+                                border: '1px solid rgba(212, 175, 55, 0.2)',
+                                color: '#D1D5DB',
+                                fontSize: '0.9rem',
+                                lineHeight: 1.6,
+                            }}>
+                                Free trial env toggle: {trialInfo?.enabled ? 'enabled' : 'disabled'}.
+                                {trialInfo ? ` Trial length: ${trialInfo.days} day${trialInfo.days === 1 ? '' : 's'}.` : ''}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleSaveBilling}
+                                disabled={billingSaving}
+                                style={{
+                                    justifySelf: 'start',
+                                    padding: '0.85rem 1.25rem',
+                                    borderRadius: '0.65rem',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)',
+                                    color: '#0B0B0D',
+                                    fontWeight: 700,
+                                    cursor: billingSaving ? 'not-allowed' : 'pointer',
+                                    opacity: billingSaving ? 0.7 : 1,
+                                }}
+                            >
+                                {billingSaving ? 'Saving...' : 'Save billing settings'}
+                            </button>
+                        </div>
+                    )}
+                </div>
 
                 {/* Promote User Section */}
                 <div style={{

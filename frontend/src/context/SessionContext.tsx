@@ -10,6 +10,12 @@ interface SessionUser {
     showWelcomeScreen?: boolean;
     role: string;
     googleId?: string | null;
+    appleId?: string | null;
+    stripeCustomerId?: string | null;
+    subscriptionStatus?: string | null;
+    subscriptionCurrentPeriodEnd?: string | null;
+    subscriptionCancelAtPeriodEnd?: boolean;
+    trialUsedAt?: string | null;
 }
 
 interface SessionContextType {

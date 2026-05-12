@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { ConfirmModal } from '@/components';
-import { BarChart3, LogIn, ArrowLeft, User, Settings, Bookmark, LogOut } from 'lucide-react';
+import { BarChart3, LogIn, ArrowLeft, User, Settings, Bookmark, CreditCard, LogOut } from 'lucide-react';
 
 export default function Navbar() {
     const pathname = usePathname();
@@ -298,6 +298,22 @@ export default function Navbar() {
                                 >
                                     <User size={16} />
                                     Profile
+                                </Link>
+                                <Link
+                                    href="/account/billing"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.75rem',
+                                        padding: '0.65rem 0.75rem',
+                                        borderRadius: '0.6rem',
+                                        textDecoration: 'none',
+                                        color: '#F3F4F6',
+                                    }}
+                                    onClick={() => setMenuOpen(false)}
+                                >
+                                    <CreditCard size={16} />
+                                    Billing
                                 </Link>
                                 <Link
                                     href="/settings"

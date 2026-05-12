@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth';
 import { getSessionUser } from '@/lib/auth-server';
+import { buildBillingState } from '@/lib/billing';
 
 export async function GET(request: NextRequest) {
     try {
@@ -17,7 +18,12 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ authenticated: false }, { status: 401 });
         }
 
-        return NextResponse.json({ authenticated: true, user, sessionId: payload.sessionId });
+        return NextResponse.json({
+            authenticated: true,
+            user,
+            sessionId: payload.sessionId,
+            billing: buildBillingState(user),
+        });
     } catch (error) {
         console.error('Session lookup error:', error);
         return NextResponse.json({ authenticated: false }, { status: 500 });
