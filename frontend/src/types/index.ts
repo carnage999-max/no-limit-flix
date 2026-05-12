@@ -112,13 +112,41 @@ export type FilterLength = 'Short' | 'Medium' | 'Long';
 export type FilterIntensity = 'Low' | 'Medium' | 'High';
 export type FilterTone = 'Light' | 'Neutral' | 'Heavy';
 
+export interface CastMember {
+    id: number;
+    name: string;
+    character: string;
+    profilePath: string | null;
+    order: number;
+}
+
+export interface ActorProfile {
+    id: string;
+    name: string;
+    tmdbId?: string | null;
+    profilePath?: string | null;
+    toneProfile: string[];
+    pacingTendency: string;
+    emotionalRange: number;
+    genreBlend: Record<string, number>;
+    rewatchability: number;
+    permanenceScore: number;
+}
+
 export interface ActorRequest {
-    actorName: string;
+    actorId?: string;    
+    actorName?: string;   
+    actorTmdbId?: string;  
     moodTags: string[];
+    constraints?: { includeAdult?: boolean };
+    sessionId?: string;
 }
 
 export interface ActorResponse {
     hero: MoviePick;
     alternates: MoviePick[];
     explanationTokens: string[];
+    explanation?: string;
+    confidence_score?: number;
+    actorProfile?: Pick<ActorProfile, 'id' | 'name' | 'profilePath' | 'toneProfile' | 'pacingTendency'>;
 }

@@ -128,6 +128,32 @@ export async function searchPerson(query: string) {
     return data.results?.[0] || null;
 }
 
+export async function searchPersonById(tmdbId: string) {
+    try {
+        const data = await fetchFromTMDB(`/person/${tmdbId}`, { append_to_response: 'movie_credits' });
+        return data;
+    } catch {
+        return null;
+    }
+}
+
+export async function getMovieCast(tmdbId: string): Promise<import('@/types').CastMember[]> {
+    try {
+        const data = await fetchFromTMDB(`/movie/${tmdbId}/credits`);
+        return (data.cast || [])
+            .slice(0, 12)
+            .map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                character: c.character,
+                profilePath: c.profile_path || null,
+                order: c.order,
+            }));
+    } catch {
+        return [];
+    }
+}
+
 const TMDB_GENRE_NAME_TO_ID: Record<string, number> = {
     'Action': 28, 'Adventure': 12, 'Animation': 16, 'Comedy': 35, 'Crime': 80,
     'Documentary': 99, 'Drama': 18, 'Family': 10751, 'Fantasy': 14, 'History': 36,
