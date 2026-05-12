@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, createSessionToken, generateRefreshToken,
 import { parseUserAgent, lookupLocation } from '@/lib/device';
 import { sendEmail } from '@/lib/email';
 import { buildBlockedDeviceEmail, buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
+import { getOrCreateStripeCustomer } from '@/lib/stripe';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const prisma = new PrismaClient();
@@ -69,6 +70,31 @@ export async function POST(request: NextRequest) {
         const normalizedDeviceName = typeof deviceName === 'string' && deviceName.trim().length > 0
             ? deviceName.trim()
             : null;
+
+        const ensureStripeCustomer = async (user: {
+            id: string;
+            email: string;
+            username: string;
+            stripeCustomerId?: string | null;
+        }) => {
+            try {
+                const stripeCustomerId = await getOrCreateStripeCustomer({
+                    userId: user.id,
+                    email: user.email,
+                    username: user.username,
+                    stripeCustomerId: user.stripeCustomerId || null,
+                });
+
+                if (user.stripeCustomerId === stripeCustomerId) return user;
+                return prisma.user.update({
+                    where: { id: user.id },
+                    data: { stripeCustomerId },
+                });
+            } catch (error) {
+                console.error('Stripe customer ensure error:', error);
+                return user;
+            }
+        };
 
         const upsertSession = async (userId: string, role: string, userEmail: string) => {
             const sessionId = crypto.randomUUID();
@@ -230,7 +256,7 @@ export async function POST(request: NextRequest) {
 
             // Create new user
             const hashedPassword = hashPassword(password);
-            const user = await prisma.user.create({
+            let user = await prisma.user.create({
                 data: {
                     email: email.toLowerCase(),
                     username,
@@ -249,6 +275,8 @@ export async function POST(request: NextRequest) {
             } catch (err) {
                 console.warn('Signup email failed', err);
             }
+
+            user = await ensureStripeCustomer(user);
 
             let token: string;
             let refreshToken: string;
@@ -300,7 +328,7 @@ export async function POST(request: NextRequest) {
 
             return response;
         } else if (action === 'login') {
-            const user = await prisma.user.findUnique({
+            let user = await prisma.user.findUnique({
                 where: { email: email.toLowerCase() }
             });
 
@@ -310,6 +338,8 @@ export async function POST(request: NextRequest) {
                     { status: 401 }
                 );
             }
+
+            user = await ensureStripeCustomer(user);
 
             let token: string;
             let refreshToken: string;
@@ -411,6 +441,8 @@ export async function POST(request: NextRequest) {
                     });
                 }
             }
+
+            user = await ensureStripeCustomer(user);
 
             if (!user) {
                 const baseUsername = tokenInfo.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '').slice(0, 16) || 'user';
@@ -527,6 +559,8 @@ export async function POST(request: NextRequest) {
                     });
                 }
             }
+
+            user = await ensureStripeCustomer(user);
 
             if (!user && resolvedEmail) {
                 const byEmail = await prisma.user.findUnique({ where: { email: resolvedEmail } });

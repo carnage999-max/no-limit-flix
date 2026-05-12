@@ -20,6 +20,12 @@ importers:
       '@prisma/client':
         specifier: ^6.3.0
         version: 6.19.2(prisma@6.19.2(typescript@5.9.3))(typescript@5.9.3)
+      '@stripe/react-stripe-js':
+        specifier: ^6.3.0
+        version: 6.3.0(@stripe/stripe-js@9.4.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      '@stripe/stripe-js':
+        specifier: ^9.4.0
+        version: 9.4.0
       '@types/video.js':
         specifier: ^7.3.58
         version: 7.3.58
@@ -921,6 +927,17 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@stripe/react-stripe-js@6.3.0':
+    resolution: {integrity: sha512-N1FTRNCMKySElDz1lAsf/m6Oy5vcl6LRVXcW29t0Y3U3HYOAqCBlk6nuDsR2x7SAuaXkVCjnpCqrNbA/7l74jg==}
+    peerDependencies:
+      '@stripe/stripe-js': '>=9.3.1 <10.0.0'
+      react: '>=16.8.0 <20.0.0'
+      react-dom: '>=16.8.0 <20.0.0'
+
+  '@stripe/stripe-js@9.4.0':
+    resolution: {integrity: sha512-zXG86DnoLU5nH2U18tX5ApTE3IAm+txoiPm4YFyEtRS0K5y7ZDH9M8e1Le/cZyI6wvW3BkJn2daZe2FqZOrSSg==}
+    engines: {node: '>=12.16'}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -3998,6 +4015,15 @@ snapshots:
   '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@stripe/react-stripe-js@6.3.0(@stripe/stripe-js@9.4.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@stripe/stripe-js': 9.4.0
+      prop-types: 15.8.1
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+
+  '@stripe/stripe-js@9.4.0': {}
 
   '@swc/helpers@0.5.15':
     dependencies:

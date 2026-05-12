@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
 import { buildBillingState, getDefaultBillingPlan } from '@/lib/billing';
+import { getOrCreateStripeCustomer } from '@/lib/stripe';
 
 export async function GET(request: NextRequest) {
     try {
@@ -9,6 +10,18 @@ export async function GET(request: NextRequest) {
         if (!user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
+
+        const stripeCustomerId = await getOrCreateStripeCustomer({
+            userId: user.id,
+            email: user.email,
+            username: user.username,
+            stripeCustomerId: user.stripeCustomerId,
+        });
+
+        const hydratedUser = {
+            ...user,
+            stripeCustomerId,
+        };
 
         const [plan, subscription] = await Promise.all([
             getDefaultBillingPlan(),
@@ -28,7 +41,7 @@ export async function GET(request: NextRequest) {
                 interval: plan.interval,
                 isActive: plan.isActive,
             },
-            billing: buildBillingState(user),
+            billing: buildBillingState(hydratedUser),
             subscription: subscription
                 ? {
                     id: subscription.id,

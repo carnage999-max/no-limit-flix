@@ -5,6 +5,7 @@ import "./globals.css";
 import { Navbar, AppBanner, MobileTabBar } from "@/components";
 import ToastContainer from "@/components/ToastContainer";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
+import SubscriptionGate from "@/components/SubscriptionGate";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -61,13 +62,15 @@ export default function RootLayout({
           <SessionProvider>
             <SearchProvider>
               <FavoritesProvider>
-                <Navbar />
-                <AppBanner />
-                {children}
-                <Suspense fallback={null}>
-                  <MobileTabBar />
-                </Suspense>
-                <ToastContainer />
+                <SubscriptionGate>
+                  <Navbar />
+                  <AppBanner />
+                  {children}
+                  <Suspense fallback={null}>
+                    <MobileTabBar />
+                  </Suspense>
+                  <ToastContainer />
+                </SubscriptionGate>
               </FavoritesProvider>
             </SearchProvider>
           </SessionProvider>

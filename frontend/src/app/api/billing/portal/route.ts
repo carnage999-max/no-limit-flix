@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSessionUser } from '@/lib/auth-server';
-import { getAppUrl, getStripe } from '@/lib/stripe';
+import { getAppUrl, getOrCreateStripeCustomer, getStripe } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
     try {
@@ -14,12 +14,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        if (!user.stripeCustomerId) {
-            return NextResponse.json({ error: 'No Stripe customer found for this account' }, { status: 409 });
-        }
+        const customerId = await getOrCreateStripeCustomer({
+            userId: user.id,
+            email: user.email,
+            username: user.username,
+            stripeCustomerId: user.stripeCustomerId,
+        });
 
         const portal = await stripe.billingPortal.sessions.create({
-            customer: user.stripeCustomerId,
+            customer: customerId,
             return_url: `${getAppUrl(request.nextUrl.origin)}/account/billing`,
         });
 

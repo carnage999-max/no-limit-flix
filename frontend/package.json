@@ -16,6 +16,8 @@
     "@aws-sdk/s3-request-presigner": "^3.992.0",
     "@openrouter/sdk": "^0.4.0",
     "@prisma/client": "^6.3.0",
+    "@stripe/react-stripe-js": "^6.3.0",
+    "@stripe/stripe-js": "^9.4.0",
     "@types/video.js": "^7.3.58",
     "@vidstack/react": "^1.12.13",
     "fluent-ffmpeg": "^2.1.3",

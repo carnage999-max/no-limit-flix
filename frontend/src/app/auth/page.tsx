@@ -23,18 +23,34 @@ function AuthContent() {
     const [successMessage, setSuccessMessage] = useState('');
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, loading: sessionLoading, refresh } = useSession();
+    const { user, billing, loading: sessionLoading, refresh } = useSession();
     const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID;
     const googleButtonRef = useRef<HTMLDivElement | null>(null);
+
+    const getPostAuthRedirect = useCallback((responseUser?: { showWelcomeScreen?: boolean }) => {
+        const redirectUrl = searchParams.get('redirect') || '/';
+        const showWelcome = responseUser?.showWelcomeScreen ?? true;
+        const requiresSubscription = billing?.requiresSubscription ?? true;
+        const hasAccess = billing?.access ?? false;
+
+        if (requiresSubscription && !hasAccess) {
+            return `/account/billing?gated=1&redirect=${encodeURIComponent(redirectUrl)}`;
+        }
+
+        if (showWelcome) {
+            return `/welcome?redirect=${encodeURIComponent(redirectUrl)}`;
+        }
+
+        return redirectUrl;
+    }, [billing, searchParams]);
 
     // Redirect if already authenticated (require both user + userId)
     useEffect(() => {
         if (sessionLoading) return;
         if (user) {
-            const redirectUrl = searchParams.get('redirect');
-            router.push(redirectUrl || '/');
+            router.push(getPostAuthRedirect(user));
         }
-    }, [router, user, sessionLoading, searchParams]);
+    }, [getPostAuthRedirect, router, user, sessionLoading]);
 
     const getDeviceInfo = useCallback(() => {
         if (typeof window === 'undefined') return {};
@@ -81,13 +97,7 @@ function AuthContent() {
                 setSuccessMessage(isLogin ? 'Login successful! Redirecting...' : 'Account created! Redirecting...');
                 await refresh();
                 setTimeout(() => {
-                    const redirectUrl = searchParams.get('redirect') || '/';
-                    const showWelcome = data?.user?.showWelcomeScreen ?? true;
-                    if (showWelcome) {
-                        router.push(`/welcome?redirect=${encodeURIComponent(redirectUrl)}`);
-                    } else {
-                        router.push(redirectUrl);
-                    }
+                    router.push(getPostAuthRedirect(data?.user));
                     router.refresh();
                 }, 150);
             } else {
@@ -121,14 +131,8 @@ function AuthContent() {
             if (response.ok) {
                 setSuccessMessage('Signed in with Google. Redirecting...');
                 await refresh();
-                const redirectUrl = searchParams.get('redirect') || '/';
-                const showWelcome = data?.user?.showWelcomeScreen ?? true;
                 setTimeout(() => {
-                    if (showWelcome) {
-                        router.push(`/welcome?redirect=${encodeURIComponent(redirectUrl)}`);
-                    } else {
-                        router.push(redirectUrl);
-                    }
+                    router.push(getPostAuthRedirect(data?.user));
                     router.refresh();
                 }, 150);
             } else {
@@ -139,7 +143,7 @@ function AuthContent() {
         } finally {
             setLoading(false);
         }
-    }, [getDeviceInfo, refresh, router, searchParams]);
+    }, [getDeviceInfo, getPostAuthRedirect, refresh, router]);
 
     useEffect(() => {
         if (!googleClientId) return;

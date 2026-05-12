@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CreditCard, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
+import BillingCheckoutEmbed from '@/components/BillingCheckoutEmbed';
 
 interface BillingSummary {
     plan: {
@@ -48,10 +49,10 @@ const formatPrice = (amountCents: number, currency: string, interval: string) =>
 function BillingPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { user, loading: sessionLoading, refresh } = useSession();
+    const { user, billing: sessionBilling, loading: sessionLoading, refresh } = useSession();
     const [summary, setSummary] = useState<BillingSummary | null>(null);
     const [loading, setLoading] = useState(true);
-    const [actionLoading, setActionLoading] = useState<'checkout' | 'portal' | null>(null);
+    const [actionLoading, setActionLoading] = useState<'portal' | null>(null);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -81,7 +82,7 @@ function BillingPageContent() {
         fetchSummary();
     }, [router, sessionLoading, user]);
 
-    const handleAction = async (kind: 'checkout' | 'portal') => {
+    const handleAction = async (kind: 'portal') => {
         try {
             setActionLoading(kind);
             setError('');
@@ -106,10 +107,14 @@ function BillingPageContent() {
 
     if (sessionLoading || !user) return null;
 
-    const status = summary?.billing.status || user.subscriptionStatus || 'inactive';
+    const status = summary?.billing.status || sessionBilling?.status || user.subscriptionStatus || 'inactive';
     const checkoutState = searchParams.get('checkout');
     const gated = searchParams.get('gated') === '1';
     const redirectTarget = searchParams.get('redirect');
+    const hasSubscriptionAccess = summary?.billing.access ?? sessionBilling?.access ?? false;
+    const hasActiveStatus = status === 'active' || status === 'trialing';
+    const canManageInStripe = status !== 'inactive';
+    const showEmbeddedCheckout = status === 'inactive';
 
     return (
         <main
@@ -301,25 +306,7 @@ function BillingPageContent() {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-                                {!summary.billing.access ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAction('checkout')}
-                                        disabled={actionLoading !== null || !summary.plan.isActive}
-                                        style={{
-                                            padding: '0.9rem 1.25rem',
-                                            borderRadius: '0.85rem',
-                                            border: 'none',
-                                            background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 55%, #B8860B 100%)',
-                                            color: '#0B0B0D',
-                                            fontWeight: 700,
-                                            cursor: actionLoading !== null || !summary.plan.isActive ? 'not-allowed' : 'pointer',
-                                            opacity: actionLoading !== null || !summary.plan.isActive ? 0.7 : 1,
-                                        }}
-                                    >
-                                        {actionLoading === 'checkout' ? 'Redirecting to Stripe...' : summary.billing.trialEligible ? 'Start free trial' : 'Subscribe with Stripe'}
-                                    </button>
-                                ) : (
+                                {canManageInStripe && (
                                     <button
                                         type="button"
                                         onClick={() => handleAction('portal')}
@@ -339,7 +326,7 @@ function BillingPageContent() {
                                     </button>
                                 )}
 
-                                {summary.billing.access && redirectTarget && (
+                                {hasSubscriptionAccess && redirectTarget && (
                                     <button
                                         type="button"
                                         onClick={() => router.push(redirectTarget)}
@@ -393,7 +380,7 @@ function BillingPageContent() {
                                 <div style={{ color: '#F3F4F6', fontSize: '1.05rem', fontWeight: 700 }}>Billing controls</div>
                             </div>
                             <div style={{ color: '#A7ABB4', fontSize: '0.95rem', lineHeight: 1.7 }}>
-                                Stripe manages payment methods, automatic renewal, failed payment recovery, and cancellations. Trial eligibility is controlled by environment configuration so you can switch it on during testing without changing code.
+                                Stripe manages payment methods, automatic renewal, failed payment recovery, and cancellations. Checkout is embedded directly in this page so customers can subscribe without leaving the app.
                             </div>
                             {summary.subscription?.trialEnd && (
                                 <div style={{ color: '#F6D365', fontSize: '0.92rem' }}>
@@ -405,7 +392,7 @@ function BillingPageContent() {
                                     {summary.subscription.cancelAtPeriodEnd ? 'Membership ends' : 'Next renewal'} on {new Date(summary.subscription.currentPeriodEnd).toLocaleDateString()}.
                                 </div>
                             )}
-                            {summary.billing.requiresSubscription && !summary.billing.access && (
+                            {summary.billing.requiresSubscription && !hasSubscriptionAccess && (
                                 <div
                                     style={{
                                         padding: '1rem',
@@ -425,6 +412,32 @@ function BillingPageContent() {
                                 </div>
                             )}
                         </section>
+
+                        {showEmbeddedCheckout && summary.plan.isActive && (
+                            <section
+                                style={{
+                                    padding: '1.5rem',
+                                    borderRadius: '1.25rem',
+                                    background: 'rgba(167, 171, 180, 0.04)',
+                                    border: '1px solid rgba(167, 171, 180, 0.1)',
+                                    display: 'grid',
+                                    gap: '1rem',
+                                }}
+                            >
+                                <div style={{ color: '#F3F4F6', fontSize: '1.15rem', fontWeight: 700 }}>
+                                    {summary.billing.trialEligible ? `Start your ${summary.billing.freeTrialDays}-day trial` : 'Enter payment details'}
+                                </div>
+                                <div style={{ color: '#A7ABB4', fontSize: '0.95rem', lineHeight: 1.6 }}>
+                                    Your card details are collected securely by Stripe inside this page. We do not store raw payment details on our servers.
+                                </div>
+                                <BillingCheckoutEmbed
+                                    onComplete={async () => {
+                                        await refresh();
+                                        window.location.href = redirectTarget || '/account/billing?checkout=success';
+                                    }}
+                                />
+                            </section>
+                        )}
                     </div>
                 )}
             </div>

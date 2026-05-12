@@ -18,8 +18,21 @@ interface SessionUser {
     trialUsedAt?: string | null;
 }
 
+interface SessionBilling {
+    access: boolean;
+    requiresSubscription: boolean;
+    customerConfigured: boolean;
+    status: string;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+    trialEligible: boolean;
+    freeTrialEnabled: boolean;
+    freeTrialDays: number;
+}
+
 interface SessionContextType {
     user: SessionUser | null;
+    billing: SessionBilling | null;
     loading: boolean;
     refresh: () => Promise<void>;
 }
@@ -28,6 +41,7 @@ const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<SessionUser | null>(null);
+    const [billing, setBilling] = useState<SessionBilling | null>(null);
     const [loading, setLoading] = useState(true);
 
     const refresh = useCallback(async () => {
@@ -38,6 +52,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             }
             const data = await res.json();
             setUser(data.user || null);
+            setBilling(data.billing || null);
             return { ok: true, status: res.status };
         };
 
@@ -55,8 +70,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
                 }
             }
             setUser(null);
+            setBilling(null);
         } catch (error) {
             setUser(null);
+            setBilling(null);
         } finally {
             setLoading(false);
         }
@@ -67,7 +84,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }, [refresh]);
 
     return (
-        <SessionContext.Provider value={{ user, loading, refresh }}>
+        <SessionContext.Provider value={{ user, billing, loading, refresh }}>
             {children}
         </SessionContext.Provider>
     );

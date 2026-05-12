@@ -21,6 +21,45 @@ export const getAppUrl = (origin?: string | null) => {
     return configured.replace(/\/$/, '');
 };
 
+export async function getOrCreateStripeCustomer(input: {
+    userId: string;
+    email: string;
+    username: string;
+    stripeCustomerId?: string | null;
+}) {
+    const stripe = getStripe();
+    if (!stripe) {
+        throw new Error('Stripe is not configured');
+    }
+
+    let customerId = input.stripeCustomerId || null;
+    if (customerId) {
+        try {
+            const existing = await stripe.customers.retrieve(customerId);
+            if (!('deleted' in existing && existing.deleted)) {
+                return customerId;
+            }
+        } catch {
+            customerId = null;
+        }
+    }
+
+    const customer = await stripe.customers.create({
+        email: input.email,
+        name: input.username,
+        metadata: {
+            userId: input.userId,
+        },
+    });
+
+    await prisma.user.update({
+        where: { id: input.userId },
+        data: { stripeCustomerId: customer.id },
+    });
+
+    return customer.id;
+}
+
 const normalizeInterval = (value?: string | null) => {
     return value === 'year' ? 'year' : 'month';
 };
