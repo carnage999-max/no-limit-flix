@@ -4,17 +4,8 @@ import prisma from '@/lib/db';
 const ACCESS_STATUSES = new Set(['active', 'trialing']);
 const BLOCKED_STATUSES = new Set(['inactive', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired']);
 
-const parseBoolean = (value: string | undefined, fallback: boolean) => {
-    if (value === undefined) return fallback;
-    return value === 'true';
-};
-
-export const isSubscriptionEnforcementEnabled = () => {
-    return parseBoolean(process.env.SUBSCRIPTION_ENFORCEMENT_ENABLED, true);
-};
-
 export const isFreeTrialEnabled = () => {
-    return parseBoolean(process.env.STRIPE_FREE_TRIAL_ENABLED, false);
+    return process.env.STRIPE_FREE_TRIAL_ENABLED === 'true';
 };
 
 export const getFreeTrialDays = () => {
@@ -30,7 +21,6 @@ export const hasActiveSubscriptionAccess = (user: {
 } | null | undefined) => {
     if (!user) return false;
     if (user.role === 'admin') return true;
-    if (!isSubscriptionEnforcementEnabled()) return true;
 
     const status = (user.subscriptionStatus || 'inactive').toLowerCase();
     if (ACCESS_STATUSES.has(status)) return true;
@@ -194,7 +184,7 @@ export const buildBillingState = (user: {
     const access = hasActiveSubscriptionAccess(user);
     return {
         access,
-        requiresSubscription: isSubscriptionEnforcementEnabled(),
+        requiresSubscription: true,
         customerConfigured: Boolean(user?.stripeCustomerId),
         status: user?.subscriptionStatus || 'inactive',
         currentPeriodEnd: user?.subscriptionCurrentPeriodEnd?.toISOString?.() || null,

@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { Navbar, AppBanner, MobileTabBar } from "@/components";
 import ToastContainer from "@/components/ToastContainer";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
-import SubscriptionGate from "@/components/SubscriptionGate";
+import AppFrame from "@/components/AppFrame";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -62,15 +60,8 @@ export default function RootLayout({
           <SessionProvider>
             <SearchProvider>
               <FavoritesProvider>
-                <SubscriptionGate>
-                  <Navbar />
-                  <AppBanner />
-                  {children}
-                  <Suspense fallback={null}>
-                    <MobileTabBar />
-                  </Suspense>
-                  <ToastContainer />
-                </SubscriptionGate>
+                <AppFrame>{children}</AppFrame>
+                <ToastContainer />
               </FavoritesProvider>
             </SearchProvider>
           </SessionProvider>
