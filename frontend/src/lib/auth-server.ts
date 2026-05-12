@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import prisma from '@/lib/db';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth';
+import { withBillingSubscription } from '@/lib/billing';
 
 const getBearerToken = (request: NextRequest) => {
     const header = request.headers.get('authorization') || request.headers.get('Authorization');
@@ -46,8 +47,20 @@ export async function getSessionUser(request: NextRequest) {
             subscriptionCurrentPeriodEnd: true,
             subscriptionCancelAtPeriodEnd: true,
             trialUsedAt: true,
+            subscriptions: {
+                orderBy: { updatedAt: 'desc' },
+                take: 1,
+                select: {
+                    status: true,
+                    currentPeriodEnd: true,
+                    cancelAtPeriodEnd: true,
+                },
+            },
         }
     });
 
-    return user || null;
+    if (!user) return null;
+
+    const { subscriptions, ...rest } = user;
+    return withBillingSubscription(rest, subscriptions[0] || null);
 }

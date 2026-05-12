@@ -71,12 +71,18 @@ export async function POST(request: NextRequest) {
             ? deviceName.trim()
             : null;
 
-        const ensureStripeCustomer = async (user: {
+        type StripeCustomerUser = {
             id: string;
             email: string;
             username: string;
             stripeCustomerId?: string | null;
-        }) => {
+        };
+
+        async function ensureStripeCustomer<T extends StripeCustomerUser>(user: T): Promise<T>;
+        async function ensureStripeCustomer<T extends StripeCustomerUser>(user: T | null): Promise<T | null>;
+        async function ensureStripeCustomer<T extends StripeCustomerUser>(user: T | null): Promise<T | null> {
+            if (!user) return null;
+
             try {
                 const stripeCustomerId = await getOrCreateStripeCustomer({
                     userId: user.id,
@@ -86,15 +92,19 @@ export async function POST(request: NextRequest) {
                 });
 
                 if (user.stripeCustomerId === stripeCustomerId) return user;
-                return prisma.user.update({
+                await prisma.user.update({
                     where: { id: user.id },
                     data: { stripeCustomerId },
                 });
+                return {
+                    ...user,
+                    stripeCustomerId,
+                };
             } catch (error) {
                 console.error('Stripe customer ensure error:', error);
                 return user;
             }
-        };
+        }
 
         const upsertSession = async (userId: string, role: string, userEmail: string) => {
             const sessionId = crypto.randomUUID();

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
-import { buildBillingState, getDefaultBillingPlan } from '@/lib/billing';
+import { buildBillingState, getDefaultBillingPlan, withBillingSubscription } from '@/lib/billing';
 import { getOrCreateStripeCustomer } from '@/lib/stripe';
 
 export async function GET(request: NextRequest) {
@@ -31,6 +31,8 @@ export async function GET(request: NextRequest) {
             }),
         ]);
 
+        const billingUser = withBillingSubscription(hydratedUser, subscription);
+
         return NextResponse.json({
             plan: {
                 id: plan.id,
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest) {
                 interval: plan.interval,
                 isActive: plan.isActive,
             },
-            billing: buildBillingState(hydratedUser),
+            billing: buildBillingState(billingUser),
             subscription: subscription
                 ? {
                     id: subscription.id,

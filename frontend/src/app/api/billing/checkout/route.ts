@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
         const session = await stripe.checkout.sessions.create({
             mode: 'subscription',
-            ui_mode: 'embedded',
+            ui_mode: 'embedded_page',
             customer: customerId,
             client_reference_id: user.id,
             return_url: `${appUrl}/account/billing?checkout=success`,

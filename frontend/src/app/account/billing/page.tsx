@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CreditCard, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
@@ -113,8 +113,12 @@ function BillingPageContent() {
     const redirectTarget = searchParams.get('redirect');
     const hasSubscriptionAccess = summary?.billing.access ?? sessionBilling?.access ?? false;
     const hasActiveStatus = status === 'active' || status === 'trialing';
-    const canManageInStripe = status !== 'inactive';
-    const showEmbeddedCheckout = status === 'inactive';
+    const canManageInStripe = summary?.billing.customerConfigured ?? sessionBilling?.customerConfigured ?? false;
+    const showEmbeddedCheckout = !hasSubscriptionAccess;
+    const handleCheckoutComplete = useCallback(async () => {
+        await refresh();
+        window.location.href = redirectTarget || '/account/billing?checkout=success';
+    }, [redirectTarget, refresh]);
 
     return (
         <main
@@ -431,10 +435,7 @@ function BillingPageContent() {
                                     Your card details are collected securely by Stripe inside this page. We do not store raw payment details on our servers.
                                 </div>
                                 <BillingCheckoutEmbed
-                                    onComplete={async () => {
-                                        await refresh();
-                                        window.location.href = redirectTarget || '/account/billing?checkout=success';
-                                    }}
+                                    onComplete={handleCheckoutComplete}
                                 />
                             </section>
                         )}

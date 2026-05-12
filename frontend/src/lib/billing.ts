@@ -4,6 +4,21 @@ import prisma from '@/lib/db';
 const ACCESS_STATUSES = new Set(['active', 'trialing']);
 const BLOCKED_STATUSES = new Set(['inactive', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired']);
 
+type BillingUserSnapshot = {
+    role?: string | null;
+    stripeCustomerId?: string | null;
+    subscriptionStatus?: string | null;
+    subscriptionCurrentPeriodEnd?: Date | string | null;
+    subscriptionCancelAtPeriodEnd?: boolean | null;
+    trialUsedAt?: Date | null;
+};
+
+type BillingSubscriptionSnapshot = {
+    status?: string | null;
+    currentPeriodEnd?: Date | null;
+    cancelAtPeriodEnd?: boolean | null;
+};
+
 export const isFreeTrialEnabled = () => {
     return process.env.STRIPE_FREE_TRIAL_ENABLED === 'true';
 };
@@ -14,11 +29,7 @@ export const getFreeTrialDays = () => {
     return parsed;
 };
 
-export const hasActiveSubscriptionAccess = (user: {
-    role?: string | null;
-    subscriptionStatus?: string | null;
-    subscriptionCurrentPeriodEnd?: Date | string | null;
-} | null | undefined) => {
+export const hasActiveSubscriptionAccess = (user: BillingUserSnapshot | null | undefined) => {
     if (!user) return false;
 
     const status = (user.subscriptionStatus || 'inactive').toLowerCase();
@@ -32,6 +43,20 @@ export const hasActiveSubscriptionAccess = (user: {
 
 export const shouldOfferFreeTrial = (user: { trialUsedAt?: Date | null } | null | undefined) => {
     return isFreeTrialEnabled() && getFreeTrialDays() > 0 && !user?.trialUsedAt;
+};
+
+export const withBillingSubscription = <T extends BillingUserSnapshot>(
+    user: T | null | undefined,
+    subscription: BillingSubscriptionSnapshot | null | undefined
+) => {
+    if (!user || !subscription) return user;
+
+    return {
+        ...user,
+        subscriptionStatus: subscription.status || user.subscriptionStatus,
+        subscriptionCurrentPeriodEnd: subscription.currentPeriodEnd ?? user.subscriptionCurrentPeriodEnd ?? null,
+        subscriptionCancelAtPeriodEnd: subscription.cancelAtPeriodEnd ?? user.subscriptionCancelAtPeriodEnd ?? false,
+    };
 };
 
 export const getDefaultBillingPlan = async () => {
@@ -172,21 +197,18 @@ export async function markSubscriptionCanceled(stripeSubscriptionId: string) {
     return existing.userId;
 }
 
-export const buildBillingState = (user: {
-    role?: string | null;
-    stripeCustomerId?: string | null;
-    subscriptionStatus?: string | null;
-    subscriptionCurrentPeriodEnd?: Date | null;
-    subscriptionCancelAtPeriodEnd?: boolean | null;
-    trialUsedAt?: Date | null;
-} | null | undefined) => {
+export const buildBillingState = (user: BillingUserSnapshot | null | undefined) => {
     const access = hasActiveSubscriptionAccess(user);
+    const currentPeriodEnd = user?.subscriptionCurrentPeriodEnd
+        ? new Date(user.subscriptionCurrentPeriodEnd).toISOString()
+        : null;
+
     return {
         access,
         requiresSubscription: true,
         customerConfigured: Boolean(user?.stripeCustomerId),
         status: user?.subscriptionStatus || 'inactive',
-        currentPeriodEnd: user?.subscriptionCurrentPeriodEnd?.toISOString?.() || null,
+        currentPeriodEnd,
         cancelAtPeriodEnd: Boolean(user?.subscriptionCancelAtPeriodEnd),
         trialEligible: shouldOfferFreeTrial(user),
         freeTrialEnabled: isFreeTrialEnabled(),
