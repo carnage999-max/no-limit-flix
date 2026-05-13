@@ -1,10 +1,11 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { CreditCard, Loader2, ShieldCheck, Sparkles } from 'lucide-react';
+import { CreditCard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
-import BillingCheckoutEmbed from '@/components/BillingCheckoutEmbed';
+import SubscriptionGateScreen from '@/components/SubscriptionGateScreen';
+import { useToast } from '@/components/Toast';
 
 interface BillingSummary {
     plan: {
@@ -50,10 +51,39 @@ function BillingPageContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { user, billing: sessionBilling, loading: sessionLoading, refresh } = useSession();
+    const { showToast } = useToast();
     const [summary, setSummary] = useState<BillingSummary | null>(null);
     const [loading, setLoading] = useState(true);
-    const [actionLoading, setActionLoading] = useState<'portal' | null>(null);
+    const [actionLoading, setActionLoading] = useState<'portal' | 'refresh' | null>(null);
     const [error, setError] = useState('');
+    const checkoutToastShown = useRef(false);
+    const checkoutSyncStarted = useRef(false);
+    const checkoutSessionId = searchParams.get('session_id');
+    const checkoutState = searchParams.get('checkout');
+    const gated = searchParams.get('gated') === '1';
+    const redirectTarget = searchParams.get('redirect');
+
+    const syncBillingStatus = useCallback(async (sessionId?: string | null) => {
+        const response = await fetch('/api/billing/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ checkoutSessionId: sessionId || undefined }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data?.error || 'Failed to sync billing status');
+        }
+
+        setSummary((current) => current
+            ? {
+                ...current,
+                billing: data.billing || current.billing,
+                subscription: data.subscription ?? current.subscription,
+              }
+            : current);
+        await refresh();
+        return data as { billing?: BillingSummary['billing']; subscription?: BillingSummary['subscription'] };
+    }, [refresh]);
 
     useEffect(() => {
         if (sessionLoading) return;
@@ -73,14 +103,48 @@ function BillingPageContent() {
                 }
                 setSummary(data);
             } catch (err) {
-                setError(err instanceof Error ? err.message : 'Failed to load billing details');
+                const message = err instanceof Error ? err.message : 'Failed to load billing details';
+                setError(message);
+                showToast(message, 'error');
             } finally {
                 setLoading(false);
             }
         };
 
         fetchSummary();
-    }, [router, sessionLoading, user]);
+    }, [router, sessionLoading, showToast, user]);
+
+    useEffect(() => {
+        if (checkoutToastShown.current) return;
+
+        if (checkoutState === 'success') {
+            checkoutToastShown.current = true;
+            showToast('Subscription checkout completed', 'success');
+        } else if (checkoutState === 'canceled') {
+            checkoutToastShown.current = true;
+            showToast('Checkout canceled', 'info');
+        }
+    }, [checkoutState, showToast]);
+
+    useEffect(() => {
+        if (checkoutState !== 'success' || checkoutSyncStarted.current || sessionLoading || !user) return;
+        checkoutSyncStarted.current = true;
+
+        syncBillingStatus(checkoutSessionId)
+            .then((data) => {
+                if (data.billing?.access) {
+                    showToast('Membership active', 'success');
+                    if (redirectTarget) {
+                        router.replace(redirectTarget);
+                    }
+                } else {
+                    showToast('Payment received. Updating membership status...', 'info');
+                }
+            })
+            .catch((err) => {
+                showToast(err instanceof Error ? err.message : 'Failed to sync billing status', 'error');
+            });
+    }, [checkoutSessionId, checkoutState, redirectTarget, router, sessionLoading, showToast, syncBillingStatus, user]);
 
     const handleAction = async (kind: 'portal') => {
         try {
@@ -95,30 +159,103 @@ function BillingPageContent() {
                 throw new Error(data?.error || `Failed to start ${kind}`);
             }
             if (data?.url) {
+                showToast('Opening plan management', 'info');
                 window.location.href = data.url;
                 return;
             }
             await refresh();
+            showToast('Billing status refreshed', 'success');
         } catch (err) {
-            setError(err instanceof Error ? err.message : `Failed to start ${kind}`);
+            const message = err instanceof Error ? err.message : `Failed to start ${kind}`;
+            setError(message);
+            showToast(message, 'error');
             setActionLoading(null);
         }
     };
 
+    const status = summary?.billing.status || sessionBilling?.status || user?.subscriptionStatus || 'inactive';
+    const hasSubscriptionAccess = summary?.billing.access ?? sessionBilling?.access ?? false;
+    const canManagePlan = summary?.billing.customerConfigured ?? sessionBilling?.customerConfigured ?? false;
+    const handleCheckoutComplete = useCallback(async () => {
+        showToast('Subscription checkout completed', 'success');
+        try {
+            const data = await syncBillingStatus(null);
+            if (data.billing?.access) {
+                showToast('Membership active', 'success');
+                window.location.href = redirectTarget || '/';
+                return;
+            }
+            showToast('Payment received. Updating membership status...', 'info');
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Failed to sync billing status', 'error');
+        }
+        window.location.href = '/account/billing?checkout=success';
+    }, [redirectTarget, showToast, syncBillingStatus]);
+    const handleCheckoutOpen = useCallback(() => {
+        showToast('Opening secure checkout', 'info');
+    }, [showToast]);
+    const handleSignOut = useCallback(async () => {
+        try {
+            await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'logout' }),
+            });
+        } finally {
+            window.location.href = '/auth';
+        }
+    }, []);
+    const handleManualRefresh = useCallback(async () => {
+        try {
+            setActionLoading('refresh');
+            const data = await syncBillingStatus(null);
+            showToast(data.billing?.access ? 'Membership status updated' : 'Status refreshed', 'success');
+        } catch (err) {
+            showToast(err instanceof Error ? err.message : 'Failed to refresh status', 'error');
+        } finally {
+            setActionLoading(null);
+        }
+    }, [showToast, syncBillingStatus]);
+
+    useEffect(() => {
+        if (!hasSubscriptionAccess || !gated) return;
+
+        if (redirectTarget) {
+            router.replace(redirectTarget);
+            return;
+        }
+
+        router.replace('/account/billing');
+    }, [gated, hasSubscriptionAccess, redirectTarget, router]);
+
     if (sessionLoading || !user) return null;
 
-    const status = summary?.billing.status || sessionBilling?.status || user.subscriptionStatus || 'inactive';
-    const checkoutState = searchParams.get('checkout');
-    const gated = searchParams.get('gated') === '1';
-    const redirectTarget = searchParams.get('redirect');
-    const hasSubscriptionAccess = summary?.billing.access ?? sessionBilling?.access ?? false;
-    const hasActiveStatus = status === 'active' || status === 'trialing';
-    const canManageInStripe = summary?.billing.customerConfigured ?? sessionBilling?.customerConfigured ?? false;
-    const showEmbeddedCheckout = !hasSubscriptionAccess;
-    const handleCheckoutComplete = useCallback(async () => {
-        await refresh();
-        window.location.href = redirectTarget || '/account/billing?checkout=success';
-    }, [redirectTarget, refresh]);
+    if (loading || !summary) {
+        return (
+            <SubscriptionGateScreen
+                plan={null}
+                billing={null}
+                checkoutState={checkoutState}
+                onCheckoutComplete={handleCheckoutComplete}
+                onSignOut={handleSignOut}
+                onCheckoutOpen={handleCheckoutOpen}
+                loading
+            />
+        );
+    }
+
+    if (!hasSubscriptionAccess) {
+        return (
+            <SubscriptionGateScreen
+                plan={summary.plan}
+                billing={summary.billing}
+                checkoutState={checkoutState}
+                onCheckoutComplete={handleCheckoutComplete}
+                onSignOut={handleSignOut}
+                onCheckoutOpen={handleCheckoutOpen}
+            />
+        );
+    }
 
     return (
         <main
@@ -129,6 +266,16 @@ function BillingPageContent() {
                 paddingBottom: '4rem',
             }}
         >
+            <style>{`
+                @keyframes billingRefreshSpin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+
+                .billingIconSpin {
+                    animation: billingRefreshSpin 0.85s linear infinite;
+                }
+            `}</style>
             <div
                 style={{
                     maxWidth: '960px',
@@ -214,7 +361,7 @@ function BillingPageContent() {
                     </div>
                 </section>
 
-                {gated && (
+                {gated && !hasSubscriptionAccess && (
                     <div
                         style={{
                             marginBottom: '1rem',
@@ -274,12 +421,7 @@ function BillingPageContent() {
                     </div>
                 )}
 
-                {loading || !summary ? (
-                    <div style={{ padding: '4rem 0', display: 'flex', justifyContent: 'center' }}>
-                        <Loader2 className="w-6 h-6 animate-spin" color="#D4AF37" />
-                    </div>
-                ) : (
-                    <div style={{ display: 'grid', gap: '1.25rem' }}>
+                <div style={{ display: 'grid', gap: '1.25rem' }}>
                         <section
                             style={{
                                 padding: '1.5rem',
@@ -310,27 +452,7 @@ function BillingPageContent() {
                             </div>
 
                             <div style={{ display: 'flex', gap: '0.85rem', flexWrap: 'wrap', marginTop: '1.5rem' }}>
-                                {canManageInStripe && (
-                                    <button
-                                        type="button"
-                                        onClick={() => handleAction('portal')}
-                                        disabled={actionLoading !== null}
-                                        style={{
-                                            padding: '0.9rem 1.25rem',
-                                            borderRadius: '0.85rem',
-                                            border: '1px solid rgba(212, 175, 55, 0.28)',
-                                            background: 'rgba(212, 175, 55, 0.1)',
-                                            color: '#F6D365',
-                                            fontWeight: 700,
-                                            cursor: actionLoading !== null ? 'not-allowed' : 'pointer',
-                                            opacity: actionLoading !== null ? 0.7 : 1,
-                                        }}
-                                    >
-                                        {actionLoading === 'portal' ? 'Opening Stripe portal...' : 'Manage in Stripe'}
-                                    </button>
-                                )}
-
-                                {hasSubscriptionAccess && redirectTarget && (
+                                {redirectTarget && (
                                     <button
                                         type="button"
                                         onClick={() => router.push(redirectTarget)}
@@ -348,23 +470,55 @@ function BillingPageContent() {
                                     </button>
                                 )}
 
+                                {canManagePlan && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAction('portal')}
+                                        disabled={actionLoading !== null}
+                                        style={{
+                                            padding: '0.9rem 1.25rem',
+                                            borderRadius: '0.85rem',
+                                            border: '1px solid rgba(212, 175, 55, 0.24)',
+                                            background: 'rgba(212, 175, 55, 0.08)',
+                                            color: '#F6D365',
+                                            fontWeight: 700,
+                                            cursor: actionLoading !== null ? 'not-allowed' : 'pointer',
+                                            opacity: actionLoading !== null ? 0.7 : 1,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '0.5rem',
+                                        }}
+                                    >
+                                        {actionLoading === 'portal' ? 'Opening...' : 'Manage plan'}
+                                        <ExternalLink size={16} />
+                                    </button>
+                                )}
+
                                 <button
                                     type="button"
-                                    onClick={async () => {
-                                        await refresh();
-                                        window.location.reload();
-                                    }}
+                                    onClick={handleManualRefresh}
+                                    disabled={actionLoading !== null}
+                                    aria-label="Refresh membership status"
+                                    title="Refresh status"
                                     style={{
-                                        padding: '0.9rem 1.25rem',
-                                        borderRadius: '0.85rem',
+                                        width: '46px',
+                                        height: '46px',
+                                        padding: 0,
+                                        borderRadius: '999px',
                                         border: '1px solid rgba(167, 171, 180, 0.18)',
                                         background: 'rgba(167, 171, 180, 0.04)',
                                         color: '#F3F4F6',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
+                                        cursor: actionLoading !== null ? 'not-allowed' : 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        opacity: actionLoading !== null && actionLoading !== 'refresh' ? 0.55 : 1,
                                     }}
                                 >
-                                    Refresh status
+                                    <RefreshCw
+                                        size={18}
+                                        className={actionLoading === 'refresh' ? 'billingIconSpin' : undefined}
+                                    />
                                 </button>
                             </div>
                         </section>
@@ -384,7 +538,7 @@ function BillingPageContent() {
                                 <div style={{ color: '#F3F4F6', fontSize: '1.05rem', fontWeight: 700 }}>Billing controls</div>
                             </div>
                             <div style={{ color: '#A7ABB4', fontSize: '0.95rem', lineHeight: 1.7 }}>
-                                Stripe manages payment methods, automatic renewal, failed payment recovery, and cancellations. Checkout is embedded directly in this page so customers can subscribe without leaving the app.
+                                Your plan manages payment methods, automatic renewal, failed payment recovery, and cancellations.
                             </div>
                             {summary.subscription?.trialEnd && (
                                 <div style={{ color: '#F6D365', fontSize: '0.92rem' }}>
@@ -396,51 +550,8 @@ function BillingPageContent() {
                                     {summary.subscription.cancelAtPeriodEnd ? 'Membership ends' : 'Next renewal'} on {new Date(summary.subscription.currentPeriodEnd).toLocaleDateString()}.
                                 </div>
                             )}
-                            {summary.billing.requiresSubscription && !hasSubscriptionAccess && (
-                                <div
-                                    style={{
-                                        padding: '1rem',
-                                        borderRadius: '0.95rem',
-                                        background: 'rgba(212, 175, 55, 0.08)',
-                                        border: '1px solid rgba(212, 175, 55, 0.18)',
-                                        color: '#F3F4F6',
-                                        display: 'flex',
-                                        gap: '0.75rem',
-                                        alignItems: 'flex-start',
-                                    }}
-                                >
-                                    <Sparkles size={18} color="#F6D365" style={{ flexShrink: 0, marginTop: 2 }} />
-                                    <span>
-                                        Once Stripe marks your subscription active, the rest of the app unlocks automatically.
-                                    </span>
-                                </div>
-                            )}
                         </section>
-
-                        {showEmbeddedCheckout && summary.plan.isActive && (
-                            <section
-                                style={{
-                                    padding: '1.5rem',
-                                    borderRadius: '1.25rem',
-                                    background: 'rgba(167, 171, 180, 0.04)',
-                                    border: '1px solid rgba(167, 171, 180, 0.1)',
-                                    display: 'grid',
-                                    gap: '1rem',
-                                }}
-                            >
-                                <div style={{ color: '#F3F4F6', fontSize: '1.15rem', fontWeight: 700 }}>
-                                    {summary.billing.trialEligible ? `Start your ${summary.billing.freeTrialDays}-day trial` : 'Enter payment details'}
-                                </div>
-                                <div style={{ color: '#A7ABB4', fontSize: '0.95rem', lineHeight: 1.6 }}>
-                                    Your card details are collected securely by Stripe inside this page. We do not store raw payment details on our servers.
-                                </div>
-                                <BillingCheckoutEmbed
-                                    onComplete={handleCheckoutComplete}
-                                />
-                            </section>
-                        )}
-                    </div>
-                )}
+                </div>
             </div>
         </main>
     );

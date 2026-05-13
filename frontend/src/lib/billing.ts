@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 
 const ACCESS_STATUSES = new Set(['active', 'trialing']);
 const BLOCKED_STATUSES = new Set(['inactive', 'past_due', 'unpaid', 'incomplete', 'incomplete_expired']);
+const SUBSCRIPTION_PRIORITY = ['active', 'trialing', 'past_due', 'incomplete', 'unpaid', 'canceled', 'incomplete_expired'];
 
 type BillingUserSnapshot = {
     role?: string | null;
@@ -162,6 +163,33 @@ export async function syncSubscriptionFromStripe(subscription: Stripe.Subscripti
     });
 
     return user.id;
+}
+
+export async function syncLatestSubscriptionForCustomer(stripe: Stripe, customerId: string) {
+    const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: 'all',
+        limit: 10,
+        expand: ['data.items.data.price'],
+    });
+
+    const [subscription] = subscriptions.data.sort((a, b) => {
+        const aPriority = SUBSCRIPTION_PRIORITY.indexOf(a.status);
+        const bPriority = SUBSCRIPTION_PRIORITY.indexOf(b.status);
+        const normalizedAPriority = aPriority === -1 ? SUBSCRIPTION_PRIORITY.length : aPriority;
+        const normalizedBPriority = bPriority === -1 ? SUBSCRIPTION_PRIORITY.length : bPriority;
+
+        if (normalizedAPriority !== normalizedBPriority) {
+            return normalizedAPriority - normalizedBPriority;
+        }
+
+        return b.created - a.created;
+    });
+
+    if (!subscription) return null;
+
+    await syncSubscriptionFromStripe(subscription);
+    return subscription;
 }
 
 export async function markSubscriptionCanceled(stripeSubscriptionId: string) {

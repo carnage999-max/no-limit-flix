@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
             ui_mode: 'embedded_page',
             customer: customerId,
             client_reference_id: user.id,
-            return_url: `${appUrl}/account/billing?checkout=success`,
+            return_url: `${appUrl}/account/billing?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
             line_items: [
                 {
                     price: syncedPlan.stripePriceId,

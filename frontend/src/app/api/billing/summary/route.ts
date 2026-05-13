@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
-import { buildBillingState, getDefaultBillingPlan, withBillingSubscription } from '@/lib/billing';
-import { getOrCreateStripeCustomer } from '@/lib/stripe';
+import {
+    buildBillingState,
+    getDefaultBillingPlan,
+    hasActiveSubscriptionAccess,
+    syncLatestSubscriptionForCustomer,
+    withBillingSubscription,
+} from '@/lib/billing';
+import { getOrCreateStripeCustomer, getStripe } from '@/lib/stripe';
 
 export async function GET(request: NextRequest) {
     try {
@@ -23,7 +29,7 @@ export async function GET(request: NextRequest) {
             stripeCustomerId,
         };
 
-        const [plan, subscription] = await Promise.all([
+        let [plan, subscription] = await Promise.all([
             getDefaultBillingPlan(),
             prisma.billingSubscription.findFirst({
                 where: { userId: user.id },
@@ -31,7 +37,18 @@ export async function GET(request: NextRequest) {
             }),
         ]);
 
-        const billingUser = withBillingSubscription(hydratedUser, subscription);
+        let billingUser = withBillingSubscription(hydratedUser, subscription);
+        if (!hasActiveSubscriptionAccess(billingUser)) {
+            const stripe = getStripe();
+            if (stripe) {
+                await syncLatestSubscriptionForCustomer(stripe, stripeCustomerId);
+                subscription = await prisma.billingSubscription.findFirst({
+                    where: { userId: user.id },
+                    orderBy: { updatedAt: 'desc' },
+                });
+                billingUser = withBillingSubscription(hydratedUser, subscription);
+            }
+        }
 
         return NextResponse.json({
             plan: {

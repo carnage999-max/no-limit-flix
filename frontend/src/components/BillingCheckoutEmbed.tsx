@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
+import { useToast } from '@/components/Toast';
 
 const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
@@ -10,6 +11,7 @@ const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 export default function BillingCheckoutEmbed({ onComplete }: { onComplete: () => void }) {
     const [loadError, setLoadError] = useState('');
     const [instanceKey, setInstanceKey] = useState(0);
+    const { showToast } = useToast();
 
     if (!publishableKey || !stripePromise) {
         return (
@@ -36,10 +38,11 @@ export default function BillingCheckoutEmbed({ onComplete }: { onComplete: () =>
         if (!response.ok || !data?.clientSecret) {
             const message = data?.error || 'Failed to initialize secure checkout';
             setLoadError(message);
+            showToast(message, 'error');
             throw new Error(message);
         }
         return data.clientSecret;
-    }, []);
+    }, [showToast]);
 
     const options = useMemo(() => ({
         fetchClientSecret,
