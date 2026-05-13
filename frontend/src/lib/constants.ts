@@ -5,5 +5,5 @@
 export const PLAY_STORE_URL =
     'https://play.google.com/store/apps/details?id=com.nolimitflix.app';
 
-// App Store: not yet available — set to null until live
-export const APP_STORE_URL: string | null = null;
+export const APP_STORE_URL =
+    'https://apps.apple.com/us/app/no-limit-flix/id6760540399';

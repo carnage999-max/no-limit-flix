@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PLAY_STORE_URL } from '@/lib/constants';
+import { APP_STORE_URL, PLAY_STORE_URL } from '@/lib/constants';
 import { X } from 'lucide-react';
 
 export function AppBanner() {
@@ -90,22 +90,30 @@ export function AppBanner() {
             />
           </a>
 
-          {/* App Store — coming soon */}
-          <span
-            title="iOS app coming soon"
+          <a
+            href={APP_STORE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
-              fontSize: '0.75rem',
-              fontWeight: '600',
-              color: 'rgba(167,171,180,0.45)',
-              letterSpacing: '0.05em',
-              userSelect: 'none',
-              border: '1px solid rgba(167,171,180,0.15)',
-              padding: '0.25rem 0.625rem',
-              borderRadius: '999px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              textDecoration: 'none',
+              transition: 'all 0.2s',
+              opacity: 0.85,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '0.85';
             }}
           >
-            iOS — Coming Soon
-          </span>
+            <img
+              src="/App_Store.svg"
+              alt="Download on the App Store"
+              style={{ height: '1.75rem', width: 'auto' }}
+            />
+          </a>
         </div>
 
         {/* Dismiss Button */}
