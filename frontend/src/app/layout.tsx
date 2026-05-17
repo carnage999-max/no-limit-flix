@@ -19,6 +19,9 @@ export const metadata: Metadata = {
   applicationName: "No Limit Flix",
   keywords: ["movie streaming", "series streaming", "subscription streaming", "watch history", "favorites", "curated library"],
   authors: [{ name: "No Limit Flix" }],
+  other: {
+    "google-adsense-account": "ca-pub-9175938417906735",
+  },
   openGraph: {
     type: "website",
     title: "No Limit Flix",
@@ -57,7 +60,7 @@ export default function RootLayout({
         <GoogleAnalytics />
         <Script
           id="google-adsense"
-          strategy="afterInteractive"
+          strategy="beforeInteractive"
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9175938417906735"
           crossOrigin="anonymous"
