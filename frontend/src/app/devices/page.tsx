@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Monitor, Smartphone, LogOut, RefreshCcw, Pencil } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
@@ -53,6 +53,10 @@ const formatLocation = (session: DeviceSession) => {
     return 'Location unavailable';
 };
 
+const getErrorMessage = (error: unknown, fallback: string) => {
+    return error instanceof Error ? error.message : fallback;
+};
+
 export default function DevicesPage() {
     const router = useRouter();
     const { user, loading: sessionLoading } = useSession();
@@ -60,7 +64,6 @@ export default function DevicesPage() {
     const [sessions, setSessions] = useState<DeviceSession[]>([]);
     const [history, setHistory] = useState<DeviceSession[]>([]);
     const [primaryDeviceId, setPrimaryDeviceId] = useState<string | null>(null);
-    const [maxDevices, setMaxDevices] = useState<number | null>(null);
     const [showHistory, setShowHistory] = useState(false);
     const [loading, setLoading] = useState(true);
     const [loggingOutAll, setLoggingOutAll] = useState(false);
@@ -86,7 +89,7 @@ export default function DevicesPage() {
         { label: 'Gaming', emoji: '🎮' },
     ];
 
-    const fetchSessions = async () => {
+    const fetchSessions = useCallback(async () => {
         try {
             setLoading(true);
             const response = await fetch('/api/account/sessions?includeHistory=1');
@@ -97,13 +100,12 @@ export default function DevicesPage() {
             setSessions(data.sessions || []);
             setHistory(data.history || []);
             setPrimaryDeviceId(data.primaryDeviceId || null);
-            setMaxDevices(typeof data.maxDevices === 'number' ? data.maxDevices : null);
-        } catch (error: any) {
-            showToast(error.message || 'Failed to fetch devices', 'error');
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Failed to fetch devices'), 'error');
         } finally {
             setLoading(false);
         }
-    };
+    }, [showToast]);
 
     useEffect(() => {
         if (sessionLoading) return;
@@ -111,8 +113,8 @@ export default function DevicesPage() {
             router.push('/auth?redirect=/devices');
             return;
         }
-        fetchSessions();
-    }, [user, sessionLoading]);
+        void fetchSessions();
+    }, [fetchSessions, router, sessionLoading, user]);
 
     const handleLogoutAll = async (keepPrimaryFlag: boolean) => {
         setLoggingOutAll(true);
@@ -132,8 +134,8 @@ export default function DevicesPage() {
             } else {
                 await fetchSessions();
             }
-        } catch (error: any) {
-            showToast(error.message || 'Failed to log out all devices', 'error');
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Failed to log out all devices'), 'error');
         } finally {
             setLoggingOutAll(false);
         }
@@ -156,8 +158,8 @@ export default function DevicesPage() {
                 return;
             }
             setSessions((prev) => prev.filter((session) => session.sessionId !== sessionId));
-        } catch (error: any) {
-            showToast(error.message || 'Failed to log out device', 'error');
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Failed to log out device'), 'error');
         }
     };
 
@@ -176,8 +178,8 @@ export default function DevicesPage() {
             setPrimaryDeviceId(deviceId);
             showToast('Primary device updated', 'success');
             await fetchSessions();
-        } catch (error: any) {
-            showToast(error.message || 'Failed to set primary device', 'error');
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Failed to set primary device'), 'error');
         }
     };
 
@@ -199,8 +201,8 @@ export default function DevicesPage() {
             showToast('Device label updated', 'success');
             setEditingDeviceId(null);
             await fetchSessions();
-        } catch (error: any) {
-            showToast(error.message || 'Failed to update device label', 'error');
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Failed to update device label'), 'error');
         }
     };
 
@@ -213,8 +215,8 @@ export default function DevicesPage() {
             }
             showToast('Device history cleared', 'success');
             await fetchSessions();
-        } catch (error: any) {
-            showToast(error.message || 'Failed to clear history', 'error');
+        } catch (error: unknown) {
+            showToast(getErrorMessage(error, 'Failed to clear history'), 'error');
         }
     };
 
@@ -229,8 +231,7 @@ export default function DevicesPage() {
                             Devices
                         </h1>
                         <p style={{ color: '#A7ABB4' }}>
-                            See where you&apos;re signed in.
-                            {maxDevices ? ` (${sessions.length}/${maxDevices} active)` : ''}
+                            See where you&apos;re signed in ({sessions.length} active).
                         </p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

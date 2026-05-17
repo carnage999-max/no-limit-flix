@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import ToastContainer from "@/components/ToastContainer";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
@@ -54,6 +55,13 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <head>
         <GoogleAnalytics />
+        <Script
+          id="google-adsense"
+          strategy="afterInteractive"
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9175938417906735"
+          crossOrigin="anonymous"
+        />
       </head>
       <body className="antialiased">
         <CardViewProvider>

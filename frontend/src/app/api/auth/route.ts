@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { hashPassword, verifyPassword, createSessionToken, generateRefreshToken, hashToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_AGE, verifySessionToken } from '@/lib/auth';
 import { parseUserAgent, lookupLocation } from '@/lib/device';
 import { sendEmail } from '@/lib/email';
-import { buildBlockedDeviceEmail, buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
+import { buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
 import { getOrCreateStripeCustomer } from '@/lib/stripe';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
@@ -122,41 +122,11 @@ export async function POST(request: NextRequest) {
             const uaInfo = parseUserAgent(userAgent);
             const effectiveDeviceName = normalizedDeviceName || uaInfo.deviceLabel;
 
-            const maxDevicesDefault = Number(process.env.MAX_ACTIVE_DEVICES || 5);
             const userRecord = await prisma.user.findUnique({
                 where: { id: userId },
-                select: { maxDevices: true, primaryDeviceId: true }
+                select: { primaryDeviceId: true }
             });
-            const maxDevices = userRecord?.maxDevices ?? maxDevicesDefault;
             const primaryDeviceId = userRecord?.primaryDeviceId || null;
-
-            const activeSessions = await prisma.userSession.findMany({
-                where: { userId, revokedAt: null },
-                select: { deviceId: true }
-            });
-            const activeDeviceIds = new Set(activeSessions.map((s) => s.deviceId).filter(Boolean) as string[]);
-            const isExistingActive = effectiveDeviceId ? activeDeviceIds.has(effectiveDeviceId) : false;
-
-            if (!isExistingActive && activeDeviceIds.size >= maxDevices) {
-                const location = await lookupLocation(ipAddress);
-                const locationText = location
-                    ? [location.city, location.region, location.country].filter(Boolean).join(', ')
-                    : 'Unknown location';
-                try {
-                    await sendEmail({
-                        to: userEmail,
-                        subject: 'New device sign-in blocked',
-                        html: buildBlockedDeviceEmail({
-                            device: effectiveDeviceName,
-                            ip: ipAddress || 'Unknown',
-                            location: locationText,
-                        }),
-                    });
-                } catch (err) {
-                    console.warn('Device limit email failed', err);
-                }
-                throw new Error('MAX_DEVICES_REACHED');
-            }
 
             let isNewDevice = false;
             if (effectiveDeviceId) {
@@ -288,21 +258,7 @@ export async function POST(request: NextRequest) {
 
             user = await ensureStripeCustomer(user);
 
-            let token: string;
-            let refreshToken: string;
-            try {
-                const sessionTokens = await upsertSession(user.id, user.role, user.email);
-                token = sessionTokens.accessToken;
-                refreshToken = sessionTokens.refreshToken;
-            } catch (err: any) {
-                if (err?.message === 'MAX_DEVICES_REACHED') {
-                    return NextResponse.json(
-                        { error: 'Maximum active devices reached. Log out another device to continue.' },
-                        { status: 403 }
-                    );
-                }
-                throw err;
-            }
+            const { accessToken: token, refreshToken } = await upsertSession(user.id, user.role, user.email);
 
             // Set session cookie
             const response = NextResponse.json({
@@ -351,21 +307,7 @@ export async function POST(request: NextRequest) {
 
             user = await ensureStripeCustomer(user);
 
-            let token: string;
-            let refreshToken: string;
-            try {
-                const sessionTokens = await upsertSession(user.id, user.role, user.email);
-                token = sessionTokens.accessToken;
-                refreshToken = sessionTokens.refreshToken;
-            } catch (err: any) {
-                if (err?.message === 'MAX_DEVICES_REACHED') {
-                    return NextResponse.json(
-                        { error: 'Maximum active devices reached. Log out another device to continue.' },
-                        { status: 403 }
-                    );
-                }
-                throw err;
-            }
+            const { accessToken: token, refreshToken } = await upsertSession(user.id, user.role, user.email);
 
             const response = NextResponse.json({
                 success: true,
@@ -487,21 +429,7 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            let token: string;
-            let refreshToken: string;
-            try {
-                const sessionTokens = await upsertSession(user.id, user.role, user.email);
-                token = sessionTokens.accessToken;
-                refreshToken = sessionTokens.refreshToken;
-            } catch (err: any) {
-                if (err?.message === 'MAX_DEVICES_REACHED') {
-                    return NextResponse.json(
-                        { error: 'Maximum active devices reached. Log out another device to continue.' },
-                        { status: 403 }
-                    );
-                }
-                throw err;
-            }
+            const { accessToken: token, refreshToken } = await upsertSession(user.id, user.role, user.email);
 
             const response = NextResponse.json({
                 success: true,
@@ -626,21 +554,7 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            let token: string;
-            let refreshToken: string;
-            try {
-                const sessionTokens = await upsertSession(user.id, user.role, user.email);
-                token = sessionTokens.accessToken;
-                refreshToken = sessionTokens.refreshToken;
-            } catch (err: any) {
-                if (err?.message === 'MAX_DEVICES_REACHED') {
-                    return NextResponse.json(
-                        { error: 'Maximum active devices reached. Log out another device to continue.' },
-                        { status: 403 }
-                    );
-                }
-                throw err;
-            }
+            const { accessToken: token, refreshToken } = await upsertSession(user.id, user.role, user.email);
 
             const response = NextResponse.json({
                 success: true,

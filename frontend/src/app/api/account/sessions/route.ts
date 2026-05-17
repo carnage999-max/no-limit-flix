@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth';
@@ -18,10 +19,9 @@ export async function GET(request: NextRequest) {
 
         const userRecord = await prisma.user.findUnique({
             where: { id: sessionUser.id },
-            select: { primaryDeviceId: true, maxDevices: true }
+            select: { primaryDeviceId: true }
         });
         const primaryDeviceId = userRecord?.primaryDeviceId || null;
-        const maxDevices = userRecord?.maxDevices ?? null;
 
         const sessions = await prisma.userSession.findMany({
             where: { userId: sessionUser.id, revokedAt: null },
@@ -96,14 +96,12 @@ export async function GET(request: NextRequest) {
                 sessions: enriched,
                 history: enrichedHistory,
                 primaryDeviceId,
-                maxDevices,
             });
         }
 
         return NextResponse.json({
             sessions: enriched,
             primaryDeviceId,
-            maxDevices,
         });
     } catch (error) {
         console.error('Sessions fetch error:', error);
@@ -127,7 +125,7 @@ export async function POST(request: NextRequest) {
         });
         const primaryDeviceId = userRecord?.primaryDeviceId || null;
 
-        let revokeWhere: any = { userId: sessionUser.id, revokedAt: null };
+        let revokeWhere: Prisma.UserSessionWhereInput = { userId: sessionUser.id, revokedAt: null };
         let keptPrimary = false;
         if (keepPrimary && primaryDeviceId) {
             revokeWhere = {

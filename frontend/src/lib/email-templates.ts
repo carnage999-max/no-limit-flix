@@ -114,19 +114,6 @@ export const buildNewDeviceEmail = (details: { device: string; ip: string; locat
     );
 };
 
-export const buildBlockedDeviceEmail = (details: { device: string; ip: string; location: string }) => {
-    return wrapEmail(
-        'New device sign-in blocked',
-        `
-          <p style="margin: 0 0 12px;">We blocked a sign-in because your account has reached the maximum number of active devices.</p>
-          ${buildInfoRow('Device', details.device)}
-          ${buildInfoRow('IP', details.ip)}
-          ${buildInfoRow('Location', details.location)}
-          <p style="margin: 16px 0 0; ${baseStyles.muted};">Log out another device and try again.</p>
-        `
-    );
-};
-
 export const buildDeletionRequestEmail = () => {
     return wrapEmail(
         'Account deletion request received',
