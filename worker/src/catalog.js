@@ -52,6 +52,10 @@ const resolveYearHint = (title, ...sources) => {
     return parseYear(title);
 };
 
+const getCandidateYear = (item) => parseYear(
+    item?.release_date || item?.first_air_date || item?.Year
+);
+
 const scoreCandidate = (candidate, target, candidateYear, targetYear) => {
     if (!candidate || !target) return 0;
     let score = 0;
@@ -60,27 +64,54 @@ const scoreCandidate = (candidate, target, candidateYear, targetYear) => {
     if (candidate.includes(target) || target.includes(candidate)) score += 2;
 
     if (targetYear && candidateYear) {
-        if (candidateYear === targetYear) score += 4;
-        else if (Math.abs(candidateYear - targetYear) === 1) score += 2;
-        else if (Math.abs(candidateYear - targetYear) <= 3) score += 1;
+        const delta = Math.abs(candidateYear - targetYear);
+        if (delta === 0) score += 4;
+        else if (delta === 1) score += 2;
+        else if (delta <= 3) score += 1;
+        else score -= 8;
     }
 
     return score;
 };
 
-const compareCandidates = (a, b, targetYear) => {
+const compareCandidates = (a, b, targetYear, preferOlder = false) => {
     if (b.score !== a.score) return b.score - a.score;
 
+    const aYear = getCandidateYear(a.item);
+    const bYear = getCandidateYear(b.item);
+
     if (targetYear) {
-        const aYear = parseYear(a.item?.release_date || a.item?.first_air_date || a.item?.Year);
-        const bYear = parseYear(b.item?.release_date || b.item?.first_air_date || b.item?.Year);
         const aDist = aYear ? Math.abs(aYear - targetYear) : Number.POSITIVE_INFINITY;
         const bDist = bYear ? Math.abs(bYear - targetYear) : Number.POSITIVE_INFINITY;
         if (aDist !== bDist) return aDist - bDist;
         if (aYear && bYear && aYear !== bYear) return aYear - bYear;
+    } else if (preferOlder && aYear && bYear && aYear !== bYear) {
+        return aYear - bYear;
     }
 
     return 0;
+};
+
+const pickBestScoredCandidate = (scored, { year, minScore, requirePosterPath = true }) => {
+    for (const entry of scored) {
+        if (entry.score < minScore) continue;
+        if (requirePosterPath && !entry.item?.poster_path) continue;
+        const candidateYear = getCandidateYear(entry.item);
+        if (year && candidateYear && !yearsMatch(candidateYear, year)) continue;
+        return entry;
+    }
+    return null;
+};
+
+const pickBestOmdbSearchCandidate = (scored, { year, minScore }) => {
+    for (const entry of scored) {
+        if (entry.score < minScore) continue;
+        if (!entry.item?.imdbID) continue;
+        const candidateYear = getCandidateYear(entry.item);
+        if (year && candidateYear && !yearsMatch(candidateYear, year)) continue;
+        return entry;
+    }
+    return null;
 };
 
 const fetchJson = async (url) => {
@@ -112,23 +143,25 @@ async function findCatalogPoster({ title, year, type, minScore = 3, ignoreYear =
     if (!results.length) return null;
 
     const normalizedTarget = normalizeTitle(title);
+    const preferOlder = type === 'movie' && !year;
 
     const scored = results.map((item) => {
         const candidateTitle = item?.title || item?.name || '';
         const normalizedCandidate = normalizeTitle(candidateTitle);
-        const candidateYear = parseYear(item?.release_date || item?.first_air_date);
+        const candidateYear = getCandidateYear(item);
         const score = scoreCandidate(normalizedCandidate, normalizedTarget, candidateYear, year);
         return { item, score };
     });
 
-    scored.sort((a, b) => compareCandidates(a, b, year));
-    const best = scored[0];
+    scored.sort((a, b) => compareCandidates(a, b, year, preferOlder));
+    const best = pickBestScoredCandidate(scored, { year, minScore });
 
-    if (!best || best.score < minScore || !best.item?.poster_path) return null;
+    if (!best) return null;
 
     return {
         posterUrl: `${TMDB_IMAGE_BASE}${best.item.poster_path}`,
         tmdbId: String(best.item.id),
+        releaseYear: getCandidateYear(best.item),
     };
 }
 
@@ -178,13 +211,13 @@ const resolveOmdbDetails = async ({ title, type, year = null }) => {
             const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
             return { item, score };
         });
-        scored.sort((a, b) => compareCandidates(a, b, year));
-        const best = scored[0]?.item;
-        if (!best?.imdbID) return null;
+        scored.sort((a, b) => compareCandidates(a, b, year, type === 'movie' && !year));
+        const best = pickBestOmdbSearchCandidate(scored, { year, minScore: 2 });
+        if (!best?.item?.imdbID) return null;
 
         const detailParams = new URLSearchParams({
             apikey: apiKey,
-            i: best.imdbID,
+            i: best.item.imdbID,
             plot: 'short',
         });
         data = await fetchOmdbJson(detailParams);
@@ -221,12 +254,18 @@ async function findOmdbPoster({ title, year, type }) {
         return {
             posterUrl: `https://img.omdbapi.com/?i=${encodeURIComponent(imdbId)}&h=600&apikey=${encodeURIComponent(apiKey)}`,
             tmdbId: null,
+            releaseYear: parseYear(details.year),
             source: 'omdb',
         };
     }
 
     if (!details.poster) return null;
-    return { posterUrl: details.poster, tmdbId: null, source: 'omdb' };
+    return {
+        posterUrl: details.poster,
+        tmdbId: null,
+        releaseYear: parseYear(details.year),
+        source: 'omdb',
+    };
 }
 
 async function findWikipediaPoster({ title, year, type }) {

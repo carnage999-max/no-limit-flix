@@ -38,6 +38,7 @@ export default function AdminImportPage() {
     const [jobStatus, setJobStatus] = useState<any>(null);
     const [reconcileLoading, setReconcileLoading] = useState(false);
     const [refreshLoading, setRefreshLoading] = useState(false);
+    const [posterOffset, setPosterOffset] = useState(0);
 
     const presetOptions = useMemo(() => ARCHIVE_PRESETS, []);
 
@@ -191,10 +192,14 @@ export default function AdminImportPage() {
         setResults([]);
 
         try {
+            const batchOffset = posterOffset;
             const res = await fetch('/api/admin/archive/posters', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ limit })
+                body: JSON.stringify({
+                    limit: 500,
+                    offset: batchOffset
+                })
             });
 
             const data = await res.json();
@@ -202,6 +207,7 @@ export default function AdminImportPage() {
                 throw new Error(data.error || 'Poster refresh failed');
             }
 
+            setPosterOffset(batchOffset + 500);
             setJobId(data.jobId || null);
             setJobStatus(null);
             setSummary(data.summary || null);
@@ -589,7 +595,7 @@ export default function AdminImportPage() {
                             opacity: refreshLoading ? 0.6 : 1
                         }}
                     >
-                        {refreshLoading ? 'Refreshing...' : 'Refresh Posters'}
+                        {refreshLoading ? 'Refreshing...' : `Refresh Posters (${posterOffset + 1}–${posterOffset + 500})`}
                     </button>
                     {error && (
                         <div style={{ color: '#F87171', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

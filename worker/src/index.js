@@ -305,15 +305,35 @@ const detectAudioSignal = (file, metadata) => {
     return null;
 };
 
-const fetchVideosNeedingPoster = async (limit) => {
+const parseArchiveMetadataYear = (sourceMetadata) => {
+    if (!sourceMetadata) return null;
+    try {
+        const meta = typeof sourceMetadata === 'string' ? JSON.parse(sourceMetadata) : sourceMetadata;
+        return resolveYearHint(null, meta?.year, meta?.date);
+    } catch {
+        return null;
+    }
+};
+
+const resolveRefreshYearHint = (row, title) => {
+    return resolveYearHint(
+        title,
+        row.s3KeyPlayback,
+        row.archiveIdentifier,
+        parseArchiveMetadataYear(row.sourceMetadata)
+    ) ?? row.releaseYear ?? parseYear(title);
+};
+
+const fetchVideosNeedingPoster = async (limit, offset = 0) => {
     const result = await pool.query(
-        `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl", "archiveIdentifier", "s3KeyPlayback"
+        `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl",
+                "archiveIdentifier", "s3KeyPlayback", "sourceMetadata"
          FROM "Video"
          WHERE "status" = 'completed'
            AND "type" = 'movie'
-         ORDER BY "updatedAt" DESC
-         LIMIT $1`,
-        [limit]
+         ORDER BY "createdAt" ASC
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
     );
     return result.rows || [];
 };
@@ -716,10 +736,11 @@ app.post('/refresh-posters', async (req, res) => {
         }
 
         const limit = Math.min(Math.max(Number(req.body?.limit) || 100, 1), 500);
+        const offset = Math.max(Number(req.body?.offset) || 0, 0);
         const asyncMode = req.body?.async !== false;
 
         const runRefresh = async (job) => {
-            const rows = await fetchVideosNeedingPoster(limit);
+            const rows = await fetchVideosNeedingPoster(limit, offset);
             if (job) {
                 job.total = rows.length;
             }
@@ -737,8 +758,7 @@ app.post('/refresh-posters', async (req, res) => {
                         if (derived) title = derived;
                     }
                     const contentType = row.type === 'series' ? 'series' : 'movie';
-                    const yearHint = row.releaseYear
-                        ?? resolveYearHint(title, row.s3KeyPlayback, row.archiveIdentifier);
+                    const yearHint = resolveRefreshYearHint(row, title);
                     const omdbDetails = await resolveOmdbDetails({ title, type: contentType, year: yearHint });
                     const posterMatch = await findBestPoster({
                         title,
@@ -747,11 +767,13 @@ app.post('/refresh-posters', async (req, res) => {
                     });
 
                     const omdbYear = parseYear(omdbDetails?.year);
+                    const posterYear = posterMatch?.releaseYear ?? null;
+                    const releaseYear = yearHint ?? posterYear ?? omdbYear ?? null;
                     const payload = {
                         thumbnailUrl: posterMatch?.posterUrl || null,
                         tmdbId: posterMatch?.tmdbId || null,
                         description: omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null,
-                        releaseYear: yearHint ?? omdbYear ?? null,
+                        releaseYear,
                         genre: omdbDetails?.genre || null,
                         rating: omdbDetails?.rated || null,
                         averageRating: parseAverageRating(omdbDetails?.imdbRating),

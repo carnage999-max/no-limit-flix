@@ -12,6 +12,12 @@ import {
 
 type ImportResultStatus = 'imported' | 'updated' | 'skipped' | 'failed' | 'ready';
 
+type PosterMatch = {
+    posterUrl: string;
+    tmdbId: string | null;
+    releaseYear?: number | null;
+};
+
 interface ImportResult {
     identifier: string;
     title: string;
@@ -276,6 +282,8 @@ const resolveYearHint = (title: string | null | undefined, ...sources: Array<str
     return parseYear(title || undefined);
 };
 
+const getCandidateYear = (item: any) => parseTmdbYear(item?.release_date || item?.first_air_date || item?.Year);
+
 const scoreCandidate = (candidate: string, target: string, candidateYear: number | null, targetYear: number | null) => {
     if (!candidate || !target) return 0;
     let score = 0;
@@ -283,9 +291,11 @@ const scoreCandidate = (candidate: string, target: string, candidateYear: number
     if (candidate.startsWith(target) || target.startsWith(candidate)) score += 3;
     if (candidate.includes(target) || target.includes(candidate)) score += 2;
     if (targetYear && candidateYear) {
-        if (candidateYear === targetYear) score += 4;
-        else if (Math.abs(candidateYear - targetYear) === 1) score += 2;
-        else if (Math.abs(candidateYear - targetYear) <= 3) score += 1;
+        const delta = Math.abs(candidateYear - targetYear);
+        if (delta === 0) score += 4;
+        else if (delta === 1) score += 2;
+        else if (delta <= 3) score += 1;
+        else score -= 8;
     }
     return score;
 };
@@ -293,20 +303,52 @@ const scoreCandidate = (candidate: string, target: string, candidateYear: number
 const compareCandidates = (
     a: { item: any; score: number },
     b: { item: any; score: number },
-    targetYear: number | null
+    targetYear: number | null,
+    preferOlder = false
 ) => {
     if (b.score !== a.score) return b.score - a.score;
 
+    const aYear = getCandidateYear(a.item);
+    const bYear = getCandidateYear(b.item);
+
     if (targetYear) {
-        const aYear = parseTmdbYear(a.item?.release_date || a.item?.first_air_date || a.item?.Year);
-        const bYear = parseTmdbYear(b.item?.release_date || b.item?.first_air_date || b.item?.Year);
         const aDist = aYear ? Math.abs(aYear - targetYear) : Number.POSITIVE_INFINITY;
         const bDist = bYear ? Math.abs(bYear - targetYear) : Number.POSITIVE_INFINITY;
         if (aDist !== bDist) return aDist - bDist;
         if (aYear && bYear && aYear !== bYear) return aYear - bYear;
+    } else if (preferOlder && aYear && bYear && aYear !== bYear) {
+        return aYear - bYear;
     }
 
     return 0;
+};
+
+const pickBestScoredCandidate = (
+    scored: Array<{ item: any; score: number }>,
+    options: { year: number | null; minScore: number }
+) => {
+    for (const entry of scored) {
+        if (entry.score < options.minScore) continue;
+        if (!entry.item?.poster_path) continue;
+        const candidateYear = getCandidateYear(entry.item);
+        if (options.year && candidateYear && !yearsMatch(candidateYear, options.year)) continue;
+        return entry;
+    }
+    return null;
+};
+
+const pickBestOmdbSearchCandidate = (
+    scored: Array<{ item: any; score: number }>,
+    options: { year: number | null; minScore: number }
+) => {
+    for (const entry of scored) {
+        if (entry.score < options.minScore) continue;
+        if (!entry.item?.imdbID) continue;
+        const candidateYear = parseYear(entry.item?.Year);
+        if (options.year && candidateYear && !yearsMatch(candidateYear, options.year)) continue;
+        return entry;
+    }
+    return null;
 };
 
 const getTmdbKey = () => process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY || '';
@@ -357,19 +399,21 @@ const findCatalogPoster = async (
         if (!results.length) return null;
 
         const target = normalizeTitle(title);
+        const preferOlder = type === 'movie' && !year;
         const scored = results.map((item: any) => {
             const candidateTitle = item?.title || item?.name || '';
-            const candidateYear = parseTmdbYear(item?.release_date || item?.first_air_date);
+            const candidateYear = getCandidateYear(item);
             const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
             return { item, score };
         });
-        scored.sort((a: any, b: any) => compareCandidates(a, b, year));
-        const best = scored[0];
-        if (!best || best.score < minScore || !best.item?.poster_path) return null;
+        scored.sort((a: any, b: any) => compareCandidates(a, b, year, preferOlder));
+        const best = pickBestScoredCandidate(scored, { year, minScore });
+        if (!best) return null;
 
         return {
             posterUrl: `${TMDB_IMAGE_BASE}${best.item.poster_path}`,
-            tmdbId: String(best.item.id)
+            tmdbId: String(best.item.id),
+            releaseYear: getCandidateYear(best.item)
         };
     } catch (error) {
         return null;
@@ -425,13 +469,13 @@ const resolveOmdbDetails = async (
             const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
             return { item, score };
         });
-        scored.sort((a: any, b: any) => compareCandidates(a, b, year));
-        const best = scored[0]?.item;
-        if (!best?.imdbID) return null;
+        scored.sort((a: any, b: any) => compareCandidates(a, b, year, type === 'movie' && !year));
+        const best = pickBestOmdbSearchCandidate(scored, { year, minScore: 2 });
+        if (!best?.item?.imdbID) return null;
 
         const detailParams = new URLSearchParams({
             apikey: apiKey,
-            i: best.imdbID,
+            i: best.item.imdbID,
             plot: 'short'
         });
         data = await fetchOmdbJson(detailParams);
@@ -467,14 +511,16 @@ const findOmdbPoster = async (title: string | null, year: number | null, type: '
     if (imdbId) {
         return {
             posterUrl: `https://img.omdbapi.com/?i=${encodeURIComponent(imdbId)}&h=600&apikey=${encodeURIComponent(apiKey)}`,
-            tmdbId: null
+            tmdbId: null,
+            releaseYear: parseYear(details.year || undefined)
         };
     }
 
     if (!details.poster) return null;
     return {
         posterUrl: details.poster,
-        tmdbId: null
+        tmdbId: null,
+        releaseYear: parseYear(details.year || undefined)
     };
 };
 
@@ -517,7 +563,8 @@ const findWikipediaPoster = async (title: string | null, year: number | null, ty
         if (page?.thumbnail?.source) {
             return {
                 posterUrl: page.thumbnail.source,
-                tmdbId: null
+                tmdbId: null,
+                releaseYear: year
             };
         }
     }
@@ -525,10 +572,10 @@ const findWikipediaPoster = async (title: string | null, year: number | null, ty
     return null;
 };
 
-const findBestPoster = async (title: string | null, year: number | null, type: 'movie' | 'series') => {
+const findBestPoster = async (title: string | null, year: number | null, type: 'movie' | 'series'): Promise<PosterMatch | null> => {
     const yearHint = year ?? parseYear(title || undefined);
 
-    let poster = await findOmdbPoster(title, yearHint, type);
+    let poster: PosterMatch | null = await findOmdbPoster(title, yearHint, type);
     if (!poster) {
         poster = await findCatalogPoster(title, yearHint, type, {
             minScore: yearHint ? 3 : 2,
@@ -771,12 +818,12 @@ export async function POST(request: NextRequest) {
                 const omdbYear = parseYear(omdbDetails?.year || undefined);
                 const releaseYear = yearHint
                     ?? omdbYear
-                    ?? (isBundleItem ? parseYear(bestFile.name) : null);
+                    ?? (isBundleItem ? parseYear(bestFile.name || undefined) : null);
                 const genre = omdbDetails?.genre || (isBundleGeneric ? null : normalizeGenre(metadata));
                 const rating = omdbDetails?.rated || normalizeRating(metadata);
                 const averageRating = parseAverageRating(omdbDetails?.imdbRating);
                 const ratingCount = parseRatingCount(omdbDetails?.imdbVotes);
-                const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length));
+                const duration = parseDurationSeconds(bestFile.length) || parseDurationSeconds(stringifyMetadata(metadata?.length) || undefined);
                 const minDuration = contentType === 'series' ? MIN_SERIES_DURATION_SECONDS : MIN_FEATURE_DURATION_SECONDS;
 
                 if (duration && duration < minDuration) {
@@ -803,6 +850,7 @@ export async function POST(request: NextRequest) {
 
                 const posterTitle = contentType === 'series' ? (seriesTitle || title) : title;
                 const posterMatch = await findBestPoster(posterTitle, releaseYear ?? yearHint, contentType);
+                const resolvedReleaseYear = releaseYear ?? posterMatch?.releaseYear ?? omdbYear ?? null;
                 const tmdbId = posterMatch?.tmdbId || null;
                 const thumbnailUrl = posterMatch?.posterUrl || (
                     isBundleItem
@@ -830,7 +878,7 @@ export async function POST(request: NextRequest) {
                             s3Url: playbackUrl,
                             thumbnailUrl,
                             status: 'completed',
-                            releaseYear,
+                            releaseYear: resolvedReleaseYear,
                             duration,
                             resolution,
                             genre,
@@ -861,7 +909,7 @@ export async function POST(request: NextRequest) {
                             s3Url: playbackUrl,
                             thumbnailUrl,
                             status: 'completed',
-                            releaseYear,
+                            releaseYear: resolvedReleaseYear,
                             duration,
                             resolution,
                             genre,

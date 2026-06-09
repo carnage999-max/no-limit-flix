@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
             },
             body: JSON.stringify({
                 limit: body?.limit,
+                offset: body?.offset,
                 async: true
             })
         });
