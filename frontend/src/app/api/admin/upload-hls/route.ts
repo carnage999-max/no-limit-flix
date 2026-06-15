@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { promises as fs } from 'fs';
 import path from 'path';
 import { writeFile } from 'fs/promises';
 import prisma from '@/lib/db';
@@ -7,16 +6,15 @@ import {
   convertToHLS,
   createTempHLSDir,
   cleanupTempDir,
-  listHLSFiles,
 } from '@/lib/ffmpeg-hls';
-import { uploadHLSToS3, verifyHLSUpload } from '@/lib/s3-hls-upload';
+import { storeHLSInMedia, verifyHLSMediaUpload } from '@/lib/media-hls-storage';
 
 /**
  * POST /api/admin/upload-hls
  * Localhost-only endpoint to:
  * 1. Accept video file upload
  * 2. Convert to HLS via FFmpeg
- * 3. Upload to S3
+ * 3. Store HLS output under MEDIA_ROOT
  * 4. Create database record
  *
  * Only works on localhost (development)
@@ -71,22 +69,22 @@ export async function POST(request: NextRequest) {
       `Conversion complete: ${conversionResult.totalSegments} segments generated`
     );
 
-    // Step 4: Upload to S3
-    console.log('Uploading HLS files to S3...');
-    const uploadResult = await uploadHLSToS3(tempHLSDir, title.replace(/[^a-z0-9-]/gi, '_'));
-    console.log(`Uploaded ${uploadResult.uploadedFiles} files to S3`);
+    // Step 4: Store HLS files in local media root
+    console.log('Writing HLS files to MEDIA_ROOT...');
+    const uploadResult = await storeHLSInMedia(tempHLSDir, title.replace(/[^a-z0-9-]/gi, '_'));
+    console.log(`Stored ${uploadResult.uploadedFiles} HLS files`);
 
-    // Step 5: Verify S3 upload
-    console.log('Verifying S3 upload...');
-    const verified = await verifyHLSUpload(uploadResult.s3KeyBase);
+    // Step 5: Verify local media write
+    console.log('Verifying local media write...');
+    const verified = await verifyHLSMediaUpload(uploadResult.mediaPathBase);
     if (!verified) {
-      throw new Error('Failed to verify HLS upload to S3');
+      throw new Error('Failed to verify HLS media write');
     }
-    console.log('S3 upload verified');
+    console.log('Local HLS write verified');
 
     // Step 6: Create database record
     console.log('Creating database record...');
-    const manifestKey = `${uploadResult.s3KeyBase}/master.m3u8`;
+    const manifestKey = `${uploadResult.mediaPathBase}/master.m3u8`;
     const video = await prisma.video.create({
       data: {
         title,
@@ -95,6 +93,7 @@ export async function POST(request: NextRequest) {
         playbackType: 'hls',
         s3KeyPlayback: manifestKey,
         cloudfrontPath: manifestKey,
+        s3Url: uploadResult.playbackUrl,
         s3KeySource: null,
         status: 'completed',
         duration: conversionResult.totalSegments * 10, // Approximate: 10 seconds per segment
@@ -117,7 +116,7 @@ export async function POST(request: NextRequest) {
         playbackType: video.playbackType,
         s3KeyPlayback: video.s3KeyPlayback,
         uploadedSegments: uploadResult.uploadedFiles,
-        message: 'HLS conversion and upload successful',
+        message: 'HLS conversion and local media write successful',
       },
       { status: 201 }
     );

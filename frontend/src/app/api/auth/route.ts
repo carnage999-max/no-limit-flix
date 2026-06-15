@@ -6,6 +6,7 @@ import { parseUserAgent, lookupLocation } from '@/lib/device';
 import { sendEmail } from '@/lib/email';
 import { buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
 import { getOrCreateStripeCustomer } from '@/lib/stripe';
+import { resolveMediaUrl } from '@/lib/media';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const prisma = new PrismaClient();
@@ -269,7 +270,7 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    avatar: user.avatar,
+                    avatar: resolveMediaUrl(user.avatar),
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,
@@ -317,7 +318,7 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    avatar: user.avatar,
+                    avatar: resolveMediaUrl(user.avatar),
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,
@@ -439,7 +440,7 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    avatar: user.avatar,
+                    avatar: resolveMediaUrl(user.avatar),
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,
@@ -564,7 +565,7 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     email: user.email,
                     username: user.username,
-                    avatar: user.avatar,
+                    avatar: resolveMediaUrl(user.avatar),
                     showWelcomeScreen: user.showWelcomeScreen,
                     role: user.role,
                     googleId: user.googleId,

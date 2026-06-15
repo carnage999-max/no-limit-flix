@@ -3,18 +3,13 @@ import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
 import { sendEmail } from '@/lib/email';
 import { buildIssueInternalEmailWithAttachments, buildIssueReceivedEmail } from '@/lib/email-templates';
-import { PutObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client, BUCKET_NAME, CLOUDFRONT_URL } from '@/lib/s3';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
+import { writeMediaBuffer } from '@/lib/media-storage';
 
 const ISSUE_DEV_EMAIL = 'dev@nolimitflix.com';
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_BYTES = 3 * 1024 * 1024; // 3MB per attachment
-
-const safeCloudfrontBase = (value?: string) => {
-    if (!value) return '';
-    return `https://${value.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
-};
 
 const decodeDataUrl = (dataUrl: string) => {
     const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -58,11 +53,10 @@ export async function POST(request: NextRequest) {
                 name: sessionUser?.username || name,
                 email: sessionUser?.email || email,
                 issue,
-                attachments: null,
+                attachments: Prisma.JsonNull,
             }
         });
 
-        const cloudfrontBase = safeCloudfrontBase(CLOUDFRONT_URL);
         const uploadedAttachments: Array<{ name: string; type: string; size: number; key: string; url: string }> = [];
 
         for (const file of sanitizedAttachments) {
@@ -73,24 +67,14 @@ export async function POST(request: NextRequest) {
             }
             const ext = file.name.includes('.') ? file.name.split('.').pop() : '';
             const key = `issues/${new Date().toISOString().slice(0, 10)}/${report.id}/${crypto.randomUUID()}${ext ? `.${safeFileName(ext)}` : ''}`;
-
-            await s3Client.send(new PutObjectCommand({
-                Bucket: BUCKET_NAME,
-                Key: key,
-                Body: decoded.buffer,
-                ContentType: decoded.mimeType || file.type,
-            }));
-
-            const url = cloudfrontBase
-                ? `${cloudfrontBase}/${key}`
-                : `https://${BUCKET_NAME}.s3.amazonaws.com/${key}`;
+            const stored = await writeMediaBuffer(key, decoded.buffer);
 
             uploadedAttachments.push({
                 name: file.name,
                 type: decoded.mimeType || file.type,
                 size: decoded.buffer.length,
-                key,
-                url,
+                key: stored.relativePath,
+                url: stored.publicUrl,
             });
         }
 

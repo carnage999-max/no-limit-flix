@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
+import { resolveMediaUrl } from '@/lib/media';
 
 export async function PUT(request: NextRequest) {
     try {
@@ -47,7 +48,12 @@ export async function PUT(request: NextRequest) {
             }
         });
 
-        return NextResponse.json({ user: updated });
+        return NextResponse.json({
+            user: {
+                ...updated,
+                avatar: resolveMediaUrl(updated.avatar),
+            }
+        });
     } catch (error: any) {
         if (error?.code === 'P2002') {
             return NextResponse.json({ error: 'Email or username already in use' }, { status: 409 });

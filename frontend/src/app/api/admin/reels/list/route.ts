@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 
 type ReelRow = {
     id: string;
@@ -93,6 +94,8 @@ export async function GET(request: NextRequest) {
         const total = Number(countRows?.[0]?.total || 0);
         const items = (rows as ReelRow[]).map((row) => ({
             ...row,
+            thumbnailUrl: resolveMediaUrl(row.thumbnailUrl),
+            s3Url: resolveMediaUrl(row.s3Url),
             fileSize: row.fileSize ? String(row.fileSize) : null,
         }));
 

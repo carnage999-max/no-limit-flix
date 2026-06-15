@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 import { isReviewSafeVideo } from '@/lib/review-safety';
 
 /**
@@ -46,32 +47,15 @@ export async function GET() {
             },
         });
 
-        const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
-        const cfBase = cloudFrontUrl ? (cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`) : null;
-        const s3Pattern = /https:\/\/[^.]+\.s3([.-][^.]+)?\.amazonaws\.com\//;
-        const cfPrefix = cfBase ? (cfBase.startsWith('http') ? cfBase : `https://${cfBase}`) : null;
-
         const reviewSafeEpisodes = episodes.filter((episode: any) => isReviewSafeVideo(episode));
 
         // Group by seriesTitle so the mobile app can render a series list
         const seriesMap: Record<string, any> = {};
         for (const ep of reviewSafeEpisodes) {
-            let publicUrl = ep.s3Url;
-            let publicThumb = ep.thumbnailUrl;
-
-            const isExternal = ep.sourceProvider === 'internet_archive' || ep.sourceType === 'external_legal';
-
-            if (cfPrefix && !isExternal) {
-                publicUrl = ep.s3Url.replace(s3Pattern, cfPrefix);
-                if (ep.thumbnailUrl) {
-                    publicThumb = ep.thumbnailUrl.replace(s3Pattern, cfPrefix);
-                }
-            }
-
             const transformedEp = {
                 ...ep,
-                s3Url: publicUrl,
-                thumbnailUrl: publicThumb
+                s3Url: resolveMediaUrl(ep.s3Url),
+                thumbnailUrl: resolveMediaUrl(ep.thumbnailUrl)
             };
 
             const key = ep.seriesTitle || ep.title || 'Unknown Series';

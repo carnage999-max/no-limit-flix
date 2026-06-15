@@ -3,6 +3,7 @@ import { searchPerson, searchMoviesByActor, getMovieDetails } from '@/lib/tmdb';
 import { enrichMoviesWithPlayable } from '@/lib/library';
 import { calculateRecommendationScore, generateExplanation, buildActorProfileFromTMDB } from '@/lib/services/ai';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 import type { ActorRequest, ActorResponse, MoviePick, ActorProfile } from '@/types';
 
 async function findOrCreateActor(req: ActorRequest): Promise<ActorProfile | null> {
@@ -118,13 +119,13 @@ async function scoreInternalLibrary(actor: ActorProfile, moodTags: string[]): Pr
         title: v.title,
         year: v.releaseYear || 0,
         runtime: v.duration ? Math.floor(v.duration / 60) : 120,
-        poster: v.thumbnailUrl || '',
+        poster: resolveMediaUrl(v.thumbnailUrl) || '',
         genres: v.genre ? v.genre.split(',').map((g: string) => g.trim()) : [],
         explanation: '',
         watchProviders: [],
         playable: true,
         assetId: v.id,
-        cloudfrontUrl: v.s3Url || undefined,
+        cloudfrontUrl: resolveMediaUrl(v.s3Url) || undefined,
         averageRating: v.averageRating || undefined,
     }));
 

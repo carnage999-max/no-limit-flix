@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function GET(
             return new Response('Video not found', { status: 404 });
         }
 
-        const inputUrl = video.s3Url;
+        const inputUrl = resolveMediaUrl(video.s3Url || video.cloudfrontPath || video.s3KeyPlayback);
 
         // Headers for streaming
         const headers = new Headers();

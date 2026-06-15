@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -64,20 +65,7 @@ const isAuthorized = (request: NextRequest) => {
 };
 
 const buildPlaybackUrl = (row: ReelRow) => {
-    if (row.s3Url) return row.s3Url;
-    if (!row.cloudfrontPath) return '';
-    if (/^https?:\/\//i.test(row.cloudfrontPath)) return row.cloudfrontPath;
-
-    const base = (
-        process.env.REELS_CLOUDFRONT_URL
-        || process.env.NEXT_PUBLIC_CLOUDFRONT_URL
-        || process.env.CLOUDFRONT_URL
-        || ''
-    ).replace(/^https?:\/\//i, '').replace(/\/$/, '');
-
-    if (!base) return row.cloudfrontPath;
-    const path = row.cloudfrontPath.startsWith('/') ? row.cloudfrontPath : `/${row.cloudfrontPath}`;
-    return `https://${base}${path}`;
+    return resolveMediaUrl(row.s3Url || row.cloudfrontPath);
 };
 
 export async function GET(request: NextRequest) {
@@ -167,7 +155,7 @@ export async function GET(request: NextRequest) {
             id: row.id,
             title: row.title,
             description: row.description || FALLBACK_DESCRIPTION,
-            thumbnailUrl: row.thumbnailUrl,
+            thumbnailUrl: resolveMediaUrl(row.thumbnailUrl),
             playbackType: row.playbackType || 'mp4',
             playbackUrl: buildPlaybackUrl(row),
             duration: row.duration,

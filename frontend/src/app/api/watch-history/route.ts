@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
+import { resolveMediaUrl } from '@/lib/media';
 
 // Track watch history
 export async function POST(request: NextRequest) {
@@ -134,6 +135,8 @@ export async function GET(request: NextRequest) {
                 ...entry,
                 video: {
                     ...entry.video,
+                    thumbnailUrl: resolveMediaUrl(entry.video.thumbnailUrl),
+                    s3Url: resolveMediaUrl(entry.video.s3Url),
                     fileSize: entry.video.fileSize ? entry.video.fileSize.toString() : null
                 }
             };

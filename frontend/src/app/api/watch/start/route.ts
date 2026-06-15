@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import crypto from 'crypto';
 import prisma from '@/lib/db';
-import {
-  generateCloudFrontSignedCookie,
-  generateCloudFrontSignedURL,
-} from '@/lib/cloudfront-signed';
-import { transformToCloudFront } from '@/lib/utils';
+import { resolveMediaUrl } from '@/lib/media';
 import { getSessionUser } from '@/lib/auth-server';
 import { isReviewSafeVideo } from '@/lib/review-safety';
 
@@ -19,51 +14,6 @@ interface WatchStartResponse {
   playbackUrl: string;
   playbackType: 'mp4' | 'hls';
   expiresAt: string;
-  cookieHeader?: string; // For browser-based playback
-}
-
-const safeEqual = (a: string, b: string) => {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
-};
-
-const hasValidReelsClientHeaders = (request: NextRequest) => {
-  const expectedId = process.env.REELS_CLIENT_ID || '';
-  const expectedSecret = process.env.REELS_CLIENT_SECRET || '';
-  if (!expectedId || !expectedSecret) return false;
-
-  const providedId = request.headers.get('x-reels-client-id')
-    || request.headers.get('x-client-id')
-    || '';
-  const providedSecret = request.headers.get('x-reels-client-secret')
-    || request.headers.get('x-client-secret')
-    || '';
-
-  if (!providedId || !providedSecret) return false;
-  return safeEqual(providedId, expectedId) && safeEqual(providedSecret, expectedSecret);
-};
-
-const normalizeResourcePath = (rawPath: string) => {
-  let resourcePath = rawPath;
-  if (resourcePath.startsWith('http')) {
-    try {
-      resourcePath = new URL(resourcePath).pathname;
-    } catch {
-      // keep as-is below
-    }
-  }
-  if (!resourcePath.startsWith('/')) {
-    resourcePath = `/${resourcePath}`;
-  }
-  return resourcePath;
-};
-
-const getCloudFrontDomain = () => {
-  const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || process.env.CLOUDFRONT_URL;
-  if (!cloudfrontUrl) return null;
-  return cloudfrontUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
 };
 
 /**
@@ -78,10 +28,9 @@ const getCloudFrontDomain = () => {
  * 
  * Response:
  * {
- *   "playbackUrl": "https://cdn.example.com/videos/...",
+ *   "playbackUrl": "https://nolimitflix.com/media/videos/...",
  *   "playbackType": "hls" | "mp4",
- *   "expiresAt": "2026-02-21T12:15:00Z",
- *   "cookieHeader": "CloudFront-Policy=...; ..." // For HLS in browser
+ *   "expiresAt": "2026-02-21T12:15:00Z"
  * }
  */
 export async function POST(request: NextRequest) {
@@ -89,13 +38,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as WatchStartRequest;
     const assetId = body?.assetId || null;
     const reelId = body?.reelId || null;
-    const reelsClientAuth = hasValidReelsClientHeaders(request);
-    let sessionUser = null;
-
-    // Only resolve session when needed; reel-client auth can bypass this for reel playback.
-    if (assetId || !reelsClientAuth) {
-      sessionUser = await getSessionUser(request);
-    }
+    const sessionUser = await getSessionUser(request);
 
     if (!assetId && !reelId) {
       return NextResponse.json(
@@ -108,7 +51,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (reelId && !sessionUser && !reelsClientAuth) {
+    if (reelId && !sessionUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -121,6 +64,7 @@ export async function POST(request: NextRequest) {
           playbackType: true,
           cloudfrontPath: true,
           s3Url: true,
+          s3KeyPlayback: true,
         }
       });
 
@@ -138,64 +82,20 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const cloudfrontDomain = getCloudFrontDomain();
-      if (!cloudfrontDomain) {
-        return NextResponse.json(
-          { error: 'Playback configuration error' },
-          { status: 500 }
-        );
-      }
-
-      let resourcePath = reel.cloudfrontPath || '';
-      if (!resourcePath && reel.s3Url) {
-        const transformed = transformToCloudFront(reel.s3Url);
-        if (transformed) {
-          try {
-            resourcePath = new URL(transformed).pathname;
-          } catch {
-            resourcePath = transformed;
-          }
-        }
-      }
-
-      if (!resourcePath) {
+      const playbackUrl = resolveMediaUrl(reel.s3Url || reel.cloudfrontPath || reel.s3KeyPlayback);
+      if (!playbackUrl) {
         return NextResponse.json(
           { error: 'Playback URL missing for reel asset' },
           { status: 500 }
         );
       }
-
-      resourcePath = normalizeResourcePath(resourcePath);
       const playbackType = (reel.playbackType || 'mp4') as 'mp4' | 'hls';
-
-      let playbackUrl = '';
-      let cookieHeader: string | undefined;
-      let expiresAt: Date;
-
-      if (playbackType === 'hls') {
-        const cookie = generateCloudFrontSignedCookie(
-          `https://${cloudfrontDomain}${resourcePath}*`,
-          10
-        );
-        playbackUrl = `https://${cloudfrontDomain}${resourcePath}`;
-        cookieHeader = cookie.cookieValue;
-        expiresAt = cookie.expiresAt;
-      } else {
-        const signed = generateCloudFrontSignedURL(
-          cloudfrontDomain,
-          resourcePath,
-          10
-        );
-        playbackUrl = signed.url;
-        expiresAt = signed.expiresAt;
-      }
 
       const response: WatchStartResponse = {
         success: true,
         playbackUrl,
         playbackType,
-        expiresAt: expiresAt.toISOString(),
-        ...(cookieHeader && { cookieHeader }),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       };
 
       return NextResponse.json(response, { status: 200 });
@@ -228,20 +128,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (video.sourceType === 'external_legal' || video.sourceProvider === 'internet_archive') {
-      let playbackUrl = video.s3Url ? transformToCloudFront(video.s3Url) : '';
-      if (!playbackUrl && video.cloudfrontPath) {
-        const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || '';
-        let resourcePath = video.cloudfrontPath;
-        if (resourcePath.startsWith('http')) {
-          playbackUrl = resourcePath;
-        } else if (cloudfrontUrl) {
-          if (!resourcePath.startsWith('/')) {
-            resourcePath = '/' + resourcePath;
-          }
-          const cfBase = cloudfrontUrl.replace(/\/$/, '');
-          playbackUrl = `${cfBase}${resourcePath}`;
-        }
-      }
+      const playbackUrl = resolveMediaUrl(video.s3Url || video.cloudfrontPath);
       if (!playbackUrl) {
         return NextResponse.json(
           { error: 'Playback URL missing for external asset' },
@@ -259,68 +146,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response, { status: 200 });
     }
 
-    const cloudfrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
-    if (!cloudfrontUrl) {
-      console.error('Missing NEXT_PUBLIC_CLOUDFRONT_URL env var');
+    const playbackUrl = resolveMediaUrl(video.s3Url || video.cloudfrontPath || video.s3KeyPlayback);
+    if (!playbackUrl) {
       return NextResponse.json(
         { error: 'Playback configuration error' },
         { status: 500 }
       );
-    }
-    // Remove https:// if present to get just the domain
-    const cloudfrontDomain = cloudfrontUrl.replace(/^https?:\/\//, '');
-
-    let playbackUrl: string;
-    let cookieHeader: string | undefined;
-    let expiresAt: Date;
-
-    // Extract the path from cloudfrontPath (handle both full URLs and paths)
-    let resourcePath = video.cloudfrontPath;
-    if (resourcePath.startsWith('http')) {
-      // If it's a full URL, extract just the path
-      try {
-        const url = new URL(resourcePath);
-        resourcePath = url.pathname;
-      } catch {
-        console.warn('Invalid URL in cloudfrontPath, using as-is:', resourcePath);
-      }
-    }
-    // Ensure path starts with /
-    if (!resourcePath.startsWith('/')) {
-      resourcePath = '/' + resourcePath;
-    }
-
-    // Handle HLS playback
-    if (video.playbackType === 'hls') {
-      // For HLS, we use signed cookies to authorize the manifest + all segments
-      const cookie = generateCloudFrontSignedCookie(
-        `https://${cloudfrontDomain}${resourcePath}*`, // Wildcard for all segments
-        10 // 10-minute expiry
-      );
-
-      playbackUrl = `https://${cloudfrontDomain}${resourcePath}`;
-      cookieHeader = cookie.cookieValue;
-      expiresAt = cookie.expiresAt;
-    }
-    // Handle MP4 fallback
-    else {
-      // For MP4, use signed URL (simpler, doesn't need cookies)
-      const signed = generateCloudFrontSignedURL(
-        cloudfrontDomain,
-        resourcePath,
-        10 // 10-minute expiry
-      );
-
-      playbackUrl = signed.url;
-      expiresAt = signed.expiresAt;
     }
 
     const response: WatchStartResponse = {
       success: true,
       playbackUrl,
       playbackType: video.playbackType as 'mp4' | 'hls',
-      expiresAt: expiresAt.toISOString(),
-      ...(cookieHeader && { cookieHeader }),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     };
 
     return NextResponse.json(response, { status: 200 });

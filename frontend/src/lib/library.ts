@@ -1,4 +1,5 @@
 import prisma from './db';
+import { resolveMediaUrl } from './media';
 import { MoviePick } from '@/types';
 import { isReviewSafeVideo } from './review-safety';
 
@@ -47,29 +48,13 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
         });
 
         const reviewSafeVideos = hostedVideos.filter((video: any) => isReviewSafeVideo(video));
-        const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
-
         const hostedMap: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null; sourceProvider?: string; title?: string }> = {};
         const hostedByTitle: Record<string, { id: string; s3Url: string; duration: number | null; releaseYear: number | null; sourceProvider?: string; title?: string }> = {};
         for (const v of reviewSafeVideos) {
             if (v.tmdbId) {
-                let publicUrl = v.s3Url;
-                if (cloudFrontUrl) {
-                    const cfBase = cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`;
-                    const cfPrefix = cfBase.startsWith('http') ? cfBase : `https://${cfBase}`;
-                    const s3Pattern = /https?:\/\/[^.]+\.s3[.-][^.]+\.amazonaws\.com\//i;
-                    const s3PatternLegacy = /https?:\/\/[^.]+\.s3\.amazonaws\.com\//i;
-
-                    if (s3Pattern.test(v.s3Url)) {
-                        publicUrl = v.s3Url.replace(s3Pattern, cfPrefix);
-                    } else if (s3PatternLegacy.test(v.s3Url)) {
-                        publicUrl = v.s3Url.replace(s3PatternLegacy, cfPrefix);
-                    }
-                }
-
                 hostedMap[v.tmdbId] = {
                     id: v.id,
-                    s3Url: publicUrl,
+                    s3Url: resolveMediaUrl(v.s3Url),
                     duration: v.duration,
                     releaseYear: v.releaseYear,
                     sourceProvider: v.sourceProvider,
@@ -78,7 +63,7 @@ export async function enrichMoviesWithPlayable(movies: MoviePick[]): Promise<Mov
             } else if (v.sourceProvider === 'internet_archive' && v.title) {
                 hostedByTitle[v.title.toLowerCase()] = {
                     id: v.id,
-                    s3Url: v.s3Url,
+                    s3Url: resolveMediaUrl(v.s3Url),
                     duration: v.duration,
                     releaseYear: v.releaseYear,
                     sourceProvider: v.sourceProvider,

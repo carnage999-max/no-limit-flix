@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { transformToCloudFront } from '@/lib/utils';
+import { resolveMediaUrl } from '@/lib/media';
 import { getSessionUser } from '@/lib/auth-server';
 import { isReviewSafeVideo } from '@/lib/review-safety';
 
@@ -59,8 +59,8 @@ export async function GET(
 
         const transformedVideo = {
             ...video,
-            s3Url: transformToCloudFront(video.s3Url),
-            thumbnailUrl: transformToCloudFront(video.thumbnailUrl),
+            s3Url: resolveMediaUrl(video.s3Url),
+            thumbnailUrl: resolveMediaUrl(video.thumbnailUrl),
         };
 
         return NextResponse.json({ video: transformedVideo });

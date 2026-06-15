@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 import { isReviewSafeVideo } from '@/lib/review-safety';
 
 export async function GET(request: Request) {
@@ -50,40 +51,13 @@ export async function GET(request: Request) {
             },
         });
 
-        const cloudFrontUrl = process.env.NEXT_PUBLIC_CLOUDFRONT_URL;
-        const cfBase = cloudFrontUrl ? (cloudFrontUrl.endsWith('/') ? cloudFrontUrl : `${cloudFrontUrl}/`) : null;
-
         const transformed = videos
         .filter((video: any) => isReviewSafeVideo(video))
         .map((video: any) => {
-            let publicUrl = video.s3Url;
-            let publicThumb = video.thumbnailUrl;
-            const isExternal = video.sourceProvider === 'internet_archive' || video.sourceType === 'external_legal';
-
-            if (cfBase && !isExternal) {
-                const cfPrefix = cfBase.startsWith('http') ? cfBase : `https://${cfBase}`;
-                const s3Pattern = /https?:\/\/[^.]+\.s3[.-][^.]+\.amazonaws\.com\//i;
-                const s3PatternLegacy = /https?:\/\/[^.]+\.s3\.amazonaws\.com\//i;
-
-                if (video.s3Url && s3Pattern.test(video.s3Url)) {
-                    publicUrl = video.s3Url.replace(s3Pattern, cfPrefix);
-                } else if (video.s3Url && s3PatternLegacy.test(video.s3Url)) {
-                    publicUrl = video.s3Url.replace(s3PatternLegacy, cfPrefix);
-                }
-
-                if (video.thumbnailUrl) {
-                    if (s3Pattern.test(video.thumbnailUrl)) {
-                        publicThumb = video.thumbnailUrl.replace(s3Pattern, cfPrefix);
-                    } else if (s3PatternLegacy.test(video.thumbnailUrl)) {
-                        publicThumb = video.thumbnailUrl.replace(s3PatternLegacy, cfPrefix);
-                    }
-                }
-            }
-
             return {
                 ...video,
-                s3Url: publicUrl,
-                thumbnailUrl: publicThumb,
+                s3Url: resolveMediaUrl(video.s3Url),
+                thumbnailUrl: resolveMediaUrl(video.thumbnailUrl),
                 fileSize: video.fileSize ? video.fileSize.toString() : null,
             };
         });

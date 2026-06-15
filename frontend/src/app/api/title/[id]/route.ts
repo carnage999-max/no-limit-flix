@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMovieDetails } from '@/lib/tmdb';
 import prisma from '@/lib/db';
+import { resolveMediaUrl } from '@/lib/media';
 import { isReviewSafeVideo } from '@/lib/review-safety';
 
 export async function GET(
@@ -56,7 +57,7 @@ export async function GET(
                 id: video.id,
                 title: video.title,
                 description: video.description,
-                poster: video.thumbnailUrl,
+                poster: resolveMediaUrl(video.thumbnailUrl),
                 year: video.releaseYear,
                 runtime: video.duration ? Math.round(video.duration / 60) : null,
                 genres: video.genre ? [video.genre] : [],
@@ -66,7 +67,7 @@ export async function GET(
                 assets: [
                     {
                         id: video.id,
-                        playbackUrl: video.s3Url,
+                        playbackUrl: resolveMediaUrl(video.s3Url),
                         playbackType: video.playbackType,
                         sourceType: video.sourceType,
                         sourceProvider: video.sourceProvider,
@@ -129,7 +130,7 @@ export async function GET(
             assets: safeAssets.map((asset) => ({
                 id: asset.id,
                 title: asset.title,
-                playbackUrl: asset.s3Url,
+                playbackUrl: resolveMediaUrl(asset.s3Url),
                 playbackType: asset.playbackType,
                 sourceType: asset.sourceType,
                 sourceProvider: asset.sourceProvider,

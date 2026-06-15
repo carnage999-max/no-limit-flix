@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { transformToCloudFront } from '@/lib/utils';
+import { resolveMediaUrl } from '@/lib/media';
 
 export async function GET(request: NextRequest) {
     try {
@@ -66,9 +66,8 @@ export async function GET(request: NextRequest) {
             video = results[0];
         }
 
-        // Transform URLs to CloudFront
         if (video) {
-            video.thumbnailUrl = transformToCloudFront(video.thumbnailUrl);
+            video.thumbnailUrl = resolveMediaUrl(video.thumbnailUrl);
         }
 
         return NextResponse.json({ video });

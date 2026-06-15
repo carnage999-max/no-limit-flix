@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
+import { resolveMediaUrl } from '@/lib/media';
 
 export async function GET(request: NextRequest) {
     try {
@@ -76,7 +77,7 @@ export async function GET(request: NextRequest) {
                 return {
                     videoId: row.videoId,
                     title: video?.title || 'Untitled',
-                    thumbnailUrl: video?.thumbnailUrl || null,
+                    thumbnailUrl: resolveMediaUrl(video?.thumbnailUrl),
                     watchCount: row._count.videoId,
                     genre: video?.genre || null
                 };
