@@ -20,7 +20,15 @@ const {
     updateVideoPoster,
     updateVideoMetadata
 } = require('./db');
-const { buildS3Key, uploadToS3, listS3Objects, buildPublicUrl, isTranscoderAvailable, DownloadFetchError } = require('./ingest');
+const {
+    buildS3Key,
+    uploadToS3,
+    storeMoviePlayback,
+    listS3Objects,
+    buildPublicUrl,
+    isTranscoderAvailable,
+    DownloadFetchError
+} = require('./ingest');
 
 const PORT = Number(process.env.PORT) || 8080;
 const ADMIN_SECRET = process.env.INGEST_WORKER_SECRET;
@@ -951,9 +959,12 @@ app.post('/import', async (req, res) => {
                 }
 
                 const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
-                const s3KeyPlayback = buildS3Key(identifier, bestFile.name);
-
-                const { s3Url, contentType: uploadedContentType } = await uploadToS3(playbackUrl, s3KeyPlayback, bestFile);
+                const {
+                    s3Url,
+                    relativePath: s3KeyPlayback,
+                    contentType: uploadedContentType,
+                    playbackType
+                } = await storeMoviePlayback(playbackUrl, identifier, bestFile);
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 let title = stringifyMetadata(metadata?.title) || identifier;
@@ -997,7 +1008,7 @@ app.post('/import', async (req, res) => {
                 const fileSize = bestFile.size ? BigInt(bestFile.size).toString() : null;
                 const height = bestFile.height ? Number(bestFile.height) : null;
                 const resolution = height ? `${height}p` : null;
-                const mimeType = normalizeMimeType(bestFile) || uploadedContentType || inferMimeType(bestFile);
+                const mimeType = uploadedContentType || normalizeMimeType(bestFile) || inferMimeType(bestFile);
                 const parsed = parseSeasonEpisode(bestFile.name);
                 const episodeNumber = contentType === 'series'
                     ? (item.episodeNumber ?? parsed.episode ?? (startEpisodeInput !== null ? startEpisodeInput + index : null))
@@ -1030,7 +1041,7 @@ app.post('/import', async (req, res) => {
                     title,
                     description,
                     type: contentType,
-                    playbackType: 'mp4',
+                    playbackType,
                     s3KeyPlayback,
                     cloudfrontPath: `/${s3KeyPlayback}`,
                     s3KeySource: null,
@@ -1362,7 +1373,8 @@ app.post('/reels/import', async (req, res) => {
                     const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
                     const sourceFileSize = parseMaybeNumber(bestFile.size);
                     const shouldCompress = compress && (!sourceFileSize || sourceFileSize >= compressMinBytes);
-                    const outputFileName = shouldCompress ? toMp4Name(bestFile.name) : bestFile.name;
+                    const forceMp4 = shouldCompress || !/\.mp4$/i.test(bestFile.name);
+                    const outputFileName = forceMp4 ? toMp4Name(bestFile.name) : bestFile.name;
                     const s3KeyPlayback = buildS3Key(identifier, outputFileName, 'reels');
                     const { s3Url, contentType: uploadedContentType, transcoded } = await withRetry(
                         () => uploadToS3(
@@ -1370,7 +1382,7 @@ app.post('/reels/import', async (req, res) => {
                             s3KeyPlayback,
                             bestFile,
                             {
-                                transcode: shouldCompress
+                                transcode: forceMp4
                             }
                         ),
                         2,
@@ -1386,7 +1398,7 @@ app.post('/reels/import', async (req, res) => {
                     const width = bestFile.width ? Number(bestFile.width) : null;
                     const height = bestFile.height ? Number(bestFile.height) : null;
                     const resolution = height ? `${height}p` : null;
-                    const mimeType = normalizeMimeType(bestFile) || uploadedContentType || inferMimeType(bestFile);
+                    const mimeType = uploadedContentType || normalizeMimeType(bestFile) || inferMimeType(bestFile);
                     const thumbnailUrl = findThumbnailForFile(files, identifier, bestFile.name) || `https://archive.org/services/img/${identifier}`;
                     let archiveIdentifier = `${identifier}:${bestFile.name}`;
                     const existingByKey = await findReelByS3KeyPlayback(s3KeyPlayback);

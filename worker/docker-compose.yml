@@ -1,0 +1,15 @@
+services:
+  nolimitflix-worker:
+    build:
+      context: .
+    container_name: nolimitflix-worker
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - /mnt/data/media/no-limit-flix:/app/media
+    networks:
+      - shared-net
+
+networks:
+  shared-net:
+    external: true
