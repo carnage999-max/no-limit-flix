@@ -2,6 +2,7 @@
   "name": "no-limit-flix-ingest-worker",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.30.3",
   "type": "commonjs",
   "main": "src/index.js",
   "scripts": {
