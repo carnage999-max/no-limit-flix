@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
-import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/auth';
+import { SESSION_COOKIE_NAME, verifySessionToken, clearAuthCookieOptions } from '@/lib/auth';
 import { parseUserAgent, lookupLocation } from '@/lib/device';
 
 export async function GET(request: NextRequest) {
@@ -168,7 +168,7 @@ export async function POST(request: NextRequest) {
 
         const response = NextResponse.json({ success: true, loggedOutCurrent: isCurrentRevoked, keptPrimary });
         if (isCurrentRevoked) {
-            response.cookies.delete(SESSION_COOKIE_NAME);
+            response.cookies.set(SESSION_COOKIE_NAME, '', clearAuthCookieOptions());
         }
         return response;
     } catch (error) {
@@ -266,7 +266,7 @@ export async function DELETE(request: NextRequest) {
 
         const response = NextResponse.json({ success: true, loggedOutCurrent: isCurrent });
         if (isCurrent) {
-            response.cookies.delete(SESSION_COOKIE_NAME);
+            response.cookies.set(SESSION_COOKIE_NAME, '', clearAuthCookieOptions());
         }
         return response;
     } catch (error) {

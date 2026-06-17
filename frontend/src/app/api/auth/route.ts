@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 import crypto from 'crypto';
-import { hashPassword, verifyPassword, createSessionToken, generateRefreshToken, hashToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_AGE, verifySessionToken } from '@/lib/auth';
+import { hashPassword, verifyPassword, createSessionToken, generateRefreshToken, hashToken, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_AGE, verifySessionToken, getAuthCookieOptions, clearAuthCookieOptions } from '@/lib/auth';
 import { parseUserAgent, lookupLocation } from '@/lib/device';
 import { sendEmail } from '@/lib/email';
 import { buildNewDeviceEmail, buildWelcomeEmail } from '@/lib/email-templates';
@@ -278,20 +278,8 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            response.cookies.set(SESSION_COOKIE_NAME, token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: SESSION_COOKIE_AGE,
-                path: '/'
-            });
-            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: REFRESH_TOKEN_AGE,
-                path: '/'
-            });
+            response.cookies.set(SESSION_COOKIE_NAME, token, getAuthCookieOptions(SESSION_COOKIE_AGE));
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, getAuthCookieOptions(REFRESH_TOKEN_AGE));
 
             return response;
         } else if (action === 'login') {
@@ -326,20 +314,8 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            response.cookies.set(SESSION_COOKIE_NAME, token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: SESSION_COOKIE_AGE,
-                path: '/'
-            });
-            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: REFRESH_TOKEN_AGE,
-                path: '/'
-            });
+            response.cookies.set(SESSION_COOKIE_NAME, token, getAuthCookieOptions(SESSION_COOKIE_AGE));
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, getAuthCookieOptions(REFRESH_TOKEN_AGE));
 
             return response;
         } else if (action === 'google') {
@@ -448,20 +424,8 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            response.cookies.set(SESSION_COOKIE_NAME, token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: SESSION_COOKIE_AGE,
-                path: '/'
-            });
-            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: REFRESH_TOKEN_AGE,
-                path: '/'
-            });
+            response.cookies.set(SESSION_COOKIE_NAME, token, getAuthCookieOptions(SESSION_COOKIE_AGE));
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, getAuthCookieOptions(REFRESH_TOKEN_AGE));
 
             return response;
         } else if (action === 'apple') {
@@ -573,20 +537,8 @@ export async function POST(request: NextRequest) {
                 }
             });
 
-            response.cookies.set(SESSION_COOKIE_NAME, token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: SESSION_COOKIE_AGE,
-                path: '/'
-            });
-            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                maxAge: REFRESH_TOKEN_AGE,
-                path: '/'
-            });
+            response.cookies.set(SESSION_COOKIE_NAME, token, getAuthCookieOptions(SESSION_COOKIE_AGE));
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, getAuthCookieOptions(REFRESH_TOKEN_AGE));
 
             return response;
         } else if (action === 'logout') {
@@ -600,8 +552,8 @@ export async function POST(request: NextRequest) {
             }
 
             const response = NextResponse.json({ success: true });
-            response.cookies.delete(SESSION_COOKIE_NAME);
-            response.cookies.delete(REFRESH_TOKEN_COOKIE_NAME);
+            response.cookies.set(SESSION_COOKIE_NAME, '', clearAuthCookieOptions());
+            response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, '', clearAuthCookieOptions());
             return response;
         }
 

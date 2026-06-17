@@ -96,10 +96,6 @@ function AuthContent() {
             if (response.ok) {
                 setSuccessMessage(isLogin ? 'Login successful! Redirecting...' : 'Account created! Redirecting...');
                 await refresh();
-                setTimeout(() => {
-                    router.push(getPostAuthRedirect(data?.user));
-                    router.refresh();
-                }, 150);
             } else {
                 setError(data.error || 'An error occurred');
             }
@@ -131,10 +127,6 @@ function AuthContent() {
             if (response.ok) {
                 setSuccessMessage('Signed in with Google. Redirecting...');
                 await refresh();
-                setTimeout(() => {
-                    router.push(getPostAuthRedirect(data?.user));
-                    router.refresh();
-                }, 150);
             } else {
                 setError(data.error || 'Google sign-in failed');
             }

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import type { ResponseCookie } from 'next/dist/compiled/@edge-runtime/cookies';
 
 // Simple password hashing (for production, use bcrypt)
 export function hashPassword(password: string): string {
@@ -21,6 +22,51 @@ export function generateRefreshToken(): string {
 export function hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
 }
+
+export const getAuthCookieDomain = () => {
+    const configured = process.env.AUTH_COOKIE_DOMAIN?.trim();
+    if (configured) {
+        return configured.replace(/^\.+/, '.');
+    }
+
+    const appUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+    if (!appUrl) return undefined;
+
+    try {
+        const hostname = new URL(appUrl).hostname.toLowerCase();
+        if (hostname === 'localhost' || /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+            return undefined;
+        }
+        const normalized = hostname.replace(/^www\./, '');
+        return normalized.includes('.') ? `.${normalized}` : undefined;
+    } catch {
+        return undefined;
+    }
+};
+
+export const getAuthCookieOptions = (maxAge: number): Partial<ResponseCookie> => {
+    const domain = getAuthCookieDomain();
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge,
+        path: '/',
+        ...(domain ? { domain } : {}),
+    };
+};
+
+export const clearAuthCookieOptions = (): Partial<ResponseCookie> => {
+    const domain = getAuthCookieDomain();
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: 0,
+        path: '/',
+        ...(domain ? { domain } : {}),
+    };
+};
 
 const getAuthSecret = () => {
     const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { createSessionToken, generateRefreshToken, hashToken, REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_AGE, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE } from '@/lib/auth';
+import { createSessionToken, generateRefreshToken, hashToken, REFRESH_TOKEN_COOKIE_NAME, REFRESH_TOKEN_AGE, SESSION_COOKIE_NAME, SESSION_COOKIE_AGE, getAuthCookieOptions } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
     try {
@@ -50,20 +50,8 @@ export async function POST(request: NextRequest) {
             refreshToken: newRefreshToken
         });
 
-        response.cookies.set(SESSION_COOKIE_NAME, accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: SESSION_COOKIE_AGE,
-            path: '/'
-        });
-        response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, newRefreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: REFRESH_TOKEN_AGE,
-            path: '/'
-        });
+        response.cookies.set(SESSION_COOKIE_NAME, accessToken, getAuthCookieOptions(SESSION_COOKIE_AGE));
+        response.cookies.set(REFRESH_TOKEN_COOKIE_NAME, newRefreshToken, getAuthCookieOptions(REFRESH_TOKEN_AGE));
 
         return response;
     } catch (error) {
