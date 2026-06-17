@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySessionTokenEdge } from '@/lib/auth-edge';
+import {
+    buildSessionVerificationHeaders,
+    buildSessionVerificationUrl,
+    getRequestSessionToken,
+} from '@/lib/middleware-auth';
 
 const PUBLIC_PAGE_PREFIXES = [
     '/auth',
@@ -62,9 +67,11 @@ const inactiveSubscriptionResponse = (request: NextRequest, isApi: boolean) => {
 };
 
 const verifyRequestSession = async (request: NextRequest) => {
-    const verifyUrl = new URL('/api/auth/session', request.url);
-    const verifyRes = await fetch(verifyUrl, {
-        headers: { cookie: request.headers.get('cookie') || '' },
+    const verifyRes = await fetch(buildSessionVerificationUrl(request.url), {
+        headers: buildSessionVerificationHeaders({
+            cookieHeader: request.headers.get('cookie') || '',
+            authorizationHeader: request.headers.get('authorization') || request.headers.get('Authorization') || '',
+        }),
         cache: 'no-store',
     });
 
@@ -99,7 +106,10 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    const token = request.cookies.get('auth_token')?.value;
+    const token = getRequestSessionToken({
+        cookieToken: request.cookies.get('auth_token')?.value || null,
+        authorizationHeader: request.headers.get('authorization') || request.headers.get('Authorization'),
+    });
     const session = await verifySessionTokenEdge(token);
     if (!session) {
         return unauthorizedResponse(request, isApi);
