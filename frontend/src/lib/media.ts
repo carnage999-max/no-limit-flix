@@ -1,5 +1,7 @@
 const DEFAULT_MEDIA_URL = 'https://nolimitflix.com/media';
 const KNOWN_MEDIA_PREFIXES = ['videos/', 'thumbnails/', 'avatars/', 'issues/'];
+const HOSTLESS_HOSTED_MEDIA_PATTERN = /^([^/]+\.(?:cloudfront\.net|s3(?:[.-][^.]+)?\.amazonaws\.com))(\/.+)$/i;
+const MEDIA_PATH_PATTERN = /(?:^|\/)[^/]+\.(?:m3u8|mp4|mkv|mov|avi|webm|jpg|jpeg|png|webp|gif|svg|vtt|srt|mp3|aac|wav)$/i;
 
 const S3_HOST_PATTERN = /^[^.]+\.s3([.-][^.]+)?\.amazonaws\.com$/i;
 const LEGACY_S3_HOST_PATTERN = /^[^.]+\.s3\.amazonaws\.com$/i;
@@ -15,6 +17,13 @@ const collapsePath = (value: string) =>
 
 const matchesKnownMediaPrefix = (value: string) =>
   KNOWN_MEDIA_PREFIXES.some((prefix) => value === prefix.slice(0, -1) || value.startsWith(prefix));
+
+const looksLikeMediaPath = (value: string) =>
+  matchesKnownMediaPrefix(value)
+  || value.startsWith('ia/')
+  || value.startsWith('download/')
+  || value.startsWith('media/')
+  || MEDIA_PATH_PATTERN.test(value);
 
 export const getMediaBaseUrl = () => {
   const configured = process.env.NEXT_PUBLIC_MEDIA_URL?.trim() || DEFAULT_MEDIA_URL;
@@ -59,6 +68,11 @@ export const extractHostedMediaPath = (value: string | null | undefined) => {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
+  const hostlessHostedMatch = trimmed.match(HOSTLESS_HOSTED_MEDIA_PATTERN);
+  if (hostlessHostedMatch?.[2]) {
+    return normalizeMediaPath(hostlessHostedMatch[2]);
+  }
+
   if (/^https?:\/\//i.test(trimmed)) {
     try {
       const url = new URL(trimmed);
@@ -89,7 +103,7 @@ export const extractHostedMediaPath = (value: string | null | undefined) => {
   }
 
   const mediaPath = normalizeMediaPath(trimmed);
-  return matchesKnownMediaPrefix(mediaPath) ? mediaPath : null;
+  return looksLikeMediaPath(mediaPath) ? mediaPath : null;
 };
 
 export const resolveMediaUrl = (value: string | null | undefined) => {

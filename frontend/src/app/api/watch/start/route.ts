@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
 import { getSessionUser } from '@/lib/auth-server';
 import { isReviewSafeVideo } from '@/lib/review-safety';
+import { getAssetReferenceCandidates, normalizeAssetReference } from '@/lib/watch-asset';
 
 interface WatchStartRequest {
   assetId?: string;
@@ -36,7 +37,7 @@ interface WatchStartResponse {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as WatchStartRequest;
-    const assetId = body?.assetId || null;
+    const assetId = body?.assetId ? normalizeAssetReference(body.assetId) : null;
     const reelId = body?.reelId || null;
     const sessionUser = await getSessionUser(request);
 
@@ -102,9 +103,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch video from database
-    const video = await prisma.video.findUnique({
+    let video = await prisma.video.findUnique({
       where: { id: assetId! },
     });
+
+    if (!video) {
+      const candidates = getAssetReferenceCandidates(assetId!);
+      video = await prisma.video.findFirst({
+        where: {
+          status: 'completed',
+          OR: [
+            { s3Url: { in: candidates } },
+            { cloudfrontPath: { in: candidates } },
+            { s3KeyPlayback: { in: candidates } },
+          ],
+        },
+      });
+    }
 
     if (!video) {
       return NextResponse.json(

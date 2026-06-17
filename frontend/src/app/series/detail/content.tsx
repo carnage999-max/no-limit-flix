@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { notFound, useSearchParams } from 'next/navigation';
 import { Skeleton, TrailerModal } from '@/components';
 import Link from 'next/link';
+import { buildWatchHref } from '@/lib/watch-asset';
 import { getTVSeriesDetails } from '@/lib/tmdb';
 import { Play, Star } from 'lucide-react';
 
@@ -342,7 +343,7 @@ export default function SeriesDetailContent() {
                             {filteredEpisodes.map((episode) => (
                                 <Link
                                     key={episode.id}
-                                    href={`/watch/${episode.id}`}
+                                    href={buildWatchHref(episode.id)}
                                     className="block"
                                     style={{ textDecoration: 'none' }}
                                 >

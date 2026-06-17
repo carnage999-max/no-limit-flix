@@ -3,6 +3,7 @@ import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
 import { getSessionUser } from '@/lib/auth-server';
 import { isReviewSafeVideo } from '@/lib/review-safety';
+import { getAssetReferenceCandidates, normalizeAssetReference } from '@/lib/watch-asset';
 
 export async function GET(
     request: NextRequest,
@@ -15,33 +16,51 @@ export async function GET(
         }
 
         const { assetId } = await params;
+        const normalizedAssetId = normalizeAssetReference(assetId);
 
-        if (!assetId) {
+        if (!normalizedAssetId) {
             return NextResponse.json(
                 { error: 'Asset ID is required' },
                 { status: 400 }
             );
         }
 
-        const video = await prisma.video.findUnique({
-            where: { id: assetId },
-            select: {
-                id: true,
-                title: true,
-                description: true,
-                thumbnailUrl: true,
-                s3Url: true,
-                resolution: true,
-                duration: true,
-                tmdbId: true,
-                status: true,
-                sourceType: true,
-                sourceProvider: true,
-                sourcePageUrl: true,
-                sourceRights: true,
-                sourceLicenseUrl: true,
-            },
+        const select = {
+            id: true,
+            title: true,
+            description: true,
+            thumbnailUrl: true,
+            s3Url: true,
+            resolution: true,
+            duration: true,
+            tmdbId: true,
+            status: true,
+            sourceType: true,
+            sourceProvider: true,
+            sourcePageUrl: true,
+            sourceRights: true,
+            sourceLicenseUrl: true,
+        } as const;
+
+        let video = await prisma.video.findUnique({
+            where: { id: normalizedAssetId },
+            select,
         });
+
+        if (!video) {
+            const candidates = getAssetReferenceCandidates(normalizedAssetId);
+            video = await prisma.video.findFirst({
+                where: {
+                    status: 'completed',
+                    OR: [
+                        { s3Url: { in: candidates } },
+                        { cloudfrontPath: { in: candidates } },
+                        { s3KeyPlayback: { in: candidates } },
+                    ],
+                },
+                select,
+            });
+        }
 
         if (!video || video.status !== 'completed') {
             return NextResponse.json(

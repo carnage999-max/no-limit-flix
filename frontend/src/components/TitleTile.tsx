@@ -8,6 +8,7 @@ import { useFavorites } from '@/context/FavoritesContext';
 import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from './Toast';
+import { buildWatchHref } from '@/lib/watch-asset';
 
 interface TitleTileProps {
     movie: MoviePick;
@@ -25,7 +26,7 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
 
     useEffect(() => {
         const movieId = movie.assetId || movie.id || movie.tmdb_id;
-        setIsFav(isFavorite(movieId));
+        setIsFav(movieId ? isFavorite(movieId) : false);
     }, [movie, isFavorite]);
 
     useEffect(() => {
@@ -48,7 +49,7 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
         
         if (movie.playable && movie.assetId) {
             // For movies, go directly to watch page
-            return `/watch/${movie.assetId}`;
+            return buildWatchHref(movie.assetId);
         }
         // For TMDB content, use the title detail page
         return `/title/${movie.tmdb_id || movie.id}`;

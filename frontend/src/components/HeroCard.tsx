@@ -7,6 +7,7 @@ import ButtonSecondary from './ButtonSecondary';
 import TrailerModal from './TrailerModal';
 import { useState, useEffect } from 'react';
 import type { MoviePick, CastMember } from '@/types';
+import { buildWatchHref } from '@/lib/watch-asset';
 
 interface HeroCardProps {
     movie: MoviePick;
@@ -257,7 +258,7 @@ export default function HeroCard({ movie }: HeroCardProps) {
                     >
                         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
                             {movie.playable ? (
-                                <Link href={isSeries ? `/series/detail?name=${encodeURIComponent(movie.title)}` : `/watch/${movie.assetId}`}>
+                                <Link href={isSeries ? `/series/detail?name=${encodeURIComponent(movie.title)}` : buildWatchHref(movie.assetId || movie.id)}>
                                     <ButtonPrimary>
                                         <div className="flex items-center gap-2">
                                             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">

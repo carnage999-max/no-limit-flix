@@ -7,6 +7,7 @@ import { VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import { ExternalLink, Loader2, ArrowLeft } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
+import { buildWatchHref, normalizeAssetReference } from '@/lib/watch-asset';
 
 interface Video {
     id: string;
@@ -32,7 +33,7 @@ interface MovieDetails {
 export default function WatchPage() {
     const params = useParams();
     const router = useRouter();
-    const assetId = params.assetId as string;
+    const assetId = normalizeAssetReference(params.assetId as string);
     const [video, setVideo] = useState<Video | null>(null);
     const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null);
     const [loading, setLoading] = useState(true);
@@ -43,7 +44,7 @@ export default function WatchPage() {
     useEffect(() => {
         if (sessionLoading) return;
         if (!user) {
-            router.push(`/auth?redirect=/watch/${assetId}`);
+            router.push(`/auth?redirect=${encodeURIComponent(buildWatchHref(assetId))}`);
         }
     }, [assetId, router, user, sessionLoading]);
 
@@ -56,7 +57,7 @@ export default function WatchPage() {
 
         const fetchVideoData = async () => {
             try {
-                const response = await fetch(`/api/watch/video/${assetId}`);
+                const response = await fetch(`/api/watch/video/${encodeURIComponent(assetId)}`);
                 if (!response.ok) throw new Error('Failed to fetch video');
                 const data = await response.json();
                 setVideo(data.video);

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { notFound } from 'next/navigation';
 import { Skeleton } from '@/components';
 import Link from 'next/link';
+import { buildWatchHref } from '@/lib/watch-asset';
 
 export default function SeriesDetailPage({ params }: { params: { id: string } }) {
     const [series, setSeries] = useState<any>(null);
@@ -260,7 +261,7 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                             {filteredEpisodes.map((episode) => (
                                 <Link
                                     key={episode.id}
-                                    href={`/watch/${episode.id}`}
+                                    href={buildWatchHref(episode.id)}
                                     className="block"
                                     style={{ textDecoration: 'none' }}
                                 >

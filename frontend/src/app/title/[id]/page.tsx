@@ -11,6 +11,7 @@ import type { MoviePick, CastMember } from '@/types';
 import { ExternalLink, Play, Smartphone } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { safeAtob } from '@/lib/base64';
+import { buildWatchHref } from '@/lib/watch-asset';
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
@@ -246,7 +247,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                             {movie.playable && movie.assetId && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '2rem' }}>
                                     <Link
-                                        href={`/watch/${movie.assetId}`}
+                                        href={buildWatchHref(movie.assetId)}
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
