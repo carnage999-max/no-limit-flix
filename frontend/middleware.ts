@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifySessionTokenEdge } from '@/lib/auth-edge';
 import {
     buildSessionVerificationHeaders,
     buildSessionVerificationUrl,
-    getRequestSessionToken,
 } from '@/lib/middleware-auth';
 
 const PUBLIC_PAGE_PREFIXES = [
@@ -104,15 +102,6 @@ export async function middleware(request: NextRequest) {
 
     if (!requiresAuthOnlyPage && !requiresSubscriptionPage && !requiresSubscriptionApi) {
         return NextResponse.next();
-    }
-
-    const token = getRequestSessionToken({
-        cookieToken: request.cookies.get('auth_token')?.value || null,
-        authorizationHeader: request.headers.get('authorization') || request.headers.get('Authorization'),
-    });
-    const session = await verifySessionTokenEdge(token);
-    if (!session) {
-        return unauthorizedResponse(request, isApi);
     }
 
     try {
