@@ -1,3 +1,7 @@
+/**
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
 export const getInternalAppOrigin = (env = process.env) => {
   const configuredOrigin = env.INTERNAL_APP_ORIGIN?.trim();
   if (configuredOrigin) {
@@ -8,10 +12,19 @@ export const getInternalAppOrigin = (env = process.env) => {
   return `http://127.0.0.1:${port}`;
 };
 
+/**
+ * @param {string} requestUrl
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
 export const buildSessionVerificationUrl = (requestUrl, env = process.env) => {
   return new URL('/api/auth/session', getInternalAppOrigin(env)).toString();
 };
 
+/**
+ * @param {{ cookieToken?: string | null, authorizationHeader?: string | null }} input
+ * @returns {string | null}
+ */
 export const getRequestSessionToken = ({ cookieToken, authorizationHeader }) => {
   if (cookieToken) return cookieToken;
   if (!authorizationHeader) return null;
@@ -21,7 +34,12 @@ export const getRequestSessionToken = ({ cookieToken, authorizationHeader }) => 
   return value || null;
 };
 
+/**
+ * @param {{ cookieHeader?: string, authorizationHeader?: string }} input
+ * @returns {Record<string, string>}
+ */
 export const buildSessionVerificationHeaders = ({ cookieHeader, authorizationHeader }) => {
+  /** @type {Record<string, string>} */
   const headers = {};
 
   if (cookieHeader) {

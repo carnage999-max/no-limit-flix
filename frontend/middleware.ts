@@ -14,10 +14,6 @@ const PUBLIC_PAGE_PREFIXES = [
     '/admin',
 ];
 
-const AUTH_ONLY_PAGE_PREFIXES = [
-    '/account/billing',
-];
-
 const SUBSCRIPTION_API_PREFIXES = [
     '/api/library',
     '/api/search',
@@ -96,11 +92,9 @@ export async function middleware(request: NextRequest) {
         return NextResponse.next();
     }
 
-    const requiresAuthOnlyPage = !isApi && isMatchingPrefix(pathname, AUTH_ONLY_PAGE_PREFIXES);
-    const requiresSubscriptionPage = !isApi && !requiresAuthOnlyPage;
     const requiresSubscriptionApi = isApi && isSubscriptionApi(pathname);
 
-    if (!requiresAuthOnlyPage && !requiresSubscriptionPage && !requiresSubscriptionApi) {
+    if (!requiresSubscriptionApi) {
         return NextResponse.next();
     }
 
@@ -110,7 +104,7 @@ export async function middleware(request: NextRequest) {
             return unauthorizedResponse(request, isApi);
         }
 
-        if ((requiresSubscriptionPage || requiresSubscriptionApi) && !sessionData?.billing?.access) {
+        if (!sessionData?.billing?.access) {
             return inactiveSubscriptionResponse(request, isApi);
         }
 
