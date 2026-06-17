@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
     buildSessionVerificationHeaders,
     buildSessionVerificationUrl,
+    getRequestSessionToken,
 } from '@/lib/middleware-auth';
 
 const PUBLIC_PAGE_PREFIXES = [
@@ -61,10 +62,16 @@ const inactiveSubscriptionResponse = (request: NextRequest, isApi: boolean) => {
 };
 
 const verifyRequestSession = async (request: NextRequest) => {
+    const sessionToken = getRequestSessionToken({
+        cookieToken: request.cookies.get('auth_token')?.value || null,
+        authorizationHeader: request.headers.get('authorization') || request.headers.get('Authorization'),
+    });
+
     const verifyRes = await fetch(buildSessionVerificationUrl(request.url), {
         headers: buildSessionVerificationHeaders({
             cookieHeader: request.headers.get('cookie') || '',
             authorizationHeader: request.headers.get('authorization') || request.headers.get('Authorization') || '',
+            sessionToken,
         }),
         cache: 'no-store',
     });

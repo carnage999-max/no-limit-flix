@@ -50,3 +50,15 @@ test('buildSessionVerificationHeaders forwards authorization when present', () =
     authorization: 'Bearer mobile-token',
   });
 });
+
+test('buildSessionVerificationHeaders falls back to bearer auth from the session token', () => {
+  const headers = buildSessionVerificationHeaders({
+    cookieHeader: '',
+    authorizationHeader: '',
+    sessionToken: 'cookie-token',
+  });
+
+  assert.deepEqual(headers, {
+    authorization: 'Bearer cookie-token',
+  });
+});

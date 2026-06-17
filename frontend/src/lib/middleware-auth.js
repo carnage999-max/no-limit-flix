@@ -35,10 +35,10 @@ export const getRequestSessionToken = ({ cookieToken, authorizationHeader }) => 
 };
 
 /**
- * @param {{ cookieHeader?: string, authorizationHeader?: string }} input
+ * @param {{ cookieHeader?: string, authorizationHeader?: string, sessionToken?: string | null }} input
  * @returns {Record<string, string>}
  */
-export const buildSessionVerificationHeaders = ({ cookieHeader, authorizationHeader }) => {
+export const buildSessionVerificationHeaders = ({ cookieHeader, authorizationHeader, sessionToken }) => {
   /** @type {Record<string, string>} */
   const headers = {};
 
@@ -48,6 +48,8 @@ export const buildSessionVerificationHeaders = ({ cookieHeader, authorizationHea
 
   if (authorizationHeader) {
     headers.authorization = authorizationHeader;
+  } else if (sessionToken) {
+    headers.authorization = `Bearer ${sessionToken}`;
   }
 
   return headers;
