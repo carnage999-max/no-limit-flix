@@ -77,15 +77,7 @@
           }
         }
       ],
-      "expo-font",
-      [
-        "@sentry/react-native/expo",
-        {
-          "url": "https://sentry.io/",
-          "project": "nolimitflix",
-          "organization": "nolimitflix"
-        }
-      ]
+      "expo-font"
     ],
     "extra": {
       "eas": {

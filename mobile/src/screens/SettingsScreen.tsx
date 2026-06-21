@@ -19,7 +19,6 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { getUserFacingError } from '../lib/errors';
 import * as DocumentPicker from 'expo-document-picker';
 import { apiClient } from '../lib/api';
-import { captureMonitoringMessage } from '../lib/monitoring';
 
 const FileSystem: any = require('expo-file-system/legacy');
 
@@ -46,23 +45,6 @@ export const SettingsScreen = () => {
         navigation.navigate('WebView', { url, title });
     };
 
-    const sendDiagnosticsEvent = () => {
-        captureMonitoringMessage(
-            'DIAGNOSTICS_EVENT',
-            'Manual diagnostics event from settings',
-            {
-                platform: 'mobile',
-                screen: 'settings',
-                auth: Boolean(user),
-                dev: __DEV__,
-            },
-            {
-                timestamp: new Date().toISOString(),
-            }
-        );
-        showToast({ message: 'Diagnostics event sent.', type: 'success' });
-    };
-
     const menuItems: Array<{ title: string; subtitle?: string; icon: string; onPress: () => void }> = [
         {
             title: 'Privacy Policy',
@@ -84,12 +66,6 @@ export const SettingsScreen = () => {
             icon: 'flag-outline',
             onPress: () => setReportOpen(true),
         },
-        ...(__DEV__ ? [{
-            title: 'Send Diagnostics Event',
-            subtitle: 'Send a test monitoring event',
-            icon: 'bug-outline',
-            onPress: sendDiagnosticsEvent,
-        }] : []),
     ];
 
     const normalizePickedAssets = async (result: DocumentPicker.DocumentPickerResult) => {
