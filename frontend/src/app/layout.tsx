@@ -19,6 +19,15 @@ export const metadata: Metadata = {
   applicationName: "No Limit Flix",
   keywords: ["movie streaming", "series streaming", "subscription streaming", "watch history", "favorites", "curated library"],
   authors: [{ name: "No Limit Flix" }],
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
+    shortcut: ["/favicon.ico"],
+  },
   other: {
     "google-adsense-account": "ca-pub-9175938417906735",
   },
