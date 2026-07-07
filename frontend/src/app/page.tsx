@@ -36,6 +36,7 @@ const MOOD_OPTIONS = [
     { label: 'Spooky' },
     { label: 'Mysterious' },
     { label: 'Action-packed' },
+    { label: 'Family' },
 ];
 
 const MOOD_TILE_ART: Record<string, string> = {
@@ -43,34 +44,22 @@ const MOOD_TILE_ART: Record<string, string> = {
     Heartwarming: '/new-icons/emotional.png',
     Funny: '/new-icons/funny.png',
     'Mind-bending': '/new-icons/thought-provoking.png',
-    Dark: '/new-icons/intense.png',
+    Dark: '/new-icons/dark.png',
     Uplifting: '/new-icons/uplifting.png',
     Intense: '/new-icons/intense.png',
     Relaxing: '/new-icons/relaxing.png',
     Romantic: '/new-icons/romantic.png',
-    Epic: '/new-icons/action.png',
+    Epic: '/new-icons/adventure.png',
     Magical: '/new-icons/fantasy.png',
-    Gritty: '/new-icons/thriller.png',
+    Gritty: '/new-icons/crime.png',
     Futuristic: '/new-icons/sci-fi.png',
     Nostalgic: '/new-icons/historical.png',
     Artistic: '/new-icons/documentary.png',
     Spooky: '/new-icons/thriller.png',
     Mysterious: '/new-icons/mystery.png',
     'Action-packed': '/new-icons/action.png',
+    Family: '/new-icons/family.png',
 };
-
-const EXPLORE_TILE_ART = [
-    { label: 'Action', imageSrc: '/new-icons/action.png' },
-    { label: 'Adventure', imageSrc: '/new-icons/adventure.png' },
-    { label: 'Sci-Fi', imageSrc: '/new-icons/sci-fi.png' },
-    { label: 'Fantasy', imageSrc: '/new-icons/fantasy.png' },
-    { label: 'Mystery', imageSrc: '/new-icons/mystery.png' },
-    { label: 'Thriller', imageSrc: '/new-icons/thriller.png' },
-    { label: 'Historical', imageSrc: '/new-icons/historical.png' },
-    { label: 'Documentary', imageSrc: '/new-icons/documentary.png' },
-    { label: 'Family', imageSrc: '/new-icons/family.png' },
-    { label: 'Emotional', imageSrc: '/new-icons/emotional.png' },
-];
 
 const FEEDBACK_OPTIONS = [
     'Too slow',
@@ -1520,23 +1509,6 @@ export default function HomePage() {
                                             imageSrc={MOOD_TILE_ART[mood.label] ?? '/new-icons/exciting.png'}
                                             selected={selectedMoods.includes(mood.label)}
                                             onClick={() => handleMoodToggle(mood.label, !selectedMoods.includes(mood.label))}
-                                        />
-                                    ))}
-                                </div>
-                            </section>
-
-                            <section className="glass-panel home-section-panel">
-                                <div className="home-section-heading">
-                                    <span className="section-label" style={{ marginBottom: 0 }}>Explore more</span>
-                                </div>
-                                <div className="home-genre-grid">
-                                    {EXPLORE_TILE_ART.map((tile) => (
-                                        <IconTile
-                                            key={tile.label}
-                                            label={tile.label}
-                                            imageSrc={tile.imageSrc}
-                                            compact
-                                            interactive={false}
                                         />
                                     ))}
                                 </div>
