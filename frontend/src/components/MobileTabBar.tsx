@@ -54,10 +54,10 @@ const getIsHiddenRoute = (pathname: string) => {
 
 export default function MobileTabBar() {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
     const { user, loading: isLoading } = useSession();
 
     const isHiddenRoute = getIsHiddenRoute(pathname || '');
-    const searchParams = useSearchParams();
     const isSearchTab = pathname === '/search' || (pathname === '/' && searchParams?.get('tab') === 'discovery');
     const shouldRender = !isLoading && Boolean(user) && !isHiddenRoute;
 
@@ -76,35 +76,9 @@ export default function MobileTabBar() {
     if (!shouldRender) return null;
 
     return (
-        <div
-            className="mobile-tabbar"
-            style={{
-                position: 'fixed',
-                left: 0,
-                right: 0,
-                zIndex: 5000,
-                display: 'flex',
-                justifyContent: 'center',
-                pointerEvents: 'auto',
-                bottom: 'max(16px, env(safe-area-inset-bottom))',
-            }}
-        >
-            <nav aria-label="Primary" style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                <div
-                    style={{
-                        width: 'min(560px, calc(100% - 20px))',
-                        height: '72px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '4px',
-                        borderRadius: '36px',
-                        background: 'rgba(11, 11, 13, 0.98)',
-                        border: '1px solid rgba(167, 171, 180, 0.15)',
-                        backdropFilter: 'blur(12px)',
-                        boxShadow: '0 14px 30px rgba(212, 175, 55, 0.18)',
-                    }}
-                >
+        <div className="mobile-tabbar">
+            <nav aria-label="Primary" className="app-bottom-dock">
+                <div className="app-bottom-dock__nav">
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = (() => {
@@ -124,69 +98,10 @@ export default function MobileTabBar() {
                                 href={tab.href}
                                 aria-current={isActive ? 'page' : undefined}
                                 aria-label={tab.label}
-                                style={{
-                                    flex: 1,
-                                    height: '100%',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    textDecoration: 'none',
-                                    position: 'relative',
-                                    color: isActive ? '#0B0B0D' : '#A7ABB4',
-                                }}
+                                className={isActive ? 'dock-item dock-item--active' : 'dock-item'}
                             >
-                                <span
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        position: 'relative',
-                                    }}
-                                >
-                                    <span
-                                        style={{
-                                            position: 'absolute',
-                                            width: '44px',
-                                            height: '44px',
-                                            borderRadius: '22px',
-                                            background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
-                                            opacity: isActive ? 1 : 0,
-                                            transform: `translateY(-12px) scale(${isActive ? 1 : 0.6})`,
-                                            transition: 'all 220ms cubic-bezier(0.4, 0, 0.2, 1)',
-                                            boxShadow: '0 10px 20px rgba(212, 175, 55, 0.35)',
-                                        }}
-                                    />
-                                    <span
-                                        style={{
-                                            position: 'relative',
-                                            transform: `translateY(${isActive ? '-8px' : '0px'}) scale(${isActive ? 1.08 : 1})`,
-                                            transition: 'transform 220ms cubic-bezier(0.4, 0, 0.2, 1)',
-                                            opacity: isActive ? 1 : 0.6,
-                                        }}
-                                    >
-                                        <Icon size={22} color={isActive ? '#0B0B0D' : '#A7ABB4'} aria-hidden="true" />
-                                    </span>
-                                    <span
-                                        style={{
-                                            position: 'absolute',
-                                            bottom: '6px',
-                                            fontSize: '8.5px',
-                                            fontWeight: 800,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.5px',
-                                            color: '#D4AF37',
-                                            opacity: isActive ? 1 : 0,
-                                            transform: `translateY(${isActive ? '-2px' : '4px'})`,
-                                            transition: 'all 220ms cubic-bezier(0.4, 0, 0.2, 1)',
-                                            textAlign: 'center',
-                                            width: '90%',
-                                        }}
-                                    >
-                                        {tab.label}
-                                    </span>
-                                </span>
+                                <Icon size={20} aria-hidden="true" />
+                                <span>{tab.label}</span>
                             </Link>
                         );
                     })}

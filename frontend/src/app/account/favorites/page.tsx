@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, Trash2, Heart } from 'lucide-react';
-import { CardViewToggle } from '@/components';
+import { ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
+import { CardViewToggle, ShellPage, ShellPageHeader } from '@/components';
 import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/components/Toast';
@@ -42,7 +42,6 @@ export default function FavoritesPage() {
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
-    const [searchQuery, setSearchQuery] = useState('');
     const { viewSize } = useCardView();
     const { user, loading: sessionLoading } = useSession();
     const { showToast } = useToast();
@@ -151,57 +150,15 @@ export default function FavoritesPage() {
     if (sessionLoading) return null;
 
     return (
-        <main style={{
-            minHeight: '100vh',
-            background: '#0B0B0D',
-            paddingTop: '80px',
-            paddingBottom: '4rem'
-        }}>
-            {/* Header */}
-            <div style={{
-                maxWidth: '1400px',
-                margin: '0 auto',
-                padding: '3rem 2rem',
-                borderBottom: '1px solid rgba(167, 171, 180, 0.1)'
-            }}>
-                <div style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: '2rem',
-                    flexWrap: 'wrap'
-                }}>
-                    <div>
-                        <h1 style={{
-                            fontSize: 'clamp(2rem, 6vw, 3.5rem)',
-                            fontWeight: '700',
-                            color: '#F3F4F6',
-                            marginBottom: '0.5rem',
-                            background: 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent'
-                        }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.6rem' }}>
-                                <Heart className="w-6 h-6" />
-                                Your Favorites
-                            </span>
-                        </h1>
-                        <p style={{
-                            color: '#A7ABB4',
-                            fontSize: '1rem'
-                        }}>
-                            {favorites.length} {favorites.length === 1 ? 'title' : 'titles'} saved
-                        </p>
-                    </div>
-                    <CardViewToggle />
-                </div>
-            </div>
+        <ShellPage width="wide">
+            <ShellPageHeader
+                eyebrow="Library"
+                title="Your Favorites"
+                subtitle={`${favorites.length} ${favorites.length === 1 ? 'title' : 'titles'} saved for quick access.`}
+                actions={<CardViewToggle />}
+            />
 
-            <div style={{
-                maxWidth: '1400px',
-                margin: '0 auto',
-                padding: '0 2rem'
-            }}>
+            <div className="glass-panel utility-panel">
                 {loading ? (
                     <div style={gridStyle} className={gridClassName}>
                         {[...Array(8)].map((_, i) => (
@@ -451,6 +408,6 @@ export default function FavoritesPage() {
                     </div>
                 )}
             </div>
-        </main>
+        </ShellPage>
     );
 }

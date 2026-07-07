@@ -2,6 +2,9 @@
 export { default as ButtonPrimary } from './ButtonPrimary';
 export { default as ButtonSecondary } from './ButtonSecondary';
 export { default as MoodChip } from './MoodChip';
+export { default as ShellPage } from './ShellPage';
+export { default as ShellPageHeader } from './ShellPageHeader';
+export { default as IconTile } from './IconTile';
 
 export { default as TitleTile } from './TitleTile';
 export { default as HeroCard } from './HeroCard';

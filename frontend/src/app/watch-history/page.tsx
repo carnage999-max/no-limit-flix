@@ -3,10 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { History, ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { safeBtoa } from '@/lib/base64';
-import { ConfirmModal } from '@/components';
+import { ConfirmModal, ShellPage, ShellPageHeader } from '@/components';
 import { useToast } from '@/components/Toast';
 
 interface WatchEntry {
@@ -33,6 +33,10 @@ interface WatchEntry {
         sourceLicenseUrl?: string | null;
     } | null;
 }
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    return error instanceof Error ? error.message : fallback;
+};
 
 export default function WatchHistoryPage() {
     const router = useRouter();
@@ -96,67 +100,41 @@ export default function WatchHistoryPage() {
     if (sessionLoading) return null;
 
     return (
-        <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '96px', paddingBottom: '140px' }}>
-            <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 2rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-                    <Link href="/" style={{ color: '#A7ABB4', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+        <ShellPage width="default">
+            <div className="utility-actions" style={{ marginBottom: '1.5rem' }}>
+                <Link href="/" style={{ color: '#A7ABB4', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
                         <ArrowLeft size={16} />
                         Back
-                    </Link>
-                </div>
+                </Link>
+            </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                    <History className="w-6 h-6 text-gold-mid" />
-                    <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3rem)', fontWeight: 700, color: '#F3F4F6' }}>
-                        Watch History
-                    </h1>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-                    <p style={{ color: '#A7ABB4', marginBottom: 0 }}>Your viewing history across devices.</p>
-                    {entries.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setShowClearConfirm(true)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                padding: '0.6rem 1rem',
-                                borderRadius: '999px',
-                                border: '1px solid rgba(248, 113, 113, 0.4)',
-                                background: 'rgba(248, 113, 113, 0.12)',
-                                color: '#FCA5A5',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                            }}
-                        >
+            <ShellPageHeader
+                eyebrow="Library"
+                title="Watch History"
+                subtitle="Your viewing history across devices."
+                actions={entries.length > 0 ? (
+                    <button type="button" onClick={() => setShowClearConfirm(true)} className="utility-danger-button">
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
                             <Trash2 size={16} />
                             Clear history
-                        </button>
-                    )}
-                </div>
+                        </span>
+                    </button>
+                ) : null}
+            />
 
+            <div className="glass-panel utility-panel">
                 {loading ? (
-                    <div style={{ color: '#A7ABB4', padding: '2rem', textAlign: 'center' }}>Loading history...</div>
+                    <div className="utility-empty">Loading history...</div>
                 ) : entries.length === 0 ? (
-                    <div style={{ color: '#A7ABB4', padding: '2rem', textAlign: 'center' }}>No watch history yet.</div>
+                    <div className="utility-empty">No watch history yet.</div>
                 ) : (
-                    <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div className="utility-list">
                         {entries.map((entry) => (
                             <Link
                                 key={entry.id}
                                 href={buildLink(entry)}
-                                style={{
-                                    textDecoration: 'none',
-                                    color: 'inherit',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '1rem',
-                                    padding: '1rem',
-                                    borderRadius: '16px',
-                                    border: '1px solid rgba(167, 171, 180, 0.12)',
-                                    background: 'rgba(11, 11, 13, 0.9)',
-                                }}
+                                className="utility-result-row"
+                                style={{ padding: '1rem' }}
                             >
                                 <img
                                     src={entry.video?.thumbnailUrl || entry.videoPoster || '/poster-placeholder.svg'}
@@ -197,19 +175,12 @@ export default function WatchHistoryPage() {
                 )}
 
                 {totalPages > 1 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '2rem' }}>
+                    <div className="utility-pagination" style={{ marginTop: '2rem' }}>
                         <button
                             onClick={() => setPage(Math.max(1, page - 1))}
                             disabled={page === 1}
-                            style={{
-                                padding: '0.6rem 1rem',
-                                borderRadius: '10px',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                background: 'rgba(167, 171, 180, 0.08)',
-                                color: '#F3F4F6',
-                                cursor: page === 1 ? 'not-allowed' : 'pointer',
-                                opacity: page === 1 ? 0.6 : 1,
-                            }}
+                            className="utility-secondary-button"
+                            style={{ opacity: page === 1 ? 0.6 : 1 }}
                         >
                             Prev
                         </button>
@@ -219,15 +190,8 @@ export default function WatchHistoryPage() {
                         <button
                             onClick={() => setPage(Math.min(totalPages, page + 1))}
                             disabled={page === totalPages}
-                            style={{
-                                padding: '0.6rem 1rem',
-                                borderRadius: '10px',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                background: 'rgba(167, 171, 180, 0.08)',
-                                color: '#F3F4F6',
-                                cursor: page === totalPages ? 'not-allowed' : 'pointer',
-                                opacity: page === totalPages ? 0.6 : 1,
-                            }}
+                            className="utility-secondary-button"
+                            style={{ opacity: page === totalPages ? 0.6 : 1 }}
                         >
                             Next
                         </button>
@@ -249,14 +213,14 @@ export default function WatchHistoryPage() {
                         setTotalPages(1);
                         setPage(1);
                         showToast('Watch history cleared', 'success');
-                    } catch (error: any) {
-                        showToast(error?.message || 'Failed to clear watch history', 'error');
+                    } catch (error: unknown) {
+                        showToast(getErrorMessage(error, 'Failed to clear watch history'), 'error');
                     } finally {
                         setShowClearConfirm(false);
                     }
                 }}
                 onCancel={() => setShowClearConfirm(false)}
             />
-        </main>
+        </ShellPage>
     );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Search, XCircle, ChevronRight, Film } from 'lucide-react';
+import { ShellPage, ShellPageHeader } from '@/components';
 import { safeBtoa } from '@/lib/base64';
 
 interface TmdbResult {
@@ -120,11 +121,11 @@ export default function SearchPage() {
 
         if (!query.length) {
             return (
-                <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-                    <Search size={56} color="#A7ABB4" style={{ opacity: 0.4 }} />
-                    <h3 style={{ marginTop: '1.5rem', fontSize: '1.25rem', color: '#F3F4F6' }}>Search for Movies</h3>
-                    <p style={{ color: '#A7ABB4', marginTop: '0.75rem' }}>
-                        Start typing to find films from our catalog and your internal library.
+                <div className="utility-card" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                    <Search size={56} color="#B5AFBD" style={{ opacity: 0.35, marginInline: 'auto' }} />
+                    <h3 style={{ marginTop: '1.25rem', fontSize: '1.25rem', color: '#F7F4EE' }}>Search for Movies</h3>
+                    <p style={{ color: '#B5AFBD', marginTop: '0.65rem' }}>
+                        Start typing to find films from the global catalog and your internal library.
                     </p>
                 </div>
             );
@@ -132,18 +133,18 @@ export default function SearchPage() {
 
         if (query.length < 2) {
             return (
-                <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-                    <p style={{ color: '#A7ABB4' }}>Type at least 2 characters to search.</p>
+                <div className="utility-card" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#B5AFBD' }}>
+                    Type at least 2 characters to search.
                 </div>
             );
         }
 
         if (tmdbResults.length === 0 && libraryResults.length === 0) {
             return (
-                <div style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-                    <Film size={56} color="#A7ABB4" style={{ opacity: 0.35 }} />
-                    <h3 style={{ marginTop: '1.5rem', fontSize: '1.25rem', color: '#F3F4F6' }}>No Results Found</h3>
-                    <p style={{ color: '#A7ABB4', marginTop: '0.75rem' }}>
+                <div className="utility-card" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
+                    <Film size={56} color="#B5AFBD" style={{ opacity: 0.35, marginInline: 'auto' }} />
+                    <h3 style={{ marginTop: '1.25rem', fontSize: '1.25rem', color: '#F7F4EE' }}>No Results Found</h3>
+                    <p style={{ color: '#B5AFBD', marginTop: '0.65rem' }}>
                         We couldn&apos;t find a match for that query. Try a different title.
                     </p>
                 </div>
@@ -154,176 +155,88 @@ export default function SearchPage() {
     };
 
     return (
-        <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '90px', paddingBottom: '140px' }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 2rem' }}>
-                <div style={{ marginBottom: '2rem' }}>
-                    <h1 style={{ fontSize: 'clamp(2rem, 6vw, 3rem)', fontWeight: 700, color: '#F3F4F6', marginBottom: '0.5rem' }}>
-                        Search
-                    </h1>
-                    <p style={{ color: '#A7ABB4' }}>
-                        Find films from the global catalog and your library.
-                    </p>
-                </div>
+        <ShellPage width="wide">
+            <ShellPageHeader
+                eyebrow="Library"
+                title="Search"
+                subtitle="Find films from the global catalog and your permanent library."
+            />
 
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    background: 'rgba(167, 171, 180, 0.05)',
-                    borderRadius: '14px',
-                    border: '1px solid rgba(167, 171, 180, 0.2)',
-                    padding: '0.75rem 1rem',
-                    marginBottom: '1.5rem',
-                }}>
-                    <Search size={18} color="#A7ABB4" />
+            <section className="glass-panel utility-panel utility-stack">
+                <div className="utility-search-input">
+                    <Search size={18} color="#B5AFBD" />
                     <input
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Search movies..."
-                        style={{
-                            flex: 1,
-                            background: 'transparent',
-                            border: 'none',
-                            outline: 'none',
-                            color: '#F3F4F6',
-                            fontSize: '1rem',
-                        }}
                     />
-                    {query.length > 0 && (
-                        <button
-                            onClick={() => setQuery('')}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                cursor: 'pointer',
-                                padding: 0,
-                            }}
-                            aria-label="Clear search"
-                        >
-                            <XCircle size={18} color="#A7ABB4" />
+                    {query.length > 0 ? (
+                        <button type="button" onClick={() => setQuery('')} aria-label="Clear search">
+                            <XCircle size={18} color="#B5AFBD" />
                         </button>
-                    )}
+                    ) : null}
                 </div>
 
-                {loading && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#A7ABB4', marginBottom: '1.5rem' }}>
-                        <div style={{ width: 18, height: 18, border: '2px solid rgba(212, 175, 55, 0.4)', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                {loading ? (
+                    <div className="utility-card" style={{ color: '#B5AFBD' }}>
                         Searching...
-                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                     </div>
-                )}
+                ) : null}
 
-                {libraryResults.length > 0 && (
-                    <section style={{ marginBottom: '2.5rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1rem' }}>
-                            <h2 style={{ fontSize: '0.85rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#D4AF37', margin: 0 }}>
-                                Ready to Watch Now
-                            </h2>
-                            {tmdbResults.length === 0 && query.length >= 2 && !loading && (
-                                <span style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>
-                                    We couldn&apos;t find a match. Showing results from your library instead.
-                                </span>
-                            )}
-                        </div>
-                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                {libraryResults.length > 0 ? (
+                    <section className="utility-results-section">
+                        <h2>Ready to Watch Now</h2>
+                        {tmdbResults.length === 0 && query.length >= 2 && !loading ? (
+                            <p style={{ color: '#B5AFBD', fontSize: '0.85rem', marginBottom: '0.8rem' }}>
+                                We couldn&apos;t find a match in the global catalog. Showing results from your library instead.
+                            </p>
+                        ) : null}
+                        <div className="utility-results-list">
                             {libraryResults.map((item) => (
-                                <Link
-                                    key={item.id}
-                                    href={buildLibraryLink(item)}
-                                    style={{
-                                        textDecoration: 'none',
-                                        color: 'inherit',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '1rem',
-                                        padding: '0.85rem 1rem',
-                                        borderRadius: '12px',
-                                        background: 'rgba(167, 171, 180, 0.04)',
-                                        border: '1px solid rgba(167, 171, 180, 0.1)',
-                                    }}
-                                >
+                                <Link key={item.id} href={buildLibraryLink(item)} className="utility-result-row">
                                     <img
                                         src={item.thumbnailUrl || DEFAULT_POSTER}
                                         alt={item.title}
-                                        style={{ width: 48, height: 64, borderRadius: 8, objectFit: 'cover' }}
                                         onError={(e) => {
                                             const target = e.currentTarget;
                                             target.onerror = null;
                                             target.src = DEFAULT_POSTER;
                                         }}
                                     />
-                                    <div style={{ flex: 1 }}>
-                                        <p style={{ fontSize: '1rem', fontWeight: 600, color: '#F3F4F6', margin: 0 }}>
-                                            {item.title || item.seriesTitle}
-                                        </p>
-                                        <p style={{ color: '#A7ABB4', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-                                            {item.releaseYear || ''} {item.genre ? `· ${item.genre}` : ''}
-                                        </p>
+                                    <div>
+                                        <p>{item.title || item.seriesTitle}</p>
+                                        <span>{item.releaseYear || ''} {item.genre ? `· ${item.genre}` : ''}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <span
-                                            style={{
-                                                padding: '0.3rem 0.6rem',
-                                                borderRadius: '999px',
-                                                background: 'rgba(212, 175, 55, 0.18)',
-                                                border: '1px solid rgba(212, 175, 55, 0.4)',
-                                                color: '#D4AF37',
-                                                fontSize: '0.7rem',
-                                                fontWeight: 700,
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.08em',
-                                            }}
-                                        >
-                                            Watch now
-                                        </span>
-                                        <ChevronRight size={18} color="#A7ABB4" />
+                                        <span className="detail-shell__tag">Watch now</span>
+                                        <ChevronRight size={18} color="#B5AFBD" />
                                     </div>
                                 </Link>
                             ))}
                         </div>
                     </section>
-                )}
+                ) : null}
 
-                {tmdbResults.length > 0 && (
-                    <section style={{ marginBottom: '2.5rem' }}>
-                        <h2 style={{ fontSize: '0.85rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#A7ABB4', marginBottom: '1rem' }}>
-                            Curated Picks
-                        </h2>
-                        <div style={{ display: 'grid', gap: '0.75rem' }}>
+                {tmdbResults.length > 0 ? (
+                    <section className="utility-results-section">
+                        <h2 style={{ color: '#B5AFBD' }}>Curated Picks</h2>
+                        <div className="utility-results-list">
                             {tmdbResults.map((item) => (
-                                <Link
-                                    key={item.id}
-                                    href={`/title/${item.id}`}
-                                    style={{
-                                        textDecoration: 'none',
-                                        color: 'inherit',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '1rem',
-                                        padding: '0.85rem 1rem',
-                                        borderRadius: '12px',
-                                        background: 'rgba(167, 171, 180, 0.03)',
-                                        border: '1px solid rgba(167, 171, 180, 0.08)',
-                                    }}
-                                >
-                                    <div style={{ flex: 1 }}>
-                                        <p style={{ fontSize: '1rem', fontWeight: 600, color: '#F3F4F6', margin: 0 }}>
-                                            {item.title}
-                                        </p>
-                                        <p style={{ color: '#A7ABB4', fontSize: '0.85rem', marginTop: '0.35rem' }}>
-                                            {item.year || '—'}
-                                        </p>
+                                <Link key={item.id} href={`/title/${item.id}`} className="utility-result-row">
+                                    <div>
+                                        <p>{item.title}</p>
+                                        <span>{item.year || '—'}</span>
                                     </div>
-                                    <ChevronRight size={18} color="#A7ABB4" />
+                                    <ChevronRight size={18} color="#B5AFBD" />
                                 </Link>
                             ))}
                         </div>
                     </section>
-                )}
+                ) : null}
 
                 {renderEmptyState()}
-            </div>
-        </main>
+            </section>
+        </ShellPage>
     );
 }

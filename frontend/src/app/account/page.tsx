@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ShellPage } from '@/components';
 import { useSession } from '@/context/SessionContext';
 
 export default function AccountPage() {
@@ -18,14 +19,11 @@ export default function AccountPage() {
     }, [router, user, loading]);
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            background: '#0B0B0D',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        }}>
-            <div style={{ color: '#A7ABB4' }}>Redirecting...</div>
-        </div>
+        <ShellPage width="narrow">
+            <div className="glass-panel status-panel">
+                <p className="section-label">Account</p>
+                <p className="status-panel__message">Redirecting...</p>
+            </div>
+        </ShellPage>
     );
 }
