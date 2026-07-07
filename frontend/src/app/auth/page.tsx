@@ -3,11 +3,35 @@
 import { useState, useEffect, Suspense, useRef, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, User, Eye, EyeOff, Loader2, CheckCircle2 } from 'lucide-react';
+import { ShellPage } from '@/components';
 import { useSession } from '@/context/SessionContext';
+
+interface GoogleCredentialResponse {
+    credential?: string;
+}
+
+interface GoogleIdentityApi {
+    initialize: (config: {
+        client_id: string;
+        callback: (response: GoogleCredentialResponse) => void;
+    }) => void;
+    renderButton: (element: HTMLElement, options: {
+        theme: string;
+        size: string;
+        text: string;
+        shape: string;
+        logo_alignment: string;
+        width: number;
+    }) => void;
+}
 
 declare global {
     interface Window {
-        google?: any;
+        google?: {
+            accounts?: {
+                id?: GoogleIdentityApi;
+            };
+        };
     }
 }
 
@@ -99,7 +123,7 @@ function AuthContent() {
             } else {
                 setError(data.error || 'An error occurred');
             }
-        } catch (err) {
+        } catch {
             setError('An error occurred. Please try again.');
         } finally {
             setLoading(false);
@@ -130,12 +154,12 @@ function AuthContent() {
             } else {
                 setError(data.error || 'Google sign-in failed');
             }
-        } catch (err) {
+        } catch {
             setError('An error occurred. Please try again.');
         } finally {
             setLoading(false);
         }
-    }, [getDeviceInfo, getPostAuthRedirect, refresh, router]);
+    }, [getDeviceInfo, refresh]);
 
     useEffect(() => {
         if (!googleClientId) return;
@@ -164,7 +188,7 @@ function AuthContent() {
         if (!window.google?.accounts?.id) return;
         window.google.accounts.id.initialize({
             client_id: googleClientId,
-            callback: (response: any) => handleGoogleCredential(response?.credential),
+            callback: (response: GoogleCredentialResponse) => handleGoogleCredential(response?.credential || ''),
         });
         googleButtonRef.current.innerHTML = '';
         window.google.accounts.id.renderButton(googleButtonRef.current, {
@@ -178,32 +202,14 @@ function AuthContent() {
     }, [googleReady, googleClientId, handleGoogleCredential]);
 
     return (
-        <main style={{
-            minHeight: '100vh',
-            background: '#0B0B0D',
-            paddingTop: '80px',
-            paddingBottom: '4rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-        }}>
-            <div style={{
+        <ShellPage width="narrow" className="auth-shell">
+            <div className="glass-panel auth-panel" style={{
                 width: '100%',
-                maxWidth: '450px',
-                padding: '2rem',
-                borderRadius: '1.5rem',
-                background: 'rgba(167, 171, 180, 0.03)',
-                border: '1px solid rgba(167, 171, 180, 0.1)',
-                backdropFilter: 'blur(10px)'
+                maxWidth: '520px',
+                margin: '0 auto',
             }}>
                 {/* Tabs */}
-                <div style={{
-                    display: 'flex',
-                    gap: '1rem',
-                    marginBottom: '2rem',
-                    borderBottom: '1px solid rgba(167, 171, 180, 0.1)',
-                    paddingBottom: '1rem'
-                }}>
+                <div className="auth-tabs" style={{ marginBottom: '1.5rem' }}>
                     <button
                         onClick={() => {
                             setIsLogin(true);
@@ -211,18 +217,7 @@ function AuthContent() {
                             setSuccessMessage('');
                             setPassword('');
                         }}
-                        style={{
-                            flex: 1,
-                            padding: '0.75rem 1rem',
-                            borderRadius: '0.5rem',
-                            background: isLogin ? 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)' : 'transparent',
-                            border: isLogin ? 'none' : '1px solid rgba(167, 171, 180, 0.2)',
-                            color: isLogin ? '#0B0B0D' : '#A7ABB4',
-                            fontWeight: isLogin ? '700' : '600',
-                            fontSize: '1rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
+                        className={isLogin ? 'auth-tabs__button auth-tabs__button--active' : 'auth-tabs__button'}
                     >
                         Sign In
                     </button>
@@ -233,18 +228,7 @@ function AuthContent() {
                             setSuccessMessage('');
                             setPassword('');
                         }}
-                        style={{
-                            flex: 1,
-                            padding: '0.75rem 1rem',
-                            borderRadius: '0.5rem',
-                            background: !isLogin ? 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)' : 'transparent',
-                            border: !isLogin ? 'none' : '1px solid rgba(167, 171, 180, 0.2)',
-                            color: !isLogin ? '#0B0B0D' : '#A7ABB4',
-                            fontWeight: !isLogin ? '700' : '600',
-                            fontSize: '1rem',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s'
-                        }}
+                        className={!isLogin ? 'auth-tabs__button auth-tabs__button--active' : 'auth-tabs__button'}
                     >
                         Create Account
                     </button>
@@ -526,7 +510,7 @@ function AuthContent() {
                     to { transform: rotate(360deg); }
                 }
             `}</style>
-        </main>
+        </ShellPage>
     );
 }
 
@@ -534,20 +518,12 @@ export default function AuthPage() {
     return (
         <Suspense
             fallback={(
-                <main style={{
-                    minHeight: '100vh',
-                    background: '#0B0B0D',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#A7ABB4',
-                    padding: '2rem',
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <ShellPage width="narrow">
+                    <div className="glass-panel status-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
                         <Loader2 className="w-5 h-5 animate-spin" />
                         Loading...
                     </div>
-                </main>
+                </ShellPage>
             )}
         >
             <AuthContent />

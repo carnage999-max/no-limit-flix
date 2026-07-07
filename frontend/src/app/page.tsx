@@ -3,30 +3,14 @@
 import { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ButtonPrimary, ButtonSecondary, MoodChip, HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch, CardViewToggle } from '@/components';
+import { HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch, CardViewToggle, IconTile } from '@/components';
 import type { MoviePick, AIPickRequest } from '@/types';
 import { useSearch } from '@/context/SearchContext';
 import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
 import {
-    Rocket,
-    Heart,
-    Brain,
-    Laugh,
-    Moon,
     Sparkles,
-    Flame,
-    Leaf,
-    HeartHandshake,
-    Swords,
-    Wand2,
-    ShieldAlert,
-    Bot,
     Film,
-    Palette,
-    Ghost,
-    Search,
-    Clapperboard,
     User,
     ArrowRight,
     SlidersHorizontal,
@@ -34,24 +18,58 @@ import {
 } from 'lucide-react';
 
 const MOOD_OPTIONS = [
-    { label: 'Thrilling', icon: <Rocket className="w-4 h-4" /> },
-    { label: 'Heartwarming', icon: <Heart className="w-4 h-4" /> },
-    { label: 'Mind-bending', icon: <Brain className="w-4 h-4" /> },
-    { label: 'Funny', icon: <Laugh className="w-4 h-4" /> },
-    { label: 'Dark', icon: <Moon className="w-4 h-4" /> },
-    { label: 'Uplifting', icon: <Sparkles className="w-4 h-4" /> },
-    { label: 'Intense', icon: <Flame className="w-4 h-4" /> },
-    { label: 'Relaxing', icon: <Leaf className="w-4 h-4" /> },
-    { label: 'Romantic', icon: <HeartHandshake className="w-4 h-4" /> },
-    { label: 'Epic', icon: <Swords className="w-4 h-4" /> },
-    { label: 'Magical', icon: <Wand2 className="w-4 h-4" /> },
-    { label: 'Gritty', icon: <ShieldAlert className="w-4 h-4" /> },
-    { label: 'Futuristic', icon: <Bot className="w-4 h-4" /> },
-    { label: 'Nostalgic', icon: <Film className="w-4 h-4" /> },
-    { label: 'Artistic', icon: <Palette className="w-4 h-4" /> },
-    { label: 'Spooky', icon: <Ghost className="w-4 h-4" /> },
-    { label: 'Mysterious', icon: <Search className="w-4 h-4" /> },
-    { label: 'Action-packed', icon: <Clapperboard className="w-4 h-4" /> },
+    { label: 'Thrilling' },
+    { label: 'Heartwarming' },
+    { label: 'Mind-bending' },
+    { label: 'Funny' },
+    { label: 'Dark' },
+    { label: 'Uplifting' },
+    { label: 'Intense' },
+    { label: 'Relaxing' },
+    { label: 'Romantic' },
+    { label: 'Epic' },
+    { label: 'Magical' },
+    { label: 'Gritty' },
+    { label: 'Futuristic' },
+    { label: 'Nostalgic' },
+    { label: 'Artistic' },
+    { label: 'Spooky' },
+    { label: 'Mysterious' },
+    { label: 'Action-packed' },
+];
+
+const MOOD_TILE_ART: Record<string, string> = {
+    Thrilling: '/new-icons/exciting.png',
+    Heartwarming: '/new-icons/emotional.png',
+    Funny: '/new-icons/funny.png',
+    'Mind-bending': '/new-icons/thought-provoking.png',
+    Dark: '/new-icons/intense.png',
+    Uplifting: '/new-icons/uplifting.png',
+    Intense: '/new-icons/intense.png',
+    Relaxing: '/new-icons/relaxing.png',
+    Romantic: '/new-icons/romantic.png',
+    Epic: '/new-icons/action.png',
+    Magical: '/new-icons/fantasy.png',
+    Gritty: '/new-icons/thriller.png',
+    Futuristic: '/new-icons/sci-fi.png',
+    Nostalgic: '/new-icons/historical.png',
+    Artistic: '/new-icons/documentary.png',
+    Spooky: '/new-icons/thriller.png',
+    Mysterious: '/new-icons/mystery.png',
+    'Action-packed': '/new-icons/action.png',
+};
+
+const EXPLORE_TILE_ART = [
+    { label: 'Action', imageSrc: '/new-icons/action.png' },
+    { label: 'Adventure', imageSrc: '/new-icons/adventure.png' },
+    { label: 'Sci-Fi', imageSrc: '/new-icons/sci-fi.png' },
+    { label: 'Fantasy', imageSrc: '/new-icons/fantasy.png' },
+    { label: 'Mystery', imageSrc: '/new-icons/mystery.png' },
+    { label: 'Thriller', imageSrc: '/new-icons/thriller.png' },
+    { label: 'Historical', imageSrc: '/new-icons/historical.png' },
+    { label: 'Documentary', imageSrc: '/new-icons/documentary.png' },
+    { label: 'Family', imageSrc: '/new-icons/family.png' },
+    { label: 'Emotional', imageSrc: '/new-icons/emotional.png' },
 ];
 
 const FEEDBACK_OPTIONS = [
@@ -61,6 +79,67 @@ const FEEDBACK_OPTIONS = [
     'Not intense enough',
     'Try something lighter',
 ];
+
+interface HostedLibraryItem {
+    id: string;
+    title?: string;
+    seriesTitle?: string;
+    releaseYear?: number;
+    duration?: number;
+    thumbnailUrl?: string;
+    genre?: string;
+    description?: string;
+    rating?: string | null;
+    averageRating?: number | null;
+    ratingCount?: number | null;
+    sourceProvider?: string;
+    sourcePageUrl?: string;
+    sourceRights?: string;
+    sourceLicenseUrl?: string;
+    s3Url?: string;
+    episodeCount?: number;
+    archiveIdentifier?: string;
+    format?: string;
+    fileSize?: string | number;
+}
+
+interface WatchHistoryLibraryEntry {
+    videoId: string;
+    videoTitle: string;
+    videoPoster?: string;
+    duration?: number;
+    totalDuration?: number;
+    completionPercent?: number;
+    video?: HostedLibraryItem;
+}
+
+type ContinueWatchingPick = MoviePick & { progressPercent: number };
+
+interface SearchResultsState {
+    hero: MoviePick;
+    alternates: MoviePick[];
+    explanationTokens: string[];
+}
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    return error instanceof Error ? error.message : fallback;
+};
+
+const filterPlayableResults = (results: SearchResultsState): SearchResultsState => {
+    const playable = [results.hero, ...results.alternates].filter(
+        (movie): movie is MoviePick => Boolean(movie?.playable)
+    );
+
+    if (playable.length === 0) {
+        return results;
+    }
+
+    return {
+        hero: playable[0],
+        alternates: playable.slice(1),
+        explanationTokens: results.explanationTokens,
+    };
+};
 
 export default function HomePage() {
     const {
@@ -88,7 +167,7 @@ export default function HomePage() {
     const lastTitleQuery = useRef<string>('');
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
-    const [continueWatching, setContinueWatching] = useState<MoviePick[]>([]);
+    const [continueWatching, setContinueWatching] = useState<ContinueWatchingPick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
     const [watchFilterOpen, setWatchFilterOpen] = useState(false);
     const [watchGenreFilter, setWatchGenreFilter] = useState('all');
@@ -297,7 +376,7 @@ export default function HomePage() {
             if (moviesRes.ok) {
                 const moviesData = await moviesRes.json();
                 console.log('Movies data:', moviesData);
-                    const movies = pickRandomItems(moviesData.movies || [], 10).map((video: any) => ({
+                    const movies = pickRandomItems(moviesData.movies || [], 10).map((video: HostedLibraryItem) => ({
                         id: video.id,
                         title: video.title,
                         year: video.releaseYear || new Date().getFullYear(),
@@ -324,7 +403,7 @@ export default function HomePage() {
             if (tvRes.ok) {
                 const tvData = await tvRes.json();
                 console.log('TV data:', tvData);
-                    const series = pickRandomItems(tvData.series || [], 10).map((tv: any) => ({
+                    const series = pickRandomItems(tvData.series || [], 10).map((tv: HostedLibraryItem) => ({
                         id: tv.seriesTitle || tv.id,
                         title: tv.seriesTitle,
                         year: tv.releaseYear || new Date().getFullYear(),
@@ -347,7 +426,7 @@ export default function HomePage() {
             if (historyRes.ok) {
                 const historyData = await historyRes.json();
                 const entries = historyData.watchHistory || [];
-                const historyItems = entries.map((entry: any) => {
+                const historyItems = entries.map((entry: WatchHistoryLibraryEntry) => {
                     const video = entry.video || {};
                     const progress = typeof entry.completionPercent === 'number'
                         ? entry.completionPercent
@@ -477,9 +556,9 @@ export default function HomePage() {
                 }
                 await handleActorSearch();
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Search Handler Error:", err);
-            setSearchError(err.message || "An unexpected error occurred. Please try again.");
+            setSearchError(getErrorMessage(err, "An unexpected error occurred. Please try again."));
         }
     };
 
@@ -490,7 +569,7 @@ export default function HomePage() {
             if (!response.ok) return [];
             const data = await response.json();
             const items = data.results || [];
-            return items.map((video: any) => ({
+            return items.map((video: HostedLibraryItem) => ({
                 id: video.id,
                 title: video.title || video.seriesTitle || 'Untitled',
                 year: video.releaseYear || new Date().getFullYear(),
@@ -539,22 +618,13 @@ export default function HomePage() {
 
             const data = await response.json();
 
-            let finalResults = {
+            const finalResults: SearchResultsState = {
                 hero: data.hero,
                 alternates: data.alternates,
                 explanationTokens: data.explanationTokens
             };
 
-            if (onlyPlayable) {
-                const all = [data.hero, ...data.alternates];
-                const playables = all.filter((m: any) => m.playable);
-                if (playables.length > 0) {
-                    finalResults.hero = playables[0];
-                    finalResults.alternates = playables.slice(1);
-                }
-            }
-
-            setResults(finalResults);
+            setResults(onlyPlayable ? filterPlayableResults(finalResults) : finalResults);
             setSessionId(null);
 
             setTimeout(() => {
@@ -590,7 +660,7 @@ export default function HomePage() {
 
             const data = await response.json();
 
-            let finalResults = {
+            const finalResults: SearchResultsState = {
                 hero: data.hero,
                 alternates: data.alternates,
                 explanationTokens: data.explanationTokens
@@ -598,8 +668,11 @@ export default function HomePage() {
 
             const internalMatches = await fetchInternalMatches(query);
             if (internalMatches.length > 0) {
-                const existingIds = new Set([data.hero?.id, ...data.alternates].map((m: any) => m?.id).filter(Boolean));
-                const existingTitles = new Set([data.hero?.title, ...data.alternates].map((m: any) => (m?.title || '').toLowerCase()));
+                const existingResults = [data.hero, ...data.alternates].filter(
+                    (movie: MoviePick | null | undefined): movie is MoviePick => Boolean(movie)
+                );
+                const existingIds = new Set(existingResults.map((movie) => movie.id));
+                const existingTitles = new Set(existingResults.map((movie) => movie.title.toLowerCase()));
                 const filteredInternal = internalMatches.filter((movie) => {
                     if (existingIds.has(movie.id)) return false;
                     if (existingTitles.has(movie.title.toLowerCase())) return false;
@@ -609,16 +682,7 @@ export default function HomePage() {
                 finalResults.alternates = [...filteredInternal, ...finalResults.alternates];
             }
 
-            if (onlyPlayable) {
-                const all = [finalResults.hero, ...finalResults.alternates].filter(Boolean);
-                const playables = all.filter((m: any) => m.playable);
-                if (playables.length > 0) {
-                    finalResults.hero = playables[0];
-                    finalResults.alternates = playables.slice(1);
-                }
-            }
-
-            setResults(finalResults);
+            setResults(onlyPlayable ? filterPlayableResults(finalResults) : finalResults);
             setSessionId(data.sessionId);
             if (data.inferredParams) setSearchParams(data.inferredParams);
 
@@ -714,31 +778,22 @@ export default function HomePage() {
 
             const data = await response.json();
 
-            let finalResults = {
+            const finalResults: SearchResultsState = {
                 hero: data.hero,
                 alternates: data.alternates,
                 explanationTokens: data.explanationTokens
             };
 
-            if (onlyPlayable) {
-                const all = [data.hero, ...data.alternates];
-                const playables = all.filter((m: any) => m.playable);
-                if (playables.length > 0) {
-                    finalResults.hero = playables[0];
-                    finalResults.alternates = playables.slice(1);
-                }
-            }
-
-            setResults(finalResults);
+            setResults(onlyPlayable ? filterPlayableResults(finalResults) : finalResults);
             setSessionId(data.sessionId);
 
             // Auto-scroll to results
             setTimeout(() => {
                 resultsRef.current?.scrollIntoView({ behavior: 'smooth' });
             }, 100);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error fetching picks:', error);
-            setSearchError(error.message || 'No movies found matching your criteria.');
+            setSearchError(getErrorMessage(error, 'No movies found matching your criteria.'));
         } finally {
             setIsLoading(false);
         }
@@ -769,38 +824,24 @@ export default function HomePage() {
 
             const data = await response.json();
             setResults({ hero: data.hero, alternates: data.alternates, explanationTokens: data.explanationTokens });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error re-picking:', error);
-            setSearchError(error.message);
+            setSearchError(getErrorMessage(error, 'Failed to adjust picks'));
         } finally {
             setIsLoading(false);
         }
     };
 
     return (
-        <div>
-            {/* Tab Switch */}
-            <div
-                style={{
-                    background: 'rgba(11, 11, 13, 0.8)',
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 40,
-                    borderBottom: '1px solid rgba(167, 171, 180, 0.1)',
-                    padding: '1rem 0',
-                }}
-            >
-                <TabSwitch activeTab={activeTab} onTabChange={handleTabChange} />
-            </div>
-
+        <div className="home-shell">
             {/* Watch Tab */}
             {activeTab === 'watch' && (
-                <section
-                    style={{
-                        minHeight: '100vh',
-                        padding: '2rem',
-                    }}
-                >
+                <section className="home-stage">
+                    <div className="home-hero-card" style={{ marginBottom: '1rem' }}>
+                        <div className="home-hero-nav">
+                            <TabSwitch activeTab={activeTab} onTabChange={handleTabChange} />
+                        </div>
+                    </div>
                     <div
                         style={{
                             maxWidth: '1400px',
@@ -931,7 +972,7 @@ export default function HomePage() {
                                                 scrollSnapType: 'x mandatory',
                                             }}
                                         >
-                                            {continueWatching.slice(0, 5).map((movie: any) => (
+                                            {continueWatching.slice(0, 5).map((movie) => (
                                                 <div
                                                     key={movie.id}
                                                     style={{
@@ -1067,7 +1108,7 @@ export default function HomePage() {
                                             >
                                                 SERIES & DOCUMENTARIES
                                             </h3>
-                                            <a
+                                            <Link
                                                 href="/series"
                                                 style={{
                                                     fontSize: '0.875rem',
@@ -1084,7 +1125,7 @@ export default function HomePage() {
                                                     See all tv
                                                     <ArrowRight className="w-4 h-4" />
                                                 </span>
-                                            </a>
+                                            </Link>
                                         </div>
                                         <div style={{ ...cardGridStyle, marginBottom: '3rem' }} className={gridClassName}>
                                             {filteredHostedSeries.map((series) => (
@@ -1148,7 +1189,7 @@ export default function HomePage() {
                                                 color: '#F3F4F6',
                                             }}
                                         >
-                                            Can't find what you need?
+                                            Can&apos;t find what you need?
                                         </p>
                                         <p
                                             style={{
@@ -1320,381 +1361,210 @@ export default function HomePage() {
             {/* Discovery Tab */}
             {activeTab === 'discovery' && (
                 <>
-            {/* Hero Section - Full Screen */}
-            <section
-                className="snap-section"
-                style={{
-                    minHeight: '100vh',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '2rem',
-                    position: 'relative',
-                    overflow: 'hidden',
-                }}
-            >
-                {/* Animated Background Elements */}
-                <div
-                    style={{
-                        position: 'absolute',
-                        inset: 0,
-                        opacity: 0.1,
-                        pointerEvents: 'none',
-                    }}
-                >
-                    <div
-                        className="animate-fade-in"
-                        style={{
-                            position: 'absolute',
-                            top: '10%',
-                            left: '10%',
-                            width: '300px',
-                            height: '300px',
-                            borderRadius: '50%',
-                            background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
-                            filter: 'blur(60px)',
-                        }}
-                    />
-                    <div
-                        className="animate-fade-in"
-                        style={{
-                            position: 'absolute',
-                            bottom: '10%',
-                            right: '10%',
-                            width: '400px',
-                            height: '400px',
-                            borderRadius: '50%',
-                            background: 'radial-gradient(circle, #D4AF37 0%, transparent 70%)',
-                            filter: 'blur(80px)',
-                            animationDelay: '0.3s',
-                        }}
-                    />
-                </div>
+                    <section className="home-stage">
+                        <div className="home-hero-card">
+                            <div className="home-hero-nav">
+                                <TabSwitch activeTab={activeTab} onTabChange={handleTabChange} />
+                            </div>
 
-                {/* Hero Content */}
-                <div
-                    className="animate-slide-up"
-                    style={{
-                        maxWidth: '900px',
-                        width: '100%',
-                        textAlign: 'center',
-                        position: 'relative',
-                        zIndex: 1,
-                    }}
-                >
-                    <h1
-                        style={{
-                            fontSize: 'clamp(2.5rem, 8vw, 5rem)',
-                            fontWeight: '700',
-                            lineHeight: '1.1',
-                            letterSpacing: '-0.02em',
-                            marginBottom: '1.5rem',
-                            background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
-                            WebkitBackgroundClip: 'text',
-                            backgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                        }}
-                    >
-                        What should you watch tonight?
-                    </h1>
+                            <div className="home-hero">
+                                <div className="home-hero__copy animate-slide-up">
+                                    <p className="section-label">Permanent entertainment</p>
+                                    <h1 className="home-hero__title">
+                                        What should you
+                                        <span> watch tonight?</span>
+                                    </h1>
+                                    <p className="home-hero__subtitle">
+                                        {searchMode === 'vibe'
+                                            ? "Tell us your vibe. We'll find the perfect match."
+                                            : searchMode === 'title'
+                                                ? "Tell us a title you love. We'll match its energy."
+                                                : "Tell us an actor you love. We'll build the short list."}
+                                    </p>
 
-                    <p
-                        style={{
-                            fontSize: 'clamp(1.125rem, 3vw, 1.5rem)',
-                            color: '#A7ABB4',
-                            marginBottom: '3rem',
-                            lineHeight: '1.6',
-                        }}
-                    >
-                        {searchMode === 'vibe' ? "Select your moods, we'll find the perfect match" :
-                            searchMode === 'title' ? "Enter a movie you love, we'll find its soulmates" :
-                                "Find movies starring your favorite actor"}
-                    </p>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', marginTop: '1rem' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSearchModeChange('vibe')}
+                                            style={{
+                                                padding: '0.55rem 1rem',
+                                                borderRadius: '999px',
+                                                border: searchMode === 'vibe' ? '1px solid rgba(255, 214, 122, 0.4)' : '1px solid rgba(255, 214, 122, 0.12)',
+                                                background: searchMode === 'vibe' ? 'rgba(255, 214, 122, 0.1)' : 'rgba(15, 16, 22, 0.65)',
+                                                color: searchMode === 'vibe' ? '#FFD26F' : '#B5AFBD',
+                                            }}
+                                        >
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Sparkles className="w-4 h-4" />
+                                                Match My Vibe
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSearchModeChange('title')}
+                                            style={{
+                                                padding: '0.55rem 1rem',
+                                                borderRadius: '999px',
+                                                border: searchMode === 'title' ? '1px solid rgba(255, 214, 122, 0.4)' : '1px solid rgba(255, 214, 122, 0.12)',
+                                                background: searchMode === 'title' ? 'rgba(255, 214, 122, 0.1)' : 'rgba(15, 16, 22, 0.65)',
+                                                color: searchMode === 'title' ? '#FFD26F' : '#B5AFBD',
+                                            }}
+                                        >
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <Film className="w-4 h-4" />
+                                                Similar Movies
+                                            </span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSearchModeChange('actor')}
+                                            style={{
+                                                padding: '0.55rem 1rem',
+                                                borderRadius: '999px',
+                                                border: searchMode === 'actor' ? '1px solid rgba(255, 214, 122, 0.4)' : '1px solid rgba(255, 214, 122, 0.12)',
+                                                background: searchMode === 'actor' ? 'rgba(255, 214, 122, 0.1)' : 'rgba(15, 16, 22, 0.65)',
+                                                color: searchMode === 'actor' ? '#FFD26F' : '#B5AFBD',
+                                            }}
+                                        >
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                                                <User className="w-4 h-4" />
+                                                Actor Search
+                                            </span>
+                                        </button>
+                                    </div>
 
-                    {/* Search Toggle */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        flexWrap: 'wrap',
-                        gap: '0.5rem',
-                        marginBottom: '1.5rem',
-                        width: '100%'
-                    }}>
-                        <button
-                            onClick={() => handleSearchModeChange('vibe')}
-                            style={{
-                                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
-                                borderRadius: '2rem',
-                                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
-                                border: searchMode === 'vibe' ? '1px solid #D4AF37' : '1px solid transparent',
-                                background: searchMode === 'vibe' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
-                                color: searchMode === 'vibe' ? '#D4AF37' : '#A7ABB4',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                whiteSpace: 'nowrap'
-                            }}
-                        >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <Sparkles className="w-4 h-4" />
-                                Match My Vibe
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => handleSearchModeChange('title')}
-                            style={{
-                                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
-                                borderRadius: '2rem',
-                                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
-                                border: searchMode === 'title' ? '1px solid #D4AF37' : '1px solid transparent',
-                                background: searchMode === 'title' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
-                                color: searchMode === 'title' ? '#D4AF37' : '#A7ABB4',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                whiteSpace: 'nowrap'
-                            }}
-                        >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <Film className="w-4 h-4" />
-                                Similar Movies
-                            </span>
-                        </button>
-                        <button
-                            onClick={() => handleSearchModeChange('actor')}
-                            style={{
-                                padding: 'clamp(0.4rem, 1.5vw, 0.5rem) clamp(0.8rem, 2vw, 1.5rem)',
-                                borderRadius: '2rem',
-                                fontSize: 'clamp(0.75rem, 2vw, 1rem)',
-                                border: searchMode === 'actor' ? '1px solid #D4AF37' : '1px solid transparent',
-                                background: searchMode === 'actor' ? 'rgba(212, 175, 55, 0.1)' : 'transparent',
-                                color: searchMode === 'actor' ? '#D4AF37' : '#A7ABB4',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                whiteSpace: 'nowrap'
-                            }}
-                        >
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                <User className="w-4 h-4" />
-                                Actor Search
-                            </span>
-                        </button>
-                    </div>
+                                    <form onSubmit={handleSearch} className="home-search-form">
+                                        <div className="home-search-form__input">
+                                            <span className="home-search-form__leading">
+                                                <Sparkles className="w-4 h-4" />
+                                            </span>
+                                            <input
+                                                ref={searchInputRef}
+                                                type="text"
+                                                value={vibeText}
+                                                onChange={(e) => {
+                                                    setVibeText(e.target.value);
+                                                    setSearchError(null);
+                                                }}
+                                                placeholder={
+                                                    searchMode === 'vibe'
+                                                        ? 'Describe your vibe...'
+                                                        : searchMode === 'title'
+                                                            ? 'Enter a movie title...'
+                                                            : "Enter an actor's name..."
+                                                }
+                                                disabled={isInterpreting || isLoading}
+                                            />
+                                            <button
+                                                type="submit"
+                                                disabled={
+                                                    isInterpreting ||
+                                                    isLoading ||
+                                                    (searchMode === 'vibe' ? (!vibeText.trim() && selectedMoods.length === 0) : !vibeText.trim())
+                                                }
+                                            >
+                                                {isInterpreting || isLoading ? (
+                                                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <ArrowRight className="w-5 h-5" />
+                                                )}
+                                            </button>
+                                        </div>
 
-                    {/* Vibe/Title/Actor Search Input */}
-                    <div className="animate-slide-up" style={{ maxWidth: '600px', margin: '0 auto 3rem', position: 'relative' }}>
-                        <form onSubmit={handleSearch} style={{ position: 'relative' }}>
-                            <input
-                                ref={searchInputRef}
-                                type="text"
-                                value={vibeText}
-                                onChange={(e) => { setVibeText(e.target.value); setSearchError(null); }}
-                                placeholder={
-                                    searchMode === 'vibe' ? "Describe your vibe... (e.g. 'Chill sci-fi with a twist')" :
-                                        searchMode === 'title' ? "Enter a movie title... (e.g. 'Inception')" :
-                                            "Enter an actor's name... (e.g. 'Ryan Gosling')"
-                                }
-                                disabled={isInterpreting || isLoading}
-                                style={{
-                                    width: '100%',
-                                    padding: '1.25rem 3.5rem 1.25rem 1.5rem',
-                                    background: 'rgba(167, 171, 180, 0.05)',
-                                    border: searchError ? '1px solid #F43F5E' : '1px solid rgba(167, 171, 180, 0.2)',
-                                    borderRadius: '9999px', // Pill shape
-                                    fontSize: '1.125rem',
-                                    color: '#F3F4F6',
-                                    outline: 'none',
-                                    transition: 'all 0.3s',
-                                    backdropFilter: 'blur(10px)'
-                                }}
-                                onFocus={(e) => {
-                                    if (!searchError) {
-                                        e.currentTarget.style.borderColor = '#D4AF37';
-                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.1)';
-                                        e.currentTarget.style.boxShadow = '0 0 20px rgba(212, 175, 55, 0.15)';
-                                    }
-                                }}
-                                onBlur={(e) => {
-                                    if (!searchError) {
-                                        e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
-                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                                        e.currentTarget.style.boxShadow = 'none';
-                                    }
-                                }}
-                            />
-                            <button
-                                type="submit"
-                                disabled={
-                                    isInterpreting ||
-                                    isLoading ||
-                                    (searchMode === 'vibe' ? (!vibeText.trim() && selectedMoods.length === 0) : !vibeText.trim())
-                                }
-                                style={{
-                                    position: 'absolute',
-                                    right: '0.75rem',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    background: 'none',
-                                    border: 'none',
-                                    color: vibeText.trim() || (searchMode === 'vibe' && selectedMoods.length > 0) ? '#D4AF37' : 'rgba(167, 171, 180, 0.3)',
-                                    cursor: vibeText.trim() || (searchMode === 'vibe' && selectedMoods.length > 0) ? 'pointer' : 'default',
-                                    padding: '0.5rem',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    transition: 'all 0.2s',
-                                }}
-                            >
-                                {isInterpreting || isLoading ? (
-                                    <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                ) : (
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M21 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" opacity="0.2" />
-                                        <path d="M21 12c0 4.97-4.03 9-9 9m9-9H3" />
-                                    </svg>
-                                )}
-                            </button>
-                        </form>
+                                        {searchError ? <p className="home-search-form__error">{searchError}</p> : null}
+                                    </form>
 
-                        {searchError && (
-                            <p className="animate-fade-in" style={{ textAlign: 'center', marginTop: '1rem', color: '#F43F5E', fontSize: '0.9375rem', fontWeight: '500' }}>
-                                ⚠️ {searchError}
-                            </p>
-                        )}
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', marginTop: '1rem', alignItems: 'center' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setOnlyPlayable(!onlyPlayable)}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.65rem',
+                                                padding: '0.75rem 1.15rem',
+                                                borderRadius: '999px',
+                                                background: onlyPlayable ? '#D4AF37' : 'rgba(212, 175, 55, 0.1)',
+                                                border: '1px solid rgba(212, 175, 55, 0.24)',
+                                                color: onlyPlayable ? '#0B0B0D' : '#FFD26F',
+                                                fontWeight: 800,
+                                                fontSize: '0.82rem',
+                                                letterSpacing: '0.1em',
+                                                textTransform: 'uppercase',
+                                            }}
+                                        >
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                                            </svg>
+                                            Playable Now
+                                        </button>
+                                        <span style={{ color: '#B5AFBD', fontSize: '0.9rem' }}>Permanent library feel. No rotation.</span>
+                                    </div>
+                                </div>
 
-                        <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.875rem', color: '#A7ABB4', opacity: 0.7 }}>
-                            Powered by DeepSeek R1 • No Limit Flix
-                        </p>
-                    </div>
+                                <div className="home-hero__art animate-scale-in" aria-hidden="true" />
+                            </div>
+                        </div>
 
-                    {/* Playable Filter Toggle */}
-                    <div className="flex justify-center mb-8">
-                        <button
-                            onClick={() => setOnlyPlayable(!onlyPlayable)}
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.75rem',
-                                padding: '0.75rem 1.5rem',
-                                borderRadius: '1.25rem',
-                                background: onlyPlayable ? '#D4AF37' : 'rgba(212, 175, 55, 0.1)',
-                                border: '1px solid rgba(212, 175, 55, 0.3)',
-                                color: onlyPlayable ? '#0B0B0D' : '#D4AF37',
-                                fontWeight: '800',
-                                fontSize: '0.875rem',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.1em',
-                                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                                boxShadow: onlyPlayable ? '0 0 20px rgba(212, 175, 55, 0.4)' : 'none',
-                            }}
-                        >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-                            </svg>
-                            <span>Playable Now</span>
-                        </button>
-                    </div>
+                        <div className="home-sections">
+                            <section className="glass-panel home-section-panel">
+                                <div className="home-section-heading">
+                                    <span className="section-label" style={{ marginBottom: 0 }}>How are you feeling?</span>
+                                    <span className="home-section-meta">Select multiple</span>
+                                </div>
+                                <div className="home-mood-grid">
+                                    {MOOD_OPTIONS.map((mood) => (
+                                        <IconTile
+                                            key={mood.label}
+                                            label={mood.label}
+                                            imageSrc={MOOD_TILE_ART[mood.label] ?? '/new-icons/exciting.png'}
+                                            selected={selectedMoods.includes(mood.label)}
+                                            onClick={() => handleMoodToggle(mood.label, !selectedMoods.includes(mood.label))}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
 
-                    {/* Mood Chips */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 'clamp(0.25rem, 1.5vw, 0.75rem)',
-                            justifyContent: 'center',
-                            marginBottom: '3rem',
-                            maxWidth: '800px',
-                            width: '100%',
-                            margin: '0 auto 3rem'
-                        }}
-                    >
-                        {MOOD_OPTIONS.map((mood) => (
-                            <MoodChip
-                                key={mood.label}
-                                label={mood.label}
-                                icon={mood.icon}
-                                selected={selectedMoods.includes(mood.label)}
-                                onToggle={(selected) => handleMoodToggle(mood.label, selected)}
-                            />
-                        ))}
-                    </div>
+                            <section className="glass-panel home-section-panel">
+                                <div className="home-section-heading">
+                                    <span className="section-label" style={{ marginBottom: 0 }}>Explore more</span>
+                                </div>
+                                <div className="home-genre-grid">
+                                    {EXPLORE_TILE_ART.map((tile) => (
+                                        <IconTile
+                                            key={tile.label}
+                                            label={tile.label}
+                                            imageSrc={tile.imageSrc}
+                                            compact
+                                            interactive={false}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
 
-                    {/* Primary CTA */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '1.5rem',
-                            marginTop: '1rem'
-                        }}
-                    >
-                        {selectedMoods.length > 0 ? (
-                            <ButtonPrimary
-                                onClick={() => handleSearch()}
-                                disabled={isLoading}
-                                className="animate-slide-up"
-                                style={{
-                                    padding: '1.25rem 4rem',
-                                    fontSize: '1.125rem',
-                                    transform: 'scale(1.1)',
-                                    boxShadow: '0 0 30px rgba(212, 175, 55, 0.3)'
-                                }}
-                            >
-                                {isLoading ? 'Finding magic...' : (
-                                    searchMode === 'title' ? `Find Movies like ${vibeText || 'this'}` : `Find ${selectedMoods.length > 0 ? selectedMoods[0] : ''} Films`
-                                )}
-                            </ButtonPrimary>
-                        ) : (
-                            <ButtonSecondary onClick={handleSurprise} disabled={isLoading}>
-                                Surprise me
-                            </ButtonSecondary>
-                        )}
-
-                        {selectedMoods.length > 0 && (
-                            <button
-                                onClick={handleSurprise}
-                                style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: '#A7ABB4',
-                                    fontSize: '0.875rem',
-                                    textDecoration: 'underline',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Actually, just surprise me
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Microcopy */}
-                    <p
-                        style={{
-                            marginTop: '4rem',
-                            fontSize: '0.875rem',
-                            color: '#A7ABB4',
-                            fontStyle: 'italic',
-                        }}
-                    >
-                        "Permanent library feel. No rotation."
-                    </p>
-                </div>
-            </section>
+                            <div className="home-cta-row">
+                                <button type="button" className="home-cta home-cta--gold" onClick={() => handleSearch()}>
+                                    <span>See My Picks</span>
+                                    <small>AI curated for you</small>
+                                </button>
+                                <button type="button" className="home-cta home-cta--violet" onClick={handleSurprise}>
+                                    <span>Surprise Me</span>
+                                    <small>I&apos;m feeling lucky</small>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
 
             {/* Results Section */}
             {(results || isLoading) && (
-                <section
-                    ref={resultsRef}
-                    style={{
-                        minHeight: '100vh',
-                        padding: '4rem 2rem',
-                    }}
-                >
+                <section ref={resultsRef} className="home-stage">
                     <div
                         style={{
                             maxWidth: '1400px',
                             margin: '0 auto',
                         }}
                     >
+                        <div className="glass-panel home-results">
                         {/* Header / Tags */}
                         <div style={{ marginBottom: '3rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
@@ -1844,6 +1714,7 @@ export default function HomePage() {
                                 </div>
                             </div>
                         )}
+                        </div>
                     </div>
                 </section>
             )}
@@ -1889,7 +1760,7 @@ export default function HomePage() {
                             maxWidth: '600px',
                         }}
                     >
-                        Powered by <span style={{ color: '#F3F4F6', fontWeight: '700' }}>Scene Aware</span> — The industry's only real-time content editor
+                        Powered by <span style={{ color: '#F3F4F6', fontWeight: '700' }}>Scene Aware</span> - The industry&apos;s only real-time content editor
                     </p>
                 </div>
             </section>

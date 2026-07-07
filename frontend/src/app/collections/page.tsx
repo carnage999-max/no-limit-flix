@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
+import { ShellPage, ShellPageHeader } from '@/components';
 
 interface Collection {
     slug: string;
@@ -100,143 +101,28 @@ const COLLECTIONS: Collection[] = [
 
 export default function CollectionsPage() {
     return (
-        <main style={{ minHeight: '100vh', padding: '4rem 2rem' }}>
-            <div
-                style={{
-                    maxWidth: '1400px',
-                    margin: '0 auto',
-                }}
-            >
-                {/* Header */}
-                <div
-                    className="animate-slide-up"
-                    style={{
-                        textAlign: 'center',
-                        marginBottom: '4rem',
-                    }}
-                >
-                    <h1
-                        style={{
-                            fontSize: 'clamp(2.5rem, 8vw, 4rem)',
-                            fontWeight: '700',
-                            lineHeight: '1.1',
-                            letterSpacing: '-0.02em',
-                            marginBottom: '1rem',
-                            background: 'linear-gradient(135deg, #F6D365 0%, #D4AF37 50%, #B8860B 100%)',
-                            WebkitBackgroundClip: 'text',
-                            backgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                        }}
-                    >
-                        Curated Collections
-                    </h1>
-                    <p
-                        style={{
-                            fontSize: 'clamp(1.125rem, 3vw, 1.5rem)',
-                            color: '#A7ABB4',
-                            maxWidth: '700px',
-                            margin: '0 auto',
-                        }}
-                    >
-                        Stable, thoughtfully curated collections that never rotate
-                    </p>
-                </div>
+        <ShellPage width="wide">
+            <ShellPageHeader
+                eyebrow="Collections"
+                title="Curated Collections"
+                subtitle="Stable, thoughtfully curated shelves that keep the permanent-library feel front and center."
+            />
 
-                {/* Collections Grid */}
-                <div
-                    className="animate-fade-in"
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                        gap: '2rem',
-                    }}
-                >
-                    {COLLECTIONS.map((collection, idx) => (
-                        <Link
-                            key={collection.slug}
-                            href={`/collection/${collection.slug}`}
-                            className="animate-slide-up"
-                            style={{
-                                textDecoration: 'none',
-                                display: 'block',
-                                padding: '2rem',
-                                borderRadius: '1rem',
-                                background: 'rgba(167, 171, 180, 0.03)',
-                                border: '1px solid rgba(167, 171, 180, 0.1)',
-                                transition: 'all 0.3s',
-                                animationDelay: `${idx * 0.05}s`,
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-8px)';
-                                e.currentTarget.style.borderColor = collection.accentColor;
-                                e.currentTarget.style.background = `${collection.accentColor}10`;
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.transform = 'translateY(0)';
-                                e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.1)';
-                                e.currentTarget.style.background = 'rgba(167, 171, 180, 0.03)';
-                            }}
-                        >
-                            <div
-                                style={{
-                                    width: '48px',
-                                    height: '4px',
-                                    borderRadius: '2px',
-                                    background: collection.accentColor,
-                                    marginBottom: '1.5rem',
-                                }}
-                            />
-
-                            <h2
-                                style={{
-                                    fontSize: '1.5rem',
-                                    fontWeight: '600',
-                                    color: '#F3F4F6',
-                                    marginBottom: '0.5rem',
-                                }}
-                            >
-                                {collection.title}
-                            </h2>
-
-                            <p
-                                style={{
-                                    fontSize: '1rem',
-                                    color: '#A7ABB4',
-                                    marginBottom: '1rem',
-                                    lineHeight: '1.6',
-                                }}
-                            >
-                                {collection.description}
-                            </p>
-
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                }}
-                            >
-                                <span
-                                    style={{
-                                        fontSize: '0.875rem',
-                                        color: '#A7ABB4',
-                                    }}
-                                >
-                                    {collection.count} films
-                                </span>
-                                <span
-                                    style={{
-                                        fontSize: '1.25rem',
-                                        color: collection.accentColor,
-                                    }}
-                                >
-                                    <ArrowRight className="w-5 h-5" />
-                                </span>
-                            </div>
+            <section className="glass-panel utility-panel">
+                <div className="catalog-grid">
+                    {COLLECTIONS.map((collection) => (
+                        <Link key={collection.slug} href={`/collection/${collection.slug}`} className="catalog-card">
+                            <div className="catalog-card__accent" style={{ background: collection.accentColor }} />
+                            <h2>{collection.title}</h2>
+                            <p>{collection.description}</p>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                {collection.count} films
+                                <ArrowRight className="w-4 h-4" />
+                            </span>
                         </Link>
                     ))}
                 </div>
-            </div>
-        </main>
+            </section>
+        </ShellPage>
     );
 }

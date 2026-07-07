@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react';
 import { usePathname } from 'next/navigation';
-import { Navbar, AppBanner, MobileTabBar } from '@/components';
+import { Navbar, MobileTabBar } from '@/components';
 import { useSession } from '@/context/SessionContext';
 import SubscriptionGate from '@/components/SubscriptionGate';
 
@@ -24,7 +24,6 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
     return (
         <SubscriptionGate>
             <Navbar />
-            <AppBanner />
             {children}
             <Suspense fallback={null}>
                 <MobileTabBar />
