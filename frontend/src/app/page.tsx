@@ -1045,7 +1045,7 @@ export default function HomePage() {
                                                 onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
                                             >
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    See all movies
+                                                    See all movies ({hostedMovies.length})
                                                     <ArrowRight className="w-4 h-4" />
                                                 </span>
                                             </a>
@@ -1111,7 +1111,7 @@ export default function HomePage() {
                                                 onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
                                             >
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    See all tv
+                                                    See all series ({hostedSeries.length})
                                                     <ArrowRight className="w-4 h-4" />
                                                 </span>
                                             </Link>

@@ -1,0 +1,72 @@
+.banner {
+  position: relative;
+  width: 100%;
+  height: clamp(92px, 9vw, 132px);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 20% 50%, rgba(241, 187, 79, 0.12), transparent 28%),
+    radial-gradient(circle at 82% 50%, rgba(241, 187, 79, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(11, 11, 13, 0.94), rgba(7, 7, 9, 0.98));
+}
+
+.reelImage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 170%;
+  width: auto;
+  max-width: none;
+  transform: translate(-50%, -50%);
+  display: block;
+  z-index: 1;
+}
+
+.glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 50%, rgba(255, 195, 86, 0.12), transparent 16%),
+    radial-gradient(circle at 80% 50%, rgba(255, 195, 86, 0.1), transparent 14%),
+    linear-gradient(110deg, transparent 0%, rgba(255, 214, 122, 0.06) 50%, transparent 100%);
+  transform: translateX(-120%);
+  animation: shimmer 11s linear infinite;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  z-index: 2;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(120%);
+  }
+}
+
+@media (max-width: 900px) {
+  .banner {
+    height: 106px;
+    border-radius: 16px;
+  }
+
+  .reelImage {
+    height: 158%;
+  }
+}
+
+@media (max-width: 640px) {
+  .banner {
+    height: 88px;
+    border-radius: 14px;
+  }
+
+  .reelImage {
+    height: 150%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow {
+    animation: none;
+  }
+}

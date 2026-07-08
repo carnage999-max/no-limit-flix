@@ -5,6 +5,7 @@ export { default as MoodChip } from './MoodChip';
 export { default as ShellPage } from './ShellPage';
 export { default as ShellPageHeader } from './ShellPageHeader';
 export { default as IconTile } from './IconTile';
+export { default as CinematicRibbonBanner } from './CinematicRibbonBanner';
 
 export { default as TitleTile } from './TitleTile';
 export { default as HeroCard } from './HeroCard';

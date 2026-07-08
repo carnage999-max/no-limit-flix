@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { ConfirmModal } from '@/components';
+import CinematicRibbonBanner from './CinematicRibbonBanner';
 import { BarChart3, LogIn, ArrowLeft, User, Settings, Bookmark, CreditCard, LogOut } from 'lucide-react';
 
 const menuLinkStyle: CSSProperties = {
@@ -61,26 +62,19 @@ export default function Navbar() {
                     </Link>
                 </div>
 
-                {isHome ? (
-                    <div className="app-topbar__center-spacer" />
-                ) : (
-                    <Link
-                        href="/"
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.5rem',
-                            textDecoration: 'none',
-                            color: '#B5AFBD',
-                            fontSize: '0.9rem',
-                            fontWeight: 600,
-                            letterSpacing: '0.04em',
-                        }}
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Back to Discovery
-                    </Link>
-                )}
+                <div className="app-topbar__center">
+                    {isHome ? (
+                        <CinematicRibbonBanner />
+                    ) : (
+                        <Link
+                            href="/"
+                            className="app-topbar__back-link"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Back to Discovery
+                        </Link>
+                    )}
+                </div>
 
                 <div className="app-topbar__actions">
                     {userRole === 'admin' ? (

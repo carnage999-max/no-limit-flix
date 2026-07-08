@@ -33,6 +33,7 @@ export default function IconTile({
     return (
         <button type="button" onClick={onClick} className={className} aria-label={label} title={label}>
             <img src={imageSrc} alt="" aria-hidden="true" className="icon-tile__art" />
+            {selected ? <span className="icon-tile__badge" aria-hidden="true">Selected</span> : null}
         </button>
     );
 }
