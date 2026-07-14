@@ -156,6 +156,8 @@ export default function HomePage() {
     const lastTitleQuery = useRef<string>('');
     const [hostedMovies, setHostedMovies] = useState<MoviePick[]>([]);
     const [hostedSeries, setHostedSeries] = useState<MoviePick[]>([]);
+    const [hostedMovieCount, setHostedMovieCount] = useState(0);
+    const [hostedSeriesCount, setHostedSeriesCount] = useState(0);
     const [continueWatching, setContinueWatching] = useState<ContinueWatchingPick[]>([]);
     const [isWatchLoading, setIsWatchLoading] = useState(true);
     const [watchFilterOpen, setWatchFilterOpen] = useState(false);
@@ -341,6 +343,8 @@ export default function HomePage() {
         if (!user) {
             setHostedMovies([]);
             setHostedSeries([]);
+            setHostedMovieCount(0);
+            setHostedSeriesCount(0);
             setContinueWatching([]);
             setIsWatchLoading(false);
             return;
@@ -365,6 +369,7 @@ export default function HomePage() {
             if (moviesRes.ok) {
                 const moviesData = await moviesRes.json();
                 console.log('Movies data:', moviesData);
+                setHostedMovieCount((moviesData.movies || []).length);
                     const movies = pickRandomItems(moviesData.movies || [], 10).map((video: HostedLibraryItem) => ({
                         id: video.id,
                         title: video.title,
@@ -387,11 +392,14 @@ export default function HomePage() {
                         sourceLicenseUrl: video.sourceLicenseUrl,
                     }));
                 setHostedMovies(movies);
+            } else {
+                setHostedMovieCount(0);
             }
 
             if (tvRes.ok) {
                 const tvData = await tvRes.json();
                 console.log('TV data:', tvData);
+                setHostedSeriesCount((tvData.series || []).length);
                     const series = pickRandomItems(tvData.series || [], 10).map((tv: HostedLibraryItem) => ({
                         id: tv.seriesTitle || tv.id,
                         title: tv.seriesTitle,
@@ -410,6 +418,8 @@ export default function HomePage() {
                         cloudfrontUrl: tv.thumbnailUrl,
                 }));
                 setHostedSeries(series);
+            } else {
+                setHostedSeriesCount(0);
             }
 
             if (historyRes.ok) {
@@ -449,6 +459,8 @@ export default function HomePage() {
             }
         } catch (error) {
             console.error('Failed to fetch hosted content:', error);
+            setHostedMovieCount(0);
+            setHostedSeriesCount(0);
         } finally {
             setIsWatchLoading(false);
         }
@@ -1045,7 +1057,7 @@ export default function HomePage() {
                                                 onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
                                             >
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    See all movies ({hostedMovies.length})
+                                                    See all movies ({hostedMovieCount})
                                                     <ArrowRight className="w-4 h-4" />
                                                 </span>
                                             </a>
@@ -1111,7 +1123,7 @@ export default function HomePage() {
                                                 onMouseLeave={(e) => (e.currentTarget.style.color = '#D4AF37')}
                                             >
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                                    See all series ({hostedSeries.length})
+                                                    See all series ({hostedSeriesCount})
                                                     <ArrowRight className="w-4 h-4" />
                                                 </span>
                                             </Link>
