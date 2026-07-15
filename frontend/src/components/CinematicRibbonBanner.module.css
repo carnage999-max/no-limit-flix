@@ -15,8 +15,8 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  height: 170%;
-  width: auto;
+  width: 128%;
+  height: auto;
   max-width: none;
   transform: translate(-50%, -50%);
   display: block;
@@ -43,6 +43,12 @@
   }
 }
 
+@media (min-width: 1280px) {
+  .reelImage {
+    width: 146%;
+  }
+}
+
 @media (max-width: 900px) {
   .banner {
     height: 106px;
@@ -50,7 +56,7 @@
   }
 
   .reelImage {
-    height: 158%;
+    width: 190%;
   }
 }
 
@@ -61,7 +67,7 @@
   }
 
   .reelImage {
-    height: 150%;
+    width: 220%;
   }
 }
 
