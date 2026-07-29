@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
+import { attachRatingSummaries } from '@/lib/ratings';
 
 const MOVIE_SELECT = {
     id: true,
@@ -113,7 +114,8 @@ export async function GET(request: Request) {
                 select: MOVIE_SELECT,
             });
 
-            return NextResponse.json({ movies: videos.map(transformMovie) });
+            const movies = await attachRatingSummaries(videos.map(transformMovie));
+            return NextResponse.json({ movies });
         }
 
         const page = parsePositiveInt(searchParams.get('page'), 1);
@@ -152,8 +154,10 @@ export async function GET(request: Request) {
 
         const totalPages = Math.max(1, Math.ceil(total / limit));
 
+        const movies = await attachRatingSummaries(videos.map(transformMovie));
+
         return NextResponse.json({
-            movies: videos.map(transformMovie),
+            movies,
             categories,
             pagination: {
                 page,

@@ -14,9 +14,11 @@ export interface Movie {
 export interface MoviePick extends Movie {
     explanation: string;
     description?: string;
-    rating?: string | number; // maturity rating (e.g., PG)
+    rating?: string | number | null; // maturity rating (e.g., PG)
     averageRating?: number | null; // average rating (e.g., 7.6)
     ratingCount?: number | null;
+    hybridRating?: number | null;
+    ratingSummary?: RatingSummary | null;
     trailerUrl?: string;
     watchProviders: WatchProvider[];
     // Phase 2 — playback enrichment
@@ -31,6 +33,26 @@ export interface MoviePick extends Movie {
     archiveIdentifier?: string;
     format?: string;
     fileSize?: string | number;
+}
+
+export interface RatingBreakdown {
+    score: number | null;
+    count: number;
+    weight: number;
+}
+
+export interface RatingSummary {
+    finalScore: number | null;
+    external: RatingBreakdown;
+    internal: RatingBreakdown;
+    engagement: RatingBreakdown;
+    userRating?: {
+        score: number;
+        feedback: string | null;
+        verifiedCompletion: boolean;
+        weight: number;
+        updatedAt: string;
+    } | null;
 }
 
 export interface WatchProvider {

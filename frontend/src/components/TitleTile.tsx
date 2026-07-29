@@ -9,6 +9,7 @@ import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from './Toast';
 import { buildWatchHref } from '@/lib/watch-asset';
+import RatingBadge from './RatingBadge';
 
 interface TitleTileProps {
     movie: MoviePick;
@@ -35,15 +36,16 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
 
     // Determine if this is a series based on the explanation field (contains "episodes")
     const isSeries = movie.explanation?.toLowerCase().includes('episodes');
-    
-    console.log('TitleTile - Title:', movie.title, 'isSeries:', isSeries, 'explanation:', movie.explanation, 'playable:', movie.playable, 'assetId:', movie.assetId);
+    const displayRating = movie.hybridRating
+        ?? movie.ratingSummary?.finalScore
+        ?? movie.averageRating
+        ?? (typeof movie.rating === 'number' ? movie.rating : null);
 
     // For playable content, navigate directly to watch page for immediate player
     const getHref = () => {
         // For series, use the series detail page with query params (regardless of assetId)
         if (isSeries) {
             const href = `/series/detail?name=${encodeURIComponent(movie.title)}`;
-            console.log('Series href:', href);
             return href;
         }
         
@@ -141,6 +143,18 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
                         }}
                     />
 
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: '0.5rem',
+                            left: '0.5rem',
+                            zIndex: 2,
+                            maxWidth: 'calc(100% - 3.75rem)',
+                        }}
+                    >
+                        <RatingBadge score={displayRating} summary={movie.ratingSummary} />
+                    </div>
+
                     {typeof progressPercent === 'number' && progressPercent > 0 && (
                         <div
                             style={{
@@ -225,19 +239,31 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
                             {movie.genres.slice(0, 3).join(', ')}
                         </p>
                     )}
-                    <h3
+                    <div
                         style={{
-                            fontSize: 'clamp(0.875rem, 2vw, 1.125rem)',
-                            fontWeight: '600',
-                            color: '#F3F4F6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
                             marginBottom: '0.25rem',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
                         }}
                     >
-                        {movie.title}
-                    </h3>
+                        <h3
+                            style={{
+                                flex: '1 1 auto',
+                                minWidth: 0,
+                                fontSize: 'clamp(0.875rem, 2vw, 1.125rem)',
+                                fontWeight: '600',
+                                color: '#F3F4F6',
+                                margin: 0,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                            }}
+                        >
+                            {movie.title}
+                        </h3>
+                        <RatingBadge score={displayRating} summary={movie.ratingSummary} compact />
+                    </div>
                     <p
                         style={{
                             fontSize: 'clamp(0.75rem, 1.5vw, 0.875rem)',

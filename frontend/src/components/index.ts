@@ -8,6 +8,8 @@ export { default as IconTile } from './IconTile';
 export { default as CinematicRibbonBanner } from './CinematicRibbonBanner';
 
 export { default as TitleTile } from './TitleTile';
+export { default as RatingBadge } from './RatingBadge';
+export { default as UserRatingPanel } from './UserRatingPanel';
 export { default as HeroCard } from './HeroCard';
 export { default as Skeleton, HeroSkeleton, TileSkeleton } from './Skeleton';
 export { default as Navbar } from './Navbar';

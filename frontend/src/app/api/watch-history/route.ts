@@ -2,6 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { getSessionUser } from '@/lib/auth-server';
 import { resolveMediaUrl } from '@/lib/media';
+import { attachRatingSummaries } from '@/lib/ratings';
+
+type WatchHistoryVideo = {
+    id: string;
+    thumbnailUrl?: string | null;
+    s3Url?: string | null;
+    fileSize?: bigint | number | string | null;
+    averageRating?: number | null;
+    ratingCount?: number | null;
+    [key: string]: unknown;
+};
+
+type WatchHistoryEntry = {
+    video?: WatchHistoryVideo | null;
+    [key: string]: unknown;
+};
 
 // Track watch history
 export async function POST(request: NextRequest) {
@@ -129,7 +145,8 @@ export async function GET(request: NextRequest) {
             })
         ]);
 
-        const sanitizedHistory = watchHistory.map((entry: any) => {
+        const typedHistory = watchHistory as WatchHistoryEntry[];
+        const sanitizedHistory = typedHistory.map((entry) => {
             if (!entry.video) return entry;
             return {
                 ...entry,
@@ -141,9 +158,19 @@ export async function GET(request: NextRequest) {
                 }
             };
         });
+        const videosWithRatings = await attachRatingSummaries(
+            sanitizedHistory
+                .map((entry) => entry.video)
+                .filter((video): video is WatchHistoryVideo => Boolean(video?.id))
+        );
+        const ratingsByVideoId = new Map(videosWithRatings.map((video) => [video.id, video]));
+        const historyWithRatings = sanitizedHistory.map((entry) => ({
+            ...entry,
+            video: entry.video?.id ? ratingsByVideoId.get(entry.video.id) || entry.video : entry.video,
+        }));
 
         return NextResponse.json({
-            watchHistory: sanitizedHistory,
+            watchHistory: historyWithRatings,
             pagination: {
                 page,
                 limit,
