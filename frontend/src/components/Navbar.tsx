@@ -232,12 +232,12 @@ export default function Navbar() {
             </header>
 
             <ConfirmModal
-                isOpen={showLogoutConfirm}
+                open={showLogoutConfirm}
                 title="Log out?"
-                message="You’ll need to sign back in to access your account."
-                confirmText="Log out"
-                cancelText="Cancel"
-                confirmVariant="danger"
+                description="You’ll need to sign back in to access your account."
+                confirmLabel="Log out"
+                cancelLabel="Cancel"
+                tone="danger"
                 onConfirm={handleLogout}
                 onCancel={() => setShowLogoutConfirm(false)}
             />
