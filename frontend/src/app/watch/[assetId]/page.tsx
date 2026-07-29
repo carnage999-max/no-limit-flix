@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { VideoPlayer } from '@/components';
+import { UserRatingPanel, VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import { ExternalLink, Loader2, ArrowLeft } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
@@ -69,7 +69,7 @@ export default function WatchPage() {
                             const tmdbData = await tmdbResponse.json();
                             setMovieDetails(tmdbData);
                         }
-                    } catch (e) {
+                    } catch {
                         console.warn('Failed to fetch TMDb details');
                     }
                 }
@@ -244,12 +244,14 @@ export default function WatchPage() {
                                     fontSize: '1.125rem',
                                     color: '#F3F4F6',
                                     lineHeight: '1.7',
-                                    marginBottom: '2.5rem',
+                                    marginBottom: '1.5rem',
                                     fontStyle: 'italic'
                                 }}
                             >
                                 {video.description || movieDetails?.explanation}
                             </p>
+
+                            <UserRatingPanel videoId={video.id} />
 
                             {video.sourceProvider === 'internet_archive' && (
                                 <div style={{

@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
         cloudfrontPath: manifestKey,
         s3Url: uploadResult.playbackUrl,
         s3KeySource: null,
+        sourceType: 'internal',
         status: 'completed',
         duration: conversionResult.totalSegments * 10, // Approximate: 10 seconds per segment
         resolution: '720p', // Default

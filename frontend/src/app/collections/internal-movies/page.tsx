@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ArrowUp, Clapperboard, Filter, Star, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, Clapperboard, Filter, LayoutGrid, List, Star, X } from 'lucide-react';
 import { buildWatchHref } from '@/lib/watch-asset';
 import type { RatingSummary } from '@/types';
 
@@ -41,6 +41,7 @@ interface LibraryMoviesResponse {
 
 const PAGE_SIZE = 60;
 type SortMode = 'title' | 'title-desc';
+type ViewMode = 'list' | 'grid';
 
 const getGenresForMovie = (movie: MovieItem) => {
     if (!movie.genre) return [];
@@ -86,6 +87,7 @@ export default function InternalMoviesPage() {
     const [error, setError] = useState<string | null>(null);
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('list');
 
     useEffect(() => {
         try {
@@ -190,6 +192,7 @@ export default function InternalMoviesPage() {
 
     const activeCategoryLabel = categoryFilter === 'all' ? 'All Categories' : categoryFilter;
     const sortLabel = sortMode === 'title' ? 'A-Z' : 'Z-A';
+    const nextViewLabel = viewMode === 'list' ? 'Grid view' : 'List view';
 
     return (
         <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
@@ -245,7 +248,7 @@ export default function InternalMoviesPage() {
                                     marginBottom: '0.5rem',
                                 }}
                             >
-                                Alphabetical Movie List
+                                Movie Library
                             </h1>
                             <p style={{ color: '#A7ABB4', fontSize: '1rem', margin: 0 }}>
                                 {loading ? 'Loading movies...' : `${movies.length} of ${totalMovies} movies loaded`}
@@ -308,7 +311,30 @@ export default function InternalMoviesPage() {
                         ) : null}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode((currentView) => (currentView === 'list' ? 'grid' : 'list'))}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '0.45rem',
+                                minHeight: '2.4rem',
+                                border: '1px solid rgba(167, 171, 180, 0.16)',
+                                borderRadius: '0.55rem',
+                                background: 'rgba(18, 18, 24, 0.72)',
+                                color: '#F3F4F6',
+                                padding: '0.58rem 0.78rem',
+                                fontWeight: 800,
+                                cursor: 'pointer',
+                            }}
+                            aria-label={`Switch to ${nextViewLabel}`}
+                            title={`Switch to ${nextViewLabel}`}
+                        >
+                            {viewMode === 'list' ? <LayoutGrid className="w-4 h-4" /> : <List className="w-4 h-4" />}
+                            {nextViewLabel}
+                        </button>
                         <span style={{ color: '#A7ABB4', fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase' }}>
                             Sort
                         </span>
@@ -462,7 +488,8 @@ export default function InternalMoviesPage() {
                         </div>
                     ) : movies.length > 0 ? (
                         <>
-                            <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                            {viewMode === 'list' ? (
+                                <ol style={{ listStyle: 'none', margin: 0, padding: 0 }}>
                                 {movies.map((movie, index) => {
                                     const genres = getGenresForMovie(movie);
                                     const runtime = formatRuntime(movie.duration);
@@ -572,7 +599,135 @@ export default function InternalMoviesPage() {
                                         </li>
                                     );
                                 })}
-                            </ol>
+                                </ol>
+                            ) : (
+                                <ol
+                                    style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                                        gap: '1rem',
+                                        listStyle: 'none',
+                                        margin: 0,
+                                        padding: '1rem 0 0',
+                                    }}
+                                >
+                                    {movies.map((movie, index) => {
+                                        const genres = getGenresForMovie(movie);
+                                        const runtime = formatRuntime(movie.duration);
+                                        const displayRating = movie.hybridRating
+                                            ?? movie.ratingSummary?.finalScore
+                                            ?? movie.averageRating
+                                            ?? null;
+                                        return (
+                                            <li key={movie.id}>
+                                                <Link
+                                                    href={buildWatchHref(movie.id)}
+                                                    style={{
+                                                        display: 'grid',
+                                                        gridTemplateRows: 'auto minmax(3.4rem, auto)',
+                                                        gap: '0.72rem',
+                                                        color: 'inherit',
+                                                        textDecoration: 'none',
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            position: 'relative',
+                                                            aspectRatio: '2 / 3',
+                                                            width: '100%',
+                                                            borderRadius: '0.5rem',
+                                                            overflow: 'hidden',
+                                                            background: 'rgba(167, 171, 180, 0.08)',
+                                                            border: '1px solid rgba(167, 171, 180, 0.12)',
+                                                        }}
+                                                    >
+                                                        <Image
+                                                            src={movie.thumbnailUrl || '/poster-placeholder.svg'}
+                                                            alt={movie.title}
+                                                            fill
+                                                            sizes="(max-width: 640px) 46vw, (max-width: 1100px) 22vw, 170px"
+                                                            style={{ objectFit: 'cover' }}
+                                                            unoptimized
+                                                        />
+                                                        <span
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: '0.55rem',
+                                                                left: '0.55rem',
+                                                                minWidth: '2.2rem',
+                                                                minHeight: '1.55rem',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                borderRadius: '999px',
+                                                                background: 'rgba(11, 11, 13, 0.82)',
+                                                                border: '1px solid rgba(212, 175, 55, 0.45)',
+                                                                color: '#D4AF37',
+                                                                fontSize: '0.78rem',
+                                                                fontVariantNumeric: 'tabular-nums',
+                                                                fontWeight: 900,
+                                                            }}
+                                                        >
+                                                            {String(index + 1).padStart(2, '0')}
+                                                        </span>
+                                                        {displayRating ? (
+                                                            <span
+                                                                style={{
+                                                                    position: 'absolute',
+                                                                    right: '0.55rem',
+                                                                    top: '0.55rem',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: '0.22rem',
+                                                                    borderRadius: '999px',
+                                                                    background: 'rgba(11, 11, 13, 0.82)',
+                                                                    color: '#F6D365',
+                                                                    padding: '0.28rem 0.42rem',
+                                                                    fontSize: '0.76rem',
+                                                                    fontWeight: 900,
+                                                                }}
+                                                            >
+                                                                <Star className="w-3 h-3" fill="#F6D365" />
+                                                                {Number(displayRating).toFixed(1)}
+                                                            </span>
+                                                        ) : null}
+                                                    </span>
+                                                    <span style={{ minWidth: 0 }}>
+                                                        <span
+                                                            style={{
+                                                                display: 'block',
+                                                                color: '#F3F4F6',
+                                                                fontSize: '0.95rem',
+                                                                fontWeight: 760,
+                                                                lineHeight: 1.22,
+                                                                overflowWrap: 'anywhere',
+                                                            }}
+                                                        >
+                                                            {movie.title}
+                                                        </span>
+                                                        <span
+                                                            style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                flexWrap: 'wrap',
+                                                                gap: '0.28rem 0.45rem',
+                                                                color: '#A7ABB4',
+                                                                fontSize: '0.78rem',
+                                                                lineHeight: 1.3,
+                                                                marginTop: '0.26rem',
+                                                            }}
+                                                        >
+                                                            {movie.releaseYear ? <span>{movie.releaseYear}</span> : null}
+                                                            {runtime ? <span>{runtime}</span> : null}
+                                                            {genres.length > 0 ? <span>{genres.slice(0, 2).join(', ')}</span> : null}
+                                                        </span>
+                                                    </span>
+                                                </Link>
+                                            </li>
+                                        );
+                                    })}
+                                </ol>
+                            )}
 
                             {hasMore && (
                                 <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '1.5rem' }}>

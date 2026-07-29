@@ -14,6 +14,11 @@ export function isReviewSafeVideo(video: ReviewSafetyVideoLike) {
     return true;
   }
 
+  // Legacy internal uploads predate sourceType/sourceProvider metadata.
+  if (!sourceType && !sourceProvider) {
+    return true;
+  }
+
   // Internet Archive-sourced titles remain available when we retain license metadata.
   const isInternetArchive = sourceProvider === 'internet_archive' || sourceType === 'external_legal';
   if (!isInternetArchive) {

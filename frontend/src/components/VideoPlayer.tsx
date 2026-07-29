@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
-import type { MediaPlayerInstance } from '@vidstack/react';
+import type { MediaPlayerInstance, PlayerSrc } from '@vidstack/react';
 import { DefaultVideoLayout, defaultLayoutIcons } from '@vidstack/react/player/layouts/default';
 import { AlertTriangle, Smartphone, Monitor } from 'lucide-react';
 import '@vidstack/react/player/styles/default/theme.css';
@@ -22,6 +22,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     const lastReportRef = useRef<{ time: number; sentAt: number }>({ time: 0, sentAt: 0 });
     const [error, setError] = useState<string | null>(null);
     const [signedPlaybackUrl, setSignedPlaybackUrl] = useState<string | null>(null);
+    const [playbackType, setPlaybackType] = useState<'mp4' | 'hls' | null>(null);
     const [isLoading, setIsLoading] = useState(Boolean(assetId));
     // Fetch signed playback credentials if assetId provided
     useEffect(() => {
@@ -38,14 +39,23 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 });
 
                 if (!response.ok) {
-                    if (!cancelled) setSignedPlaybackUrl(null);
+                    if (!cancelled) {
+                        setSignedPlaybackUrl(null);
+                        setPlaybackType(null);
+                    }
                     return;
                 }
 
                 const data = await response.json();
-                if (!cancelled) setSignedPlaybackUrl(data.playbackUrl || null);
+                if (!cancelled) {
+                    setSignedPlaybackUrl(data.playbackUrl || null);
+                    setPlaybackType(data.playbackType === 'hls' ? 'hls' : 'mp4');
+                }
             } catch {
-                if (!cancelled) setSignedPlaybackUrl(null);
+                if (!cancelled) {
+                    setSignedPlaybackUrl(null);
+                    setPlaybackType(null);
+                }
             } finally {
                 if (!cancelled) setIsLoading(false);
             }
@@ -58,6 +68,10 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     }, [assetId]);
 
     const playbackUrl = signedPlaybackUrl || src;
+    const effectivePlaybackType = playbackType || (playbackUrl.toLowerCase().includes('.m3u8') ? 'hls' : 'mp4');
+    const playerSrc: PlayerSrc = effectivePlaybackType === 'hls'
+        ? { src: playbackUrl, type: 'application/x-mpegurl' }
+        : playbackUrl;
 
     const handleWatchProgress = async (force: boolean) => {
         if (!enableWatchTracking || !assetId) return;
@@ -139,7 +153,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
         <div data-vds-player className="relative">
             <MediaPlayer
                 ref={playerRef}
-                src={playbackUrl}
+                src={playerSrc}
                 poster={poster}
                 autoPlay={false}
                 playsInline
