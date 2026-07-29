@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { verifySessionTokenEdge } from '@/lib/auth-edge';
 
 const PUBLIC_PAGE_PREFIXES = [
     '/auth',
@@ -7,7 +8,6 @@ const PUBLIC_PAGE_PREFIXES = [
     '/terms',
     '/support',
     '/delete-account',
-    '/admin',
 ];
 
 const isMatchingPrefix = (pathname: string, prefixes: string[]) => {
@@ -22,14 +22,20 @@ const isPublicPage = (pathname: string) => {
 export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    if (pathname.startsWith('/admin') && pathname !== '/admin') {
-        const session = request.cookies.get('admin_session');
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        if (!session || !adminPassword || session.value !== adminPassword) {
-            const url = new URL('/admin', request.url);
+    if (pathname.startsWith('/admin')) {
+        const token = request.cookies.get('auth_token')?.value;
+        const payload = await verifySessionTokenEdge(token);
+
+        if (!payload) {
+            const url = new URL('/auth', request.url);
             url.searchParams.set('redirect', pathname);
             return NextResponse.redirect(url);
         }
+
+        if (payload.role !== 'admin') {
+            return NextResponse.redirect(new URL('/', request.url));
+        }
+
         return NextResponse.next();
     }
 

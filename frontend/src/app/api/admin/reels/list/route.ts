@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
+import { requireAdmin } from '@/lib/admin-auth';
 
 type ReelRow = {
     id: string;
@@ -22,13 +23,8 @@ type ReelRow = {
 
 export async function GET(request: NextRequest) {
     try {
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const session = request.cookies.get('admin_session')?.value;
-        const authHeader = request.headers.get('authorization');
-
-        if (!adminPassword || (authHeader !== adminPassword && session !== adminPassword)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const page = Math.max(1, Number(request.nextUrl.searchParams.get('page') || 1));
         const limit = Math.min(100, Math.max(1, Number(request.nextUrl.searchParams.get('limit') || 20)));

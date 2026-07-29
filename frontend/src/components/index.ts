@@ -16,6 +16,7 @@ export { default as TabSwitch } from './TabSwitch';
 export { default as VideoPlayer } from './VideoPlayer';
 export { default as MobileTabBar } from './MobileTabBar';
 export { default as CardViewToggle } from './CardViewToggle';
+export { default as AdminFloatingButton } from './AdminFloatingButton';
 export { default as ConfirmModal } from './ConfirmModal';
 export { AppBanner } from './AppBanner';
 export { Toast, useToast } from './Toast';

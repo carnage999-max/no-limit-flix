@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
     try {
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const session = request.cookies.get('admin_session')?.value;
-        const authHeader = request.headers.get('authorization');
-
-        if (!adminPassword || (authHeader !== adminPassword && session !== adminPassword)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const workerUrl = process.env.INGEST_WORKER_URL;
         const workerSecret = process.env.INGEST_WORKER_SECRET;

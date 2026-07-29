@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2 } from 'lucide-react';
 
 interface IssueItem {
     id: string;
@@ -36,7 +35,7 @@ export default function AdminIssuesPage() {
             setLoading(true);
             const response = await fetch('/api/admin/issues');
             if (response.status === 401) {
-                router.push('/admin?redirect=/admin/issues');
+                router.push('/auth?redirect=/admin/issues');
                 return;
             }
             if (!response.ok) throw new Error('Failed to fetch issues');

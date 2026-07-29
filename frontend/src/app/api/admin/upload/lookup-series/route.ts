@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
     try {
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
+
         const seriesTitle = request.nextUrl.searchParams.get('seriesTitle');
 
         if (!seriesTitle || seriesTitle.trim().length === 0) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
+import { requireAdmin } from '@/lib/admin-auth';
 
 // Helper to convert BigInt to string for JSON serialization
 function serializeData(data: any): any {
@@ -33,13 +34,8 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const session = request.cookies.get('admin_session')?.value;
-        const authHeader = request.headers.get('authorization');
-
-        if (!adminPassword || (authHeader !== adminPassword && session !== adminPassword)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         // Handle both Promise and direct params (for Next.js version compatibility)
         const resolvedParams = params instanceof Promise ? await params : params;
@@ -54,7 +50,19 @@ export async function PUT(
         }
 
         const body = await request.json();
-        const { title, description, releaseYear, tmdbId, thumbnailUrl } = body;
+        const {
+            title,
+            description,
+            releaseYear,
+            tmdbId,
+            thumbnailUrl,
+            genre,
+            rating,
+            sourceProvider,
+            sourcePageUrl,
+            sourceRights,
+            sourceLicenseUrl,
+        } = body;
 
         if (!title) {
             return NextResponse.json(
@@ -78,10 +86,16 @@ export async function PUT(
             where: { id },
             data: {
                 title,
-                description: description || undefined,
-                releaseYear: releaseYear || undefined,
-                tmdbId: tmdbId || undefined,
-                thumbnailUrl: thumbnailUrl || undefined,
+                description: typeof description === 'string' ? description : null,
+                releaseYear: releaseYear ? Number(releaseYear) : null,
+                tmdbId: typeof tmdbId === 'string' && tmdbId.trim() ? tmdbId.trim() : null,
+                thumbnailUrl: typeof thumbnailUrl === 'string' && thumbnailUrl.trim() ? thumbnailUrl.trim() : null,
+                genre: typeof genre === 'string' && genre.trim() ? genre.trim() : null,
+                rating: typeof rating === 'string' && rating.trim() ? rating.trim() : null,
+                sourceProvider: typeof sourceProvider === 'string' && sourceProvider.trim() ? sourceProvider.trim() : null,
+                sourcePageUrl: typeof sourcePageUrl === 'string' && sourcePageUrl.trim() ? sourcePageUrl.trim() : null,
+                sourceRights: typeof sourceRights === 'string' && sourceRights.trim() ? sourceRights.trim() : null,
+                sourceLicenseUrl: typeof sourceLicenseUrl === 'string' && sourceLicenseUrl.trim() ? sourceLicenseUrl.trim() : null,
                 updatedAt: new Date(),
             },
         });

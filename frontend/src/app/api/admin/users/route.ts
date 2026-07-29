@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
+import { requireAdmin } from '@/lib/admin-auth';
 
-const prisma = new PrismaClient();
-
-// Get all users (admin only) with pagination and search
 export async function GET(request: NextRequest) {
     try {
-        // Check admin session
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const session = request.cookies.get('admin_session')?.value;
-        if (!adminPassword || session !== adminPassword) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const searchParams = request.nextUrl.searchParams;
         const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
@@ -22,7 +14,7 @@ export async function GET(request: NextRequest) {
         const search = searchParams.get('search') || '';
 
         // Build search query
-        const whereClause: any = {};
+        const whereClause: Prisma.UserWhereInput = {};
         if (search) {
             whereClause.OR = [
                 { username: { contains: search, mode: 'insensitive' } },

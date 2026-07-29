@@ -1,43 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import prisma from '@/lib/db';
+import { requireAdmin } from '@/lib/admin-auth';
 
-const prisma = new PrismaClient();
-
-// Promote user to admin (admin only)
 export async function POST(request: NextRequest) {
     try {
-        // Check admin session
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const session = request.cookies.get('admin_session')?.value;
-        if (!adminPassword || session !== adminPassword) {
-            return NextResponse.json(
-                { error: 'Unauthorized' },
-                { status: 401 }
-            );
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
-        const { userId } = await request.json();
+        const { userId, query } = await request.json();
+        const normalizedQuery = typeof query === 'string' ? query.trim() : '';
 
-        if (!userId) {
+        if (!userId && !normalizedQuery) {
             return NextResponse.json(
-                { error: 'User ID is required' },
+                { error: 'Email or username is required' },
                 { status: 400 }
             );
         }
 
-        // Find the user
-        const user = await prisma.user.findUnique({
-            where: { id: userId }
-        });
+        const where: Prisma.UserWhereInput = userId
+            ? { id: userId }
+            : {
+                OR: [
+                    { email: { equals: normalizedQuery.toLowerCase(), mode: 'insensitive' } },
+                    { username: { equals: normalizedQuery, mode: 'insensitive' } },
+                ],
+            };
+
+        const user = await prisma.user.findFirst({ where });
 
         if (!user) {
             return NextResponse.json(
-                { error: 'User not found' },
+                { error: 'No user found for that email or username' },
                 { status: 404 }
             );
         }
 
-        // Check if already admin
         if (user.role === 'admin') {
             return NextResponse.json(
                 { error: 'User is already an admin' },
@@ -45,9 +43,8 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Promote to admin
         const updatedUser = await prisma.user.update({
-            where: { id: userId },
+            where: { id: user.id },
             data: { role: 'admin' },
             select: {
                 id: true,

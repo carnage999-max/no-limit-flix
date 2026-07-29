@@ -8,6 +8,7 @@ import {
   cleanupTempDir,
 } from '@/lib/ffmpeg-hls';
 import { storeHLSInMedia, verifyHLSMediaUpload } from '@/lib/media-hls-storage';
+import { requireAdmin } from '@/lib/admin-auth';
 
 /**
  * POST /api/admin/upload-hls
@@ -21,6 +22,9 @@ import { storeHLSInMedia, verifyHLSMediaUpload } from '@/lib/media-hls-storage';
  */
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAdmin(request);
+    if (auth.response) return auth.response;
+
     // Verify localhost origin
     const host = request.headers.get('host') || '';
     if (!host.includes('localhost') && !host.includes('127.0.0.1')) {

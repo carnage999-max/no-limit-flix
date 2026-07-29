@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import prisma from '@/lib/db';
+import { requireAdmin } from '@/lib/admin-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
+
         const videos = await prisma.video.findMany({
             select: {
                 id: true,

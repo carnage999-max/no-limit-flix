@@ -1,16 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
     try {
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const session = request.cookies.get('admin_session')?.value;
-        const authHeader = request.headers.get('authorization');
-
-        if (!adminPassword || (authHeader !== adminPassword && session !== adminPassword)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const q = request.nextUrl.searchParams.get('q');
 
@@ -32,6 +28,12 @@ export async function GET(request: NextRequest) {
                 thumbnailUrl: true,
                 releaseYear: true,
                 tmdbId: true,
+                genre: true,
+                rating: true,
+                sourceProvider: true,
+                sourcePageUrl: true,
+                sourceRights: true,
+                sourceLicenseUrl: true,
             },
         });
 
@@ -52,6 +54,12 @@ export async function GET(request: NextRequest) {
                     thumbnailUrl: true,
                     releaseYear: true,
                     tmdbId: true,
+                    genre: true,
+                    rating: true,
+                    sourceProvider: true,
+                    sourcePageUrl: true,
+                    sourceRights: true,
+                    sourceLicenseUrl: true,
                 },
                 take: 1,
             });

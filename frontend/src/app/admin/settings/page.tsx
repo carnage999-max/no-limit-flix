@@ -3,21 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, ArrowRight, CheckCircle2, CreditCard, User as UserIcon } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, CreditCard, User as UserIcon } from 'lucide-react';
 
 interface User {
     id: string;
     email: string;
     username: string;
     role: string;
-}
-
-interface UsersResponse {
-    users: User[];
-    total: number;
-    page: number;
-    pageSize: number;
-    totalPages: number;
 }
 
 interface DeletionRequest {
@@ -50,12 +42,9 @@ export default function AdminSettingsPage() {
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [selectedUserId, setSelectedUserId] = useState('');
+    const [promoteQuery, setPromoteQuery] = useState('');
     const [promoting, setPromoting] = useState(false);
     const [successMessage, setSuccessMessage] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [searchQuery, setSearchQuery] = useState('');
     const [deletionRequests, setDeletionRequests] = useState<DeletionRequest[]>([]);
     const [deletionLoading, setDeletionLoading] = useState(false);
     const [deletionError, setDeletionError] = useState('');
@@ -63,7 +52,7 @@ export default function AdminSettingsPage() {
     const [billingLoading, setBillingLoading] = useState(false);
     const [billingSaving, setBillingSaving] = useState(false);
     const [trialInfo, setTrialInfo] = useState<{ enabled: boolean; days: number } | null>(null);
-    const pageSize = 10;
+    const pageSize = 25;
 
     useEffect(() => {
         fetchUsers(1);
@@ -76,7 +65,7 @@ export default function AdminSettingsPage() {
             setBillingLoading(true);
             const response = await fetch('/api/admin/billing');
             if (response.status === 401) {
-                router.push('/admin?redirect=/admin/settings');
+                router.push('/auth?redirect=/admin/settings');
                 return;
             }
             if (!response.ok) {
@@ -98,7 +87,7 @@ export default function AdminSettingsPage() {
             setDeletionError('');
             const response = await fetch('/api/admin/deletion-requests');
             if (response.status === 401) {
-                router.push('/admin?redirect=/admin/settings');
+                router.push('/auth?redirect=/admin/settings');
                 return;
             }
             if (!response.ok) {
@@ -137,11 +126,11 @@ export default function AdminSettingsPage() {
             const queryParams = new URLSearchParams({
                 page: page.toString(),
                 pageSize: pageSize.toString(),
-                search: searchQuery
+                search: ''
             });
             const response = await fetch(`/api/admin/users?${queryParams}`);
             if (response.status === 401) {
-                router.push('/admin?redirect=/admin/settings');
+                router.push('/auth?redirect=/admin/settings');
                 return;
             }
             if (!response.ok) {
@@ -149,8 +138,6 @@ export default function AdminSettingsPage() {
             }
             const data = await response.json();
             setUsers(data.users || []);
-            setTotalPages(data.totalPages || 1);
-            setCurrentPage(page);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to fetch users');
         } finally {
@@ -159,8 +146,9 @@ export default function AdminSettingsPage() {
     };
 
     const handlePromoteToAdmin = async () => {
-        if (!selectedUserId) {
-            setError('Please select a user');
+        const query = promoteQuery.trim();
+        if (!query) {
+            setError('Enter a user email or username');
             return;
         }
 
@@ -172,7 +160,7 @@ export default function AdminSettingsPage() {
             const response = await fetch('/api/admin/promote', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: selectedUserId })
+                body: JSON.stringify({ query })
             });
 
             const data = await response.json();
@@ -181,39 +169,14 @@ export default function AdminSettingsPage() {
                 throw new Error(data.error || 'Failed to promote user');
             }
 
-            setSuccessMessage(`User promoted to admin successfully!`);
-            setSelectedUserId('');
-            fetchUsers(currentPage); // Refresh users list
+            setSuccessMessage(data.message || 'User promoted to admin successfully.');
+            setPromoteQuery('');
+            fetchUsers(1);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to promote user');
         } finally {
             setPromoting(false);
         }
-    };
-
-    const handleSearch = (query: string) => {
-        setSearchQuery(query);
-        setCurrentPage(1);
-        // Fetch with new search
-        setTimeout(() => {
-            (async () => {
-                const queryParams = new URLSearchParams({
-                    page: '1',
-                    pageSize: pageSize.toString(),
-                    search: query
-                });
-                try {
-                    const response = await fetch(`/api/admin/users?${queryParams}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        setUsers(data.users || []);
-                        setTotalPages(data.totalPages || 1);
-                    }
-                } catch (err) {
-                    console.error('Search error:', err);
-                }
-            })();
-        }, 300);
     };
 
     const handleSaveBilling = async () => {
@@ -503,13 +466,16 @@ export default function AdminSettingsPage() {
                         Promote User to Admin
                     </h2>
 
-                    {/* Search Bar */}
-                    <div style={{ marginBottom: '1.5rem' }}>
+                    <div style={{ display: 'grid', gap: '1rem' }}>
                         <input
                             type="text"
-                            placeholder="Search by username or email..."
-                            value={searchQuery}
-                            onChange={(e) => handleSearch(e.target.value)}
+                            placeholder="Exact email or username"
+                            value={promoteQuery}
+                            onChange={(e) => {
+                                setPromoteQuery(e.target.value);
+                                setError('');
+                                setSuccessMessage('');
+                            }}
                             style={{
                                 width: '100%',
                                 padding: '0.75rem 1rem',
@@ -518,7 +484,7 @@ export default function AdminSettingsPage() {
                                 background: 'rgba(167, 171, 180, 0.05)',
                                 color: '#F3F4F6',
                                 fontSize: '1rem',
-                                transition: 'all 0.2s'
+                                transition: 'all 0.2s',
                             }}
                             onFocus={(e) => {
                                 e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
@@ -529,264 +495,31 @@ export default function AdminSettingsPage() {
                                 e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
                             }}
                         />
-                    </div>                    {loading ? (
-                        <div style={{
-                            padding: '2rem',
-                            textAlign: 'center',
-                            color: '#A7ABB4'
-                        }}>
-                            Loading users...
-                        </div>
-                    ) : users.length === 0 ? (
-                        <div style={{
-                            padding: '2rem',
-                            textAlign: 'center',
-                            color: '#A7ABB4'
-                        }}>
-                            No users found
-                        </div>
-                    ) : (
-                        <>
-                            <div style={{ marginBottom: '1.5rem' }}>
-                                <label style={{
-                                    display: 'block',
-                                    fontSize: '0.875rem',
-                                    fontWeight: '600',
-                                    color: '#D4AF37',
-                                    marginBottom: '0.75rem',
-                                    textTransform: 'uppercase',
-                                    letterSpacing: '0.05em'
-                                }}>
-                                    Select User
-                                </label>
-                                <select
-                                    value={selectedUserId}
-                                    onChange={(e) => {
-                                        setSelectedUserId(e.target.value);
-                                        setError('');
-                                        setSuccessMessage('');
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '0.75rem 1rem',
-                                        borderRadius: '0.5rem',
-                                        border: '1px solid rgba(167, 171, 180, 0.2)',
-                                        background: 'rgba(167, 171, 180, 0.05)',
-                                        color: '#F3F4F6',
-                                        fontSize: '1rem',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s'
-                                    }}
-                                    onFocus={(e) => {
-                                        e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.5)';
-                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.08)';
-                                    }}
-                                    onBlur={(e) => {
-                                        e.currentTarget.style.borderColor = 'rgba(167, 171, 180, 0.2)';
-                                        e.currentTarget.style.background = 'rgba(167, 171, 180, 0.05)';
-                                    }}
-                                >
-                                    <option value="">-- Choose a user --</option>
-                                    {users.map((user) => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.username} ({user.email}) {user.role === 'admin' ? '[ADMIN]' : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* User Info Display */}
-                            {selectedUserId && (
-                                <div style={{
-                                    padding: '1rem',
-                                    borderRadius: '0.75rem',
-                                    background: 'rgba(212, 175, 55, 0.05)',
-                                    border: '1px solid rgba(212, 175, 55, 0.2)',
-                                    marginBottom: '1.5rem'
-                                }}>
-                                    {(() => {
-                                        const user = users.find(u => u.id === selectedUserId);
-                                        return user ? (
-                                            <div>
-                                                <div style={{
-                                                    display: 'grid',
-                                                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                                    gap: '1rem'
-                                                }}>
-                                                    <div>
-                                                        <span style={{
-                                                            fontSize: '0.75rem',
-                                                            color: '#A7ABB4',
-                                                            textTransform: 'uppercase',
-                                                            fontWeight: '600'
-                                                        }}>
-                                                            Username
-                                                        </span>
-                                                        <div style={{
-                                                            fontSize: '1rem',
-                                                            color: '#F3F4F6',
-                                                            fontWeight: '600',
-                                                            marginTop: '0.25rem'
-                                                        }}>
-                                                            {user.username}
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <span style={{
-                                                            fontSize: '0.75rem',
-                                                            color: '#A7ABB4',
-                                                            textTransform: 'uppercase',
-                                                            fontWeight: '600'
-                                                        }}>
-                                                            Email
-                                                        </span>
-                                                        <div style={{
-                                                            fontSize: '1rem',
-                                                            color: '#F3F4F6',
-                                                            fontWeight: '600',
-                                                            marginTop: '0.25rem'
-                                                        }}>
-                                                            {user.email}
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <span style={{
-                                                            fontSize: '0.75rem',
-                                                            color: '#A7ABB4',
-                                                            textTransform: 'uppercase',
-                                                            fontWeight: '600'
-                                                        }}>
-                                                            Current Role
-                                                        </span>
-                                                        <div style={{
-                                                            fontSize: '1rem',
-                                                            color: user.role === 'admin' ? '#D4AF37' : '#A7ABB4',
-                                                            fontWeight: '600',
-                                                            marginTop: '0.25rem',
-                                                            textTransform: 'uppercase'
-                                                        }}>
-                                                            {user.role}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : null;
-                                    })()}
-                                </div>
-                            )}
-
-                            <button
-                                onClick={handlePromoteToAdmin}
-                                disabled={!selectedUserId || promoting || users.find(u => u.id === selectedUserId)?.role === 'admin'}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.75rem 1.5rem',
-                                    borderRadius: '0.5rem',
-                                    background: selectedUserId && users.find(u => u.id === selectedUserId)?.role !== 'admin'
-                                        ? 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)'
-                                        : 'rgba(212, 175, 55, 0.3)',
-                                    border: 'none',
-                                    color: selectedUserId && users.find(u => u.id === selectedUserId)?.role !== 'admin' ? '#0B0B0D' : '#A7ABB4',
-                                    fontWeight: '700',
-                                    fontSize: '1rem',
-                                    cursor: selectedUserId && users.find(u => u.id === selectedUserId)?.role !== 'admin' ? 'pointer' : 'not-allowed',
-                                    transition: 'all 0.2s',
-                                    opacity: selectedUserId && users.find(u => u.id === selectedUserId)?.role !== 'admin' ? 1 : 0.5
-                                }}
-                                onMouseEnter={(e) => {
-                                    if (selectedUserId && users.find(u => u.id === selectedUserId)?.role !== 'admin') {
-                                        e.currentTarget.style.transform = 'translateY(-2px)';
-                                        e.currentTarget.style.boxShadow = '0 10px 20px rgba(212, 175, 55, 0.2)';
-                                    }
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.transform = 'translateY(0)';
-                                    e.currentTarget.style.boxShadow = 'none';
-                                }}
-                            >
-                                {promoting ? 'Promoting...' : users.find(u => u.id === selectedUserId)?.role === 'admin' ? 'Already Admin' : 'Promote to Admin'}
-                            </button>
-
-                            {/* Pagination Controls */}
-                            {totalPages > 1 && (
-                                <div style={{
-                                    marginTop: '2rem',
-                                    paddingTop: '1.5rem',
-                                    borderTop: '1px solid rgba(167, 171, 180, 0.1)',
-                                    display: 'flex',
-                                    justifyContent: 'center',
-                                    gap: '0.5rem',
-                                    alignItems: 'center',
-                                    flexWrap: 'wrap'
-                                }}>
-                                    <button
-                                        onClick={() => fetchUsers(Math.max(1, currentPage - 1))}
-                                        disabled={currentPage === 1}
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: '0.5rem',
-                                            border: '1px solid rgba(212, 175, 55, 0.3)',
-                                            background: currentPage === 1 ? 'rgba(212, 175, 55, 0.1)' : 'rgba(212, 175, 55, 0.15)',
-                                            color: '#D4AF37',
-                                            fontWeight: '600',
-                                            cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                                            opacity: currentPage === 1 ? 0.5 : 1
-                                        }}
-                                    >
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                            <ArrowLeft className="w-4 h-4" />
-                                            Previous
-                                        </span>
-                                    </button>
-
-                                    <div style={{
-                                        display: 'flex',
-                                        gap: '0.25rem',
-                                        alignItems: 'center'
-                                    }}>
-                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                            <button
-                                                key={page}
-                                                onClick={() => fetchUsers(page)}
-                                                style={{
-                                                    padding: '0.5rem 0.75rem',
-                                                    borderRadius: '0.375rem',
-                                                    border: '1px solid rgba(212, 175, 55, 0.3)',
-                                                    background: page === currentPage ? 'rgba(212, 175, 55, 0.3)' : 'rgba(212, 175, 55, 0.1)',
-                                                    color: '#D4AF37',
-                                                    fontWeight: page === currentPage ? '700' : '600',
-                                                    cursor: 'pointer',
-                                                    fontSize: '0.875rem'
-                                                }}
-                                            >
-                                                {page}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    <button
-                                        onClick={() => fetchUsers(Math.min(totalPages, currentPage + 1))}
-                                        disabled={currentPage === totalPages}
-                                        style={{
-                                            padding: '0.5rem 1rem',
-                                            borderRadius: '0.5rem',
-                                            border: '1px solid rgba(212, 175, 55, 0.3)',
-                                            background: currentPage === totalPages ? 'rgba(212, 175, 55, 0.1)' : 'rgba(212, 175, 55, 0.15)',
-                                            color: '#D4AF37',
-                                            fontWeight: '600',
-                                            cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                                            opacity: currentPage === totalPages ? 0.5 : 1
-                                        }}
-                                    >
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-                                            Next
-                                            <ArrowRight className="w-4 h-4" />
-                                        </span>
-                                    </button>
-                                </div>
-                            )}
-                        </>
-                    )}
+                        <p style={{ color: '#A7ABB4', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                            Enter one exact email address or username. Matching users are not listed here.
+                        </p>
+                        <button
+                            onClick={handlePromoteToAdmin}
+                            disabled={!promoteQuery.trim() || promoting}
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1.5rem',
+                                borderRadius: '0.5rem',
+                                background: promoteQuery.trim()
+                                    ? 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)'
+                                    : 'rgba(212, 175, 55, 0.3)',
+                                border: 'none',
+                                color: promoteQuery.trim() ? '#0B0B0D' : '#A7ABB4',
+                                fontWeight: '700',
+                                fontSize: '1rem',
+                                cursor: promoteQuery.trim() ? 'pointer' : 'not-allowed',
+                                transition: 'all 0.2s',
+                                opacity: promoteQuery.trim() ? 1 : 0.5
+                            }}
+                        >
+                            {promoting ? 'Promoting...' : 'Promote Matching User'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Current Admins */}
@@ -807,7 +540,15 @@ export default function AdminSettingsPage() {
                         Current Administrators
                     </h2>
 
-                    {users.filter(u => u.role === 'admin').length === 0 ? (
+                    {loading ? (
+                        <div style={{
+                            padding: '2rem',
+                            textAlign: 'center',
+                            color: '#A7ABB4'
+                        }}>
+                            Loading administrators...
+                        </div>
+                    ) : users.filter(u => u.role === 'admin').length === 0 ? (
                         <div style={{
                             padding: '2rem',
                             textAlign: 'center',

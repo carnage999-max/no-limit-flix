@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-
-function ensureAdminSession(request: NextRequest) {
-    const session = request.cookies.get('admin_session')?.value;
-    return Boolean(session);
-}
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
     try {
-        if (!ensureAdminSession(request)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const requests = await prisma.accountDeletionRequest.findMany({
             orderBy: { createdAt: 'desc' },
@@ -34,9 +29,8 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
     try {
-        if (!ensureAdminSession(request)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const { id } = await request.json();
         if (!id) {

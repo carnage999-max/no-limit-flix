@@ -358,7 +358,7 @@ export default function HomePage() {
             console.log('Fetching hosted content...');
             
             const [moviesRes, tvRes, historyRes] = await Promise.all([
-                fetch('/api/library/movies'),
+                fetch('/api/library/movies?sort=recent&page=1&limit=10'),
                 fetch('/api/library/tv'),
                 fetch('/api/watch-history?page=1&limit=10')
             ]);
@@ -369,8 +369,8 @@ export default function HomePage() {
             if (moviesRes.ok) {
                 const moviesData = await moviesRes.json();
                 console.log('Movies data:', moviesData);
-                setHostedMovieCount((moviesData.movies || []).length);
-                    const movies = pickRandomItems(moviesData.movies || [], 10).map((video: HostedLibraryItem) => ({
+                setHostedMovieCount(moviesData.pagination?.total ?? (moviesData.movies || []).length);
+                    const movies = (moviesData.movies || []).map((video: HostedLibraryItem) => ({
                         id: video.id,
                         title: video.title,
                         year: video.releaseYear || new Date().getFullYear(),

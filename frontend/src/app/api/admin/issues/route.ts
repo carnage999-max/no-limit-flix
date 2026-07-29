@@ -2,19 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { sendEmail } from '@/lib/email';
 import { buildIssueResolvedEmail, buildIssueInternalEmail } from '@/lib/email-templates';
+import { requireAdmin } from '@/lib/admin-auth';
 
 const ISSUE_DEV_EMAIL = 'dev@nolimitflix.com';
 
-function ensureAdminSession(request: NextRequest) {
-    const session = request.cookies.get('admin_session')?.value;
-    return Boolean(session);
-}
-
 export async function GET(request: NextRequest) {
     try {
-        if (!ensureAdminSession(request)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const [openIssues, resolvedIssues] = await Promise.all([
             prisma.issueReport.findMany({
@@ -36,9 +31,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
     try {
-        if (!ensureAdminSession(request)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const { ids } = await request.json();
         const issueIds: string[] = Array.isArray(ids) ? ids : ids ? [ids] : [];

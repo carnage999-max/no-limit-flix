@@ -2,18 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDefaultBillingPlan, getFreeTrialDays, isFreeTrialEnabled } from '@/lib/billing';
 import { syncStripePlanPrice } from '@/lib/stripe';
 import prisma from '@/lib/db';
-
-const isAuthorized = (request: NextRequest) => {
-    const adminPassword = process.env.ADMIN_PASSWORD;
-    const session = request.cookies.get('admin_session')?.value;
-    return Boolean(adminPassword && session === adminPassword);
-};
+import { requireAdmin } from '@/lib/admin-auth';
 
 export async function GET(request: NextRequest) {
     try {
-        if (!isAuthorized(request)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const plan = await getDefaultBillingPlan();
         return NextResponse.json({
@@ -31,9 +25,8 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
     try {
-        if (!isAuthorized(request)) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-        }
+        const auth = await requireAdmin(request);
+        if (auth.response) return auth.response;
 
         const body = await request.json();
         const plan = await getDefaultBillingPlan();

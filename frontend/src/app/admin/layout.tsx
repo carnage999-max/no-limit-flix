@@ -1,36 +1,43 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { useSession } from '@/context/SessionContext';
 
 export default function AdminLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
-    // We already have the main Navbar from RootLayout.
-    // This layout will focus on the cinematic background and center the content.
+    const router = useRouter();
+    const pathname = usePathname() || '/admin';
+    const { user, loading } = useSession();
+
+    useEffect(() => {
+        if (loading) return;
+        if (!user) {
+            router.push(`/auth?redirect=${encodeURIComponent(pathname)}`);
+            return;
+        }
+        if (user.role !== 'admin') {
+            router.push('/');
+        }
+    }, [loading, pathname, router, user]);
+
+    if (loading || !user || user.role !== 'admin') {
+        return null;
+    }
+
     return (
         <div className="relative min-h-screen overflow-x-hidden">
-            {/* Animated Background Elements (Matching HomePage) */}
-            <div className="fixed inset-0 z-[-1] opacity-20 pointer-events-none">
-                <div
-                    className="absolute top-[10%] left-[10%] w-[500px] h-[500px] rounded-full"
-                    style={{
-                        background: 'radial-gradient(circle, #8B5CF6 0%, transparent 70%)',
-                        filter: 'blur(100px)',
-                        animation: 'fadeIn 2s ease-out'
-                    }}
-                />
-                <div
-                    className="absolute bottom-[10%] right-[10%] w-[600px] h-[600px] rounded-full"
-                    style={{
-                        background: 'radial-gradient(circle, #D4AF37 0%, transparent 70%)',
-                        filter: 'blur(120px)',
-                        animation: 'fadeIn 2s ease-out 0.5s both'
-                    }}
-                />
-            </div>
-
-            {/* Content Area */}
-            <div className="container-custom py-12 md:py-24">
+            <div
+                className="fixed inset-0 z-[-1] pointer-events-none"
+                style={{
+                    background:
+                        'linear-gradient(180deg, rgba(11, 11, 13, 0.98) 0%, rgba(5, 6, 8, 1) 100%)',
+                }}
+            />
+            <div className="container-custom py-10 md:py-16">
                 {children}
             </div>
         </div>

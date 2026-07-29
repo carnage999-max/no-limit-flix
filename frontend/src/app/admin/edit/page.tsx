@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useRef, CSSProperties } from 'react';
-import { Upload, AlertCircle, CheckCircle2, ArrowLeft, X } from 'lucide-react';
+import Image from 'next/image';
+import { Upload, AlertCircle, CheckCircle2, ArrowLeft, X, Settings } from 'lucide-react';
 import Link from 'next/link';
 
 const styles: Record<string, CSSProperties> = {
@@ -91,10 +92,6 @@ const styles: Record<string, CSSProperties> = {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
         gap: '32px',
-        '@media (max-width: 768px)': {
-            gridTemplateColumns: '1fr',
-            gap: '24px',
-        },
     },
     formGroup: {
         display: 'flex',
@@ -211,6 +208,12 @@ interface Video {
     thumbnailUrl?: string;
     releaseYear?: number;
     tmdbId?: string;
+    genre?: string;
+    rating?: string;
+    sourceProvider?: string;
+    sourcePageUrl?: string;
+    sourceRights?: string;
+    sourceLicenseUrl?: string;
 }
 
 interface EditFormData {
@@ -218,6 +221,12 @@ interface EditFormData {
     description: string;
     releaseYear: string;
     tmdbId: string;
+    genre: string;
+    rating: string;
+    sourceProvider: string;
+    sourcePageUrl: string;
+    sourceRights: string;
+    sourceLicenseUrl: string;
 }
 
 export default function AdminEditPage() {
@@ -234,6 +243,12 @@ export default function AdminEditPage() {
         description: '',
         releaseYear: '',
         tmdbId: '',
+        genre: '',
+        rating: '',
+        sourceProvider: '',
+        sourcePageUrl: '',
+        sourceRights: '',
+        sourceLicenseUrl: '',
     });
     const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
@@ -263,6 +278,12 @@ export default function AdminEditPage() {
             description: video.description || '',
             releaseYear: video.releaseYear ? String(video.releaseYear) : '',
             tmdbId: video.tmdbId || '',
+            genre: video.genre || '',
+            rating: video.rating || '',
+            sourceProvider: video.sourceProvider || '',
+            sourcePageUrl: video.sourcePageUrl || '',
+            sourceRights: video.sourceRights || '',
+            sourceLicenseUrl: video.sourceLicenseUrl || '',
         });
         setThumbnailFile(null);
         setThumbnailPreview(video.thumbnailUrl || null);
@@ -331,6 +352,12 @@ export default function AdminEditPage() {
                     releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : null,
                     tmdbId: formData.tmdbId || null,
                     thumbnailUrl: newThumbnailUrl,
+                    genre: formData.genre || null,
+                    rating: formData.rating || null,
+                    sourceProvider: formData.sourceProvider || null,
+                    sourcePageUrl: formData.sourcePageUrl || null,
+                    sourceRights: formData.sourceRights || null,
+                    sourceLicenseUrl: formData.sourceLicenseUrl || null,
                 }),
             });
 
@@ -338,9 +365,20 @@ export default function AdminEditPage() {
 
             setSuccess('Video metadata updated successfully!');
             setThumbnailFile(null);
-            // Reload videos to reflect changes
-            await loadVideos();
-            setSelectedVideo(null);
+            setSelectedVideo((current) => current ? {
+                ...current,
+                title: formData.title,
+                description: formData.description,
+                releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : undefined,
+                tmdbId: formData.tmdbId,
+                thumbnailUrl: newThumbnailUrl,
+                genre: formData.genre,
+                rating: formData.rating,
+                sourceProvider: formData.sourceProvider,
+                sourcePageUrl: formData.sourcePageUrl,
+                sourceRights: formData.sourceRights,
+                sourceLicenseUrl: formData.sourceLicenseUrl,
+            } : current);
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -362,7 +400,8 @@ export default function AdminEditPage() {
                                 ...styles.backLink,
                                 color: 'rgba(212, 175, 55, 0.6)'
                             }}>
-                                ⚙️ Admin Settings
+                                <Settings size={14} />
+                                Admin Settings
                             </Link>
                         </div>
                         <h1 style={styles.title}>Edit Metadata</h1>
@@ -493,14 +532,88 @@ export default function AdminEditPage() {
                             />
                         </div>
 
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Category / Genre</label>
+                            <input
+                                type="text"
+                                name="genre"
+                                value={formData.genre}
+                                onChange={handleFormChange}
+                                style={styles.input}
+                                placeholder="Action, Drama"
+                            />
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Rating</label>
+                            <input
+                                type="text"
+                                name="rating"
+                                value={formData.rating}
+                                onChange={handleFormChange}
+                                style={styles.input}
+                                placeholder="PG-13"
+                            />
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Source Provider</label>
+                            <input
+                                type="text"
+                                name="sourceProvider"
+                                value={formData.sourceProvider}
+                                onChange={handleFormChange}
+                                style={styles.input}
+                                placeholder="internal, internet_archive"
+                            />
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Source Page URL</label>
+                            <input
+                                type="url"
+                                name="sourcePageUrl"
+                                value={formData.sourcePageUrl}
+                                onChange={handleFormChange}
+                                style={styles.input}
+                                placeholder="https://..."
+                            />
+                        </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Source License URL</label>
+                            <input
+                                type="url"
+                                name="sourceLicenseUrl"
+                                value={formData.sourceLicenseUrl}
+                                onChange={handleFormChange}
+                                style={styles.input}
+                                placeholder="https://..."
+                            />
+                        </div>
+
+                        <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                            <label style={styles.label}>Source Rights</label>
+                            <textarea
+                                name="sourceRights"
+                                value={formData.sourceRights}
+                                onChange={handleFormChange}
+                                style={styles.textarea}
+                                placeholder="Rights and license notes..."
+                            />
+                        </div>
+
                         <div style={{ ...styles.formGroup, ...styles.thumbnailSection }}>
                             <div style={styles.thumbnailPreview}>
                                 <label style={styles.label}>Current Thumbnail</label>
                                 {thumbnailPreview ? (
                                     <>
-                                        <img
+                                        <Image
                                             src={thumbnailPreview}
                                             alt="Thumbnail preview"
+                                            width={300}
+                                            height={450}
+                                            unoptimized
                                             style={styles.thumbnailImage}
                                         />
                                         {thumbnailFile && (
