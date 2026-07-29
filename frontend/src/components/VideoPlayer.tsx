@@ -17,8 +17,33 @@ interface VideoPlayerProps {
     enableWatchTracking?: boolean;
 }
 
+const RESTRICTED_VIDEO_CONTROLS = 'nodownload noplaybackrate noremoteplayback';
+type DownloadRestrictedVideoElement = HTMLVideoElement & {
+    controlsList?: DOMTokenList;
+    disableRemotePlayback?: boolean;
+};
+
+const restrictNativeVideoDownloads = (provider: unknown) => {
+    const video = typeof provider === 'object' && provider && 'video' in provider
+        ? (provider as { video?: DownloadRestrictedVideoElement }).video
+        : null;
+
+    if (!video) return;
+
+    video.setAttribute('controlsList', RESTRICTED_VIDEO_CONTROLS);
+    video.controlsList?.add('nodownload');
+    video.controlsList?.add('noplaybackrate');
+    video.controlsList?.add('noremoteplayback');
+    video.disablePictureInPicture = true;
+    video.setAttribute('disablePictureInPicture', '');
+    video.disableRemotePlayback = true;
+    video.setAttribute('disableRemotePlayback', '');
+    video.setAttribute('draggable', 'false');
+};
+
 export default function VideoPlayer({ src, assetId, poster, onReady, title, enableWatchTracking = true }: VideoPlayerProps) {
     const playerRef = useRef<MediaPlayerInstance | null>(null);
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const lastReportRef = useRef<{ time: number; sentAt: number }>({ time: 0, sentAt: 0 });
     const [error, setError] = useState<string | null>(null);
     const [signedPlaybackUrl, setSignedPlaybackUrl] = useState<string | null>(null);
@@ -72,6 +97,11 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     const playerSrc: PlayerSrc = effectivePlaybackType === 'hls'
         ? { src: playbackUrl, type: 'application/x-mpegurl' }
         : playbackUrl;
+
+    useEffect(() => {
+        const video = containerRef.current?.querySelector('video') || null;
+        restrictNativeVideoDownloads(video ? { video } : null);
+    }, [playbackUrl]);
 
     const handleWatchProgress = async (force: boolean) => {
         if (!enableWatchTracking || !assetId) return;
@@ -150,7 +180,13 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     }
 
     return (
-        <div data-vds-player className="relative">
+        <div
+            ref={containerRef}
+            data-vds-player
+            className="relative"
+            onContextMenu={(event) => event.preventDefault()}
+            onDragStart={(event) => event.preventDefault()}
+        >
             <MediaPlayer
                 ref={playerRef}
                 src={playerSrc}
@@ -158,6 +194,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 autoPlay={false}
                 playsInline
                 controls
+                onProviderChange={(provider) => restrictNativeVideoDownloads(provider)}
                 onCanPlay={() => onReady && onReady(playerRef.current)}
                 onTimeUpdate={() => handleWatchProgress(false)}
                 onPlay={() => handleWatchProgress(true)}
