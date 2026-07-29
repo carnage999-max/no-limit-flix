@@ -197,7 +197,6 @@ export default function AdminUploadPage() {
     const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [progress, setProgress] = useState(0);
-    const [thumbProgress, setThumbProgress] = useState(0);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [error, setError] = useState('');
     const [codecWarning, setCodecWarning] = useState<string | null>(null);
@@ -389,85 +388,51 @@ export default function AdminUploadPage() {
                 return;
             }
 
-            // Direct Upload Method (original flow)
-            const res = await fetch('/api/admin/upload/presigned-url', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fileName: file.name,
-                    fileType: file.type,
-                    thumbFileName: thumbnailFile?.name,
-                    thumbFileType: thumbnailFile?.type,
-                    title,
-                    description,
-                    type: assetType,
-                    seasonNumber: assetType === 'series' ? seasonNumber : null,
-                    episodeNumber: assetType === 'series' ? episodeNumber : null,
-                    seriesTitle: assetType === 'series' ? seriesTitle : null,
-                    tmdbId: tmdbId.trim() || null,
-                    releaseYear,
-                    duration,
-                    resolution,
-                    genre,
-                    rating
-                }),
-            });
-
-            if (!res.ok) {
-                const data = await res.json();
-                throw new Error(data.error || 'Failed to get upload URL');
+            // Direct upload writes to the app server's MEDIA_ROOT. No browser S3 PUT.
+            const directFormData = new FormData();
+            directFormData.append('file', file);
+            if (thumbnailFile) {
+                directFormData.append('thumbnail', thumbnailFile);
             }
+            directFormData.append('title', title);
+            directFormData.append('description', description);
+            directFormData.append('type', assetType);
+            directFormData.append('seasonNumber', assetType === 'series' ? seasonNumber : '');
+            directFormData.append('episodeNumber', assetType === 'series' ? episodeNumber : '');
+            directFormData.append('seriesTitle', assetType === 'series' ? seriesTitle : '');
+            directFormData.append('tmdbId', tmdbId.trim());
+            directFormData.append('releaseYear', releaseYear);
+            directFormData.append('duration', duration ? String(duration) : '');
+            directFormData.append('resolution', resolution);
+            directFormData.append('genre', genre);
+            directFormData.append('rating', rating);
 
-            const { presignedUrl, thumbPresignedUrl, videoId } = await res.json();
-
-            // 1. Upload Video
-            const videoXhr = new XMLHttpRequest();
-            const videoUploadPromise = new Promise((resolve, reject) => {
-                videoXhr.open('PUT', presignedUrl);
-                videoXhr.setRequestHeader('Content-Type', file.type);
-                videoXhr.upload.onprogress = (event) => {
+            const uploadXhr = new XMLHttpRequest();
+            const directUploadPromise = new Promise((resolve, reject) => {
+                uploadXhr.open('POST', '/api/admin/upload/direct');
+                uploadXhr.upload.onprogress = (event) => {
                     if (event.lengthComputable) {
                         setProgress(Math.round((event.loaded / event.total) * 100));
                     }
                 };
-                videoXhr.onload = () => {
-                    if (videoXhr.status === 200) resolve(true);
-                    else reject(new Error(`Video upload failed (${videoXhr.status})`));
+                uploadXhr.onload = () => {
+                    let response: { error?: string } = {};
+                    try {
+                        response = JSON.parse(uploadXhr.responseText || '{}');
+                    } catch {
+                        response = {};
+                    }
+                    if (uploadXhr.status >= 200 && uploadXhr.status < 300) {
+                        resolve(response);
+                    } else {
+                        reject(new Error(response.error || `Upload failed (${uploadXhr.status})`));
+                    }
                 };
-                videoXhr.onerror = () => reject(new Error('Network error during video upload'));
-                videoXhr.send(file);
+                uploadXhr.onerror = () => reject(new Error('Network error during upload'));
+                uploadXhr.send(directFormData);
             });
 
-            // 2. Upload Thumbnail (Parallel)
-            let thumbUploadPromise = Promise.resolve(true);
-            if (thumbPresignedUrl && thumbnailFile) {
-                const thumbXhr = new XMLHttpRequest();
-                thumbUploadPromise = new Promise((resolve, reject) => {
-                    thumbXhr.open('PUT', thumbPresignedUrl);
-                    thumbXhr.setRequestHeader('Content-Type', thumbnailFile.type);
-                    thumbXhr.upload.onprogress = (event) => {
-                        if (event.lengthComputable) {
-                            setThumbProgress(Math.round((event.loaded / event.total) * 100));
-                        }
-                    };
-                    thumbXhr.onload = () => {
-                        if (thumbXhr.status === 200) resolve(true);
-                        else reject(new Error(`Thumbnail upload failed (${thumbXhr.status})`));
-                    };
-                    thumbXhr.onerror = () => reject(new Error('Network error during thumbnail upload'));
-                    thumbXhr.send(thumbnailFile);
-                });
-            }
-
-            await Promise.all([videoUploadPromise, thumbUploadPromise]);
-
-            const completeRes = await fetch('/api/admin/upload/complete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ videoId, fileSize: file.size }),
-            });
-
-            if (!completeRes.ok) throw new Error('Database sync failed');
+            await directUploadPromise;
 
             setStatus('success');
             setFile(null);
@@ -485,9 +450,8 @@ export default function AdminUploadPage() {
             setDuration(null);
             setResolution('');
             setProgress(0);
-            setThumbProgress(0);
-        } catch (err: any) {
-            setError(err.message || 'An unexpected error occurred');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred');
             setStatus('error');
         } finally {
             setUploading(false);

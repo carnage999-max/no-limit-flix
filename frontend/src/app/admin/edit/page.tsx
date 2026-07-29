@@ -294,6 +294,9 @@ export default function AdminEditPage() {
     const handleThumbnailSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            if (thumbnailPreview?.startsWith('blob:')) {
+                URL.revokeObjectURL(thumbnailPreview);
+            }
             setThumbnailFile(file);
             const preview = URL.createObjectURL(file);
             setThumbnailPreview(preview);
@@ -318,28 +321,18 @@ export default function AdminEditPage() {
 
             // Upload new thumbnail if provided
             if (thumbnailFile) {
-                const thumbRes = await fetch('/api/admin/edit/thumbnail-presigned-url', {
+                const thumbnailForm = new FormData();
+                thumbnailForm.append('videoId', selectedVideo.id);
+                thumbnailForm.append('file', thumbnailFile);
+
+                const thumbRes = await fetch('/api/admin/edit/thumbnail', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        fileName: thumbnailFile.name,
-                        fileType: thumbnailFile.type,
-                        videoId: selectedVideo.id,
-                    }),
+                    body: thumbnailForm,
                 });
 
-                if (!thumbRes.ok) throw new Error('Failed to get thumbnail upload URL');
-                const { presignedUrl, s3Url } = await thumbRes.json();
-                newThumbnailUrl = s3Url;
-
-                // Upload to S3
-                const uploadRes = await fetch(presignedUrl, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': thumbnailFile.type },
-                    body: thumbnailFile,
-                });
-
-                if (!uploadRes.ok) throw new Error('Failed to upload thumbnail');
+                const thumbnailData = await thumbRes.json();
+                if (!thumbRes.ok) throw new Error(thumbnailData.error || 'Failed to upload thumbnail');
+                newThumbnailUrl = thumbnailData.thumbnailUrl;
             }
 
             // Update metadata
@@ -365,6 +358,10 @@ export default function AdminEditPage() {
 
             setSuccess('Video metadata updated successfully!');
             setThumbnailFile(null);
+            if (thumbnailPreview?.startsWith('blob:')) {
+                URL.revokeObjectURL(thumbnailPreview);
+            }
+            setThumbnailPreview(newThumbnailUrl || null);
             setSelectedVideo((current) => current ? {
                 ...current,
                 title: formData.title,
@@ -620,6 +617,9 @@ export default function AdminEditPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => {
+                                                    if (thumbnailPreview?.startsWith('blob:')) {
+                                                        URL.revokeObjectURL(thumbnailPreview);
+                                                    }
                                                     setThumbnailFile(null);
                                                     setThumbnailPreview(selectedVideo.thumbnailUrl || null);
                                                 }}
