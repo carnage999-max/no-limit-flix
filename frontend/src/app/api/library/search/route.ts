@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
 import { isReviewSafeVideo } from '@/lib/review-safety';
+import { attachRatingSummaries } from '@/lib/ratings';
 
 export async function GET(request: Request) {
     try {
@@ -13,7 +14,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ results: [] });
         }
 
-        const videos = await (prisma.video as any).findMany({
+        const videos = await prisma.video.findMany({
             where: {
                 status: 'completed',
                 OR: [
@@ -52,8 +53,8 @@ export async function GET(request: Request) {
         });
 
         const transformed = videos
-        .filter((video: any) => isReviewSafeVideo(video))
-        .map((video: any) => {
+        .filter((video) => isReviewSafeVideo(video))
+        .map((video) => {
             return {
                 ...video,
                 s3Url: resolveMediaUrl(video.s3Url),
@@ -62,8 +63,10 @@ export async function GET(request: Request) {
             };
         });
 
-        return NextResponse.json({ results: transformed });
-    } catch (error: any) {
+        const results = await attachRatingSummaries(transformed);
+
+        return NextResponse.json({ results });
+    } catch (error) {
         console.error('GET /api/library/search error:', error);
         return NextResponse.json({ error: 'Failed to search library' }, { status: 500 });
     }

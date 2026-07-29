@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ArrowUp, Clapperboard, Filter, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, Clapperboard, Filter, Star, X } from 'lucide-react';
 import { buildWatchHref } from '@/lib/watch-asset';
+import type { RatingSummary } from '@/types';
 
 interface MovieItem {
     id: string;
@@ -17,6 +18,8 @@ interface MovieItem {
     rating?: string | null;
     averageRating?: number | null;
     ratingCount?: number | null;
+    hybridRating?: number | null;
+    ratingSummary?: RatingSummary | null;
     tmdbId?: string | null;
     sourceProvider?: string | null;
     sourcePageUrl?: string | null;
@@ -387,6 +390,10 @@ export default function InternalMoviesPage() {
                                 {movies.map((movie, index) => {
                                     const genres = getGenresForMovie(movie);
                                     const runtime = formatRuntime(movie.duration);
+                                    const displayRating = movie.hybridRating
+                                        ?? movie.ratingSummary?.finalScore
+                                        ?? movie.averageRating
+                                        ?? null;
                                     return (
                                         <li key={movie.id}>
                                             <Link
@@ -439,6 +446,12 @@ export default function InternalMoviesPage() {
                                                     >
                                                         {movie.releaseYear ? <span>{movie.releaseYear}</span> : null}
                                                         {runtime ? <span>{runtime}</span> : null}
+                                                        {displayRating ? (
+                                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#F6D365', fontWeight: 800 }}>
+                                                                <Star className="w-3 h-3" fill="#F6D365" />
+                                                                {Number(displayRating).toFixed(1)}
+                                                            </span>
+                                                        ) : null}
                                                         {genres.length > 0 ? <span>{genres.slice(0, 3).join(', ')}</span> : null}
                                                         <span
                                                             style={{

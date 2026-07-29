@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Search, XCircle, ChevronRight, Film } from 'lucide-react';
 import { ShellPage, ShellPageHeader } from '@/components';
 import { safeBtoa } from '@/lib/base64';
+import type { RatingSummary } from '@/types';
 
 interface TmdbResult {
     id: string;
@@ -23,6 +24,8 @@ interface LibraryResult {
     rating?: string | null;
     averageRating?: number | null;
     ratingCount?: number | null;
+    hybridRating?: number | null;
+    ratingSummary?: RatingSummary | null;
     tmdbId?: string | null;
     sourceProvider?: string | null;
     sourcePageUrl?: string | null;
@@ -104,6 +107,8 @@ export default function SearchPage() {
             rating: item.rating || null,
             averageRating: item.averageRating ?? null,
             ratingCount: item.ratingCount ?? null,
+            hybridRating: item.hybridRating ?? null,
+            ratingSummary: item.ratingSummary ?? null,
             playable: true,
             assetId: item.id,
             tmdbId: item.tmdbId,

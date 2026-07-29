@@ -69,6 +69,7 @@ model Video {
   watchHistory WatchHistory[]
   favorites    Favorite[]
   actors       ActorOnVideo[]
+  userRatings  UserRating[]
 }
 
 model Actor {
@@ -139,6 +140,7 @@ model User {
   issueReports      IssueReport[]
   sessions          UserSession[]
   subscriptions     BillingSubscription[]
+  ratings           UserRating[]
 
   @@index([email])
   @@index([username])
@@ -218,6 +220,27 @@ model UserSession {
   @@unique([userId, deviceId])
   @@index([sessionId])
   @@index([revokedAt])
+}
+
+model UserRating {
+  id                     String   @id @default(cuid())
+  userId                 String
+  videoId                String
+  score                  Int      // 1-5 stars
+  feedback               String?
+  watchCompletionPercent Float?
+  verifiedCompletion     Boolean  @default(false)
+  weight                 Float    @default(1.0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video                  Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId], name: "userVideoRatingUnique")
+  @@index([videoId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model WatchHistory {

@@ -3,6 +3,7 @@ import { getMovieDetails } from '@/lib/tmdb';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
 import { isReviewSafeVideo } from '@/lib/review-safety';
+import { getRatingSummary } from '@/lib/ratings';
 
 export async function GET(
     request: NextRequest,
@@ -53,6 +54,8 @@ export async function GET(
                 );
             }
 
+            const ratingSummary = await getRatingSummary(video.id);
+
             return NextResponse.json({
                 id: video.id,
                 title: video.title,
@@ -64,6 +67,8 @@ export async function GET(
                 rating: video.rating,
                 averageRating: video.averageRating,
                 ratingCount: video.ratingCount,
+                ratingSummary,
+                hybridRating: ratingSummary?.finalScore ?? video.averageRating,
                 assets: [
                     {
                         id: video.id,
@@ -125,8 +130,13 @@ export async function GET(
 
         const safeAssets = assets.filter((asset) => isReviewSafeVideo(asset));
 
+        const firstAsset = safeAssets[0];
+        const ratingSummary = firstAsset ? await getRatingSummary(firstAsset.id) : null;
+
         return NextResponse.json({
             ...movie,
+            ratingSummary,
+            hybridRating: ratingSummary?.finalScore ?? movie.rating,
             assets: safeAssets.map((asset) => ({
                 id: asset.id,
                 title: asset.title,
@@ -143,7 +153,7 @@ export async function GET(
                 resolution: asset.resolution,
             }))
         });
-    } catch (error: any) {
+    } catch (error) {
         console.error('Error fetching movie details:', error);
         return NextResponse.json(
             { error: 'Failed to fetch title details' },

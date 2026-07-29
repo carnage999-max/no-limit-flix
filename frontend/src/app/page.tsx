@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HeroCard, TitleTile, HeroSkeleton, TileSkeleton, TabSwitch, CardViewToggle, IconTile } from '@/components';
-import type { MoviePick, AIPickRequest } from '@/types';
+import type { MoviePick, AIPickRequest, RatingSummary } from '@/types';
 import { useSearch } from '@/context/SearchContext';
 import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
@@ -81,6 +81,8 @@ interface HostedLibraryItem {
     rating?: string | null;
     averageRating?: number | null;
     ratingCount?: number | null;
+    hybridRating?: number | null;
+    ratingSummary?: RatingSummary | null;
     sourceProvider?: string;
     sourcePageUrl?: string;
     sourceRights?: string;
@@ -382,6 +384,8 @@ export default function HomePage() {
                         rating: video.rating || null,
                         averageRating: video.averageRating ?? null,
                         ratingCount: video.ratingCount ?? null,
+                        hybridRating: video.hybridRating ?? null,
+                        ratingSummary: video.ratingSummary ?? null,
                         watchProviders: [],
                         playable: true,
                         assetId: video.id,
@@ -400,9 +404,10 @@ export default function HomePage() {
                 const tvData = await tvRes.json();
                 console.log('TV data:', tvData);
                 setHostedSeriesCount((tvData.series || []).length);
-                    const series = pickRandomItems(tvData.series || [], 10).map((tv: HostedLibraryItem) => ({
+                    const seriesItems = (tvData.series || []) as HostedLibraryItem[];
+                    const series = pickRandomItems(seriesItems, 10).map((tv) => ({
                         id: tv.seriesTitle || tv.id,
-                        title: tv.seriesTitle,
+                        title: tv.seriesTitle || tv.title || 'Untitled',
                         year: tv.releaseYear || new Date().getFullYear(),
                         runtime: 45,
                         poster: tv.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400',
@@ -412,10 +417,12 @@ export default function HomePage() {
                         rating: tv.rating || null,
                         averageRating: tv.averageRating ?? null,
                         ratingCount: tv.ratingCount ?? null,
+                        hybridRating: tv.hybridRating ?? null,
+                        ratingSummary: tv.ratingSummary ?? null,
                         watchProviders: [],
                         playable: true,
                         assetId: tv.id,
-                        cloudfrontUrl: tv.thumbnailUrl,
+                        cloudfrontUrl: tv.thumbnailUrl ?? undefined,
                 }));
                 setHostedSeries(series);
             } else {
@@ -426,7 +433,7 @@ export default function HomePage() {
                 const historyData = await historyRes.json();
                 const entries = historyData.watchHistory || [];
                 const historyItems = entries.map((entry: WatchHistoryLibraryEntry) => {
-                    const video = entry.video || {};
+                    const video = (entry.video || {}) as Partial<HostedLibraryItem>;
                     const progress = typeof entry.completionPercent === 'number'
                         ? entry.completionPercent
                         : (entry.totalDuration && entry.duration)
@@ -444,6 +451,8 @@ export default function HomePage() {
                         rating: video.rating || null,
                         averageRating: video.averageRating ?? null,
                         ratingCount: video.ratingCount ?? null,
+                        hybridRating: video.hybridRating ?? null,
+                        ratingSummary: video.ratingSummary ?? null,
                         watchProviders: [],
                         playable: true,
                         assetId: video.id || entry.videoId,
@@ -563,7 +572,7 @@ export default function HomePage() {
         }
     };
 
-    const fetchInternalMatches = async (query: string) => {
+    const fetchInternalMatches = async (query: string): Promise<MoviePick[]> => {
         if (!query || query.length < 2) return [];
         try {
             const response = await fetch(`/api/library/search?q=${encodeURIComponent(query)}&limit=12`);
@@ -582,6 +591,8 @@ export default function HomePage() {
                 rating: video.rating || null,
                 averageRating: video.averageRating ?? null,
                 ratingCount: video.ratingCount ?? null,
+                hybridRating: video.hybridRating ?? null,
+                ratingSummary: video.ratingSummary ?? null,
                 watchProviders: [],
                 playable: true,
                 assetId: video.id,

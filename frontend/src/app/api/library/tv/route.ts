@@ -2,6 +2,23 @@ import { NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
 import { isReviewSafeVideo } from '@/lib/review-safety';
+import { attachRatingSummaries } from '@/lib/ratings';
+import type { RatingSummary } from '@/lib/ratings';
+
+type SeriesGroup = {
+    seriesTitle: string;
+    thumbnailUrl: string | null;
+    genre: string | null;
+    rating: string | null;
+    averageRating: number | null;
+    ratingCount: number | null;
+    ratingSummary: RatingSummary;
+    hybridRating: number | null;
+    tmdbId: string | null;
+    description: string | null;
+    episodeCount: number;
+    episodes: unknown[];
+};
 
 /**
  * GET /api/library/tv
@@ -11,7 +28,7 @@ import { isReviewSafeVideo } from '@/lib/review-safety';
  */
 export async function GET() {
     try {
-        const episodes = await (prisma.video as any).findMany({
+        const episodes = await prisma.video.findMany({
             where: {
                 type: 'series',
                 status: 'completed',
@@ -47,10 +64,11 @@ export async function GET() {
             },
         });
 
-        const reviewSafeEpisodes = episodes.filter((episode: any) => isReviewSafeVideo(episode));
+        const safeEpisodes = episodes.filter((episode) => isReviewSafeVideo(episode));
+        const reviewSafeEpisodes = await attachRatingSummaries(safeEpisodes);
 
         // Group by seriesTitle so the mobile app can render a series list
-        const seriesMap: Record<string, any> = {};
+        const seriesMap: Record<string, SeriesGroup> = {};
         for (const ep of reviewSafeEpisodes) {
             const transformedEp = {
                 ...ep,
@@ -67,6 +85,8 @@ export async function GET() {
                     rating: ep.rating,
                     averageRating: ep.averageRating,
                     ratingCount: ep.ratingCount,
+                    ratingSummary: ep.ratingSummary,
+                    hybridRating: ep.hybridRating,
                     tmdbId: ep.tmdbId,
                     description: transformedEp.description,
                     episodeCount: 0,
@@ -89,7 +109,7 @@ export async function GET() {
         const series = Object.values(seriesMap);
 
         return NextResponse.json({ series });
-    } catch (error: any) {
+    } catch (error) {
         console.error('GET /api/library/tv error:', error);
         return NextResponse.json(
             { error: 'Failed to fetch TV library' },

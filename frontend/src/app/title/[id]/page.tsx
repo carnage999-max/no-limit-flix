@@ -3,22 +3,31 @@
 import { use, useState, useEffect } from 'react';
 import { notFound, useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal } from '@/components';
+import { ButtonPrimary, ButtonSecondary, Skeleton, TrailerModal, UserRatingPanel } from '@/components';
 import VideoPlayer from '@/components/VideoPlayer';
 import { getMovieDetails, getMovieCast } from '@/lib/tmdb';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import type { MoviePick, CastMember } from '@/types';
-import { ExternalLink, Play, Smartphone } from 'lucide-react';
+import { Play, Smartphone } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { safeAtob } from '@/lib/base64';
 import { buildWatchHref } from '@/lib/watch-asset';
+
+type TitleApiData = MoviePick & {
+    overview?: string;
+    genre?: string | null;
+    assets?: Array<{
+        id: string;
+        playbackUrl?: string | null;
+    }>;
+};
 
 export default function TitlePage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const router = useRouter();
     const searchParams = useSearchParams();
     const [movie, setMovie] = useState<MoviePick | null>(null);
-    const [tmdbData, setTmdbData] = useState<any>(null);
+    const [tmdbData, setTmdbData] = useState<TitleApiData | null>(null);
     const [cast, setCast] = useState<CastMember[]>([]);
     const [loading, setLoading] = useState(true);
     const [isTrailerOpen, setIsTrailerOpen] = useState(false);
@@ -62,14 +71,33 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                     }
                 }
 
-                // Otherwise, fetch from TMDB (TMDB content)
-                const [details, castData] = await Promise.all([
-                    getMovieDetails(id),
-                    getMovieCast(id),
-                ]);
-                setMovie(details);
+                // Otherwise, fetch through the local title API so hosted assets can carry ratings.
+                const detailResponse = await fetch(`/api/title/${id}`, { cache: 'no-store' });
+                if (!detailResponse.ok) {
+                    throw new Error('Failed to fetch title');
+                }
+                const details = await detailResponse.json() as TitleApiData;
+                const firstAsset = Array.isArray(details.assets) ? details.assets[0] : null;
+                const hydratedMovie = {
+                    ...details,
+                    explanation: details.explanation || details.description || details.overview || '',
+                    playable: Boolean(firstAsset),
+                    assetId: firstAsset?.id,
+                    cloudfrontUrl: firstAsset?.playbackUrl,
+                    poster: details.poster || '/poster-placeholder.svg',
+                    genres: Array.isArray(details.genres) ? details.genres : [],
+                    watchProviders: details.watchProviders || [],
+                } as MoviePick;
+                setMovie(hydratedMovie);
                 setTmdbData(details);
-                setCast(castData);
+                if (/^\d+$/.test(id)) {
+                    try {
+                        const castData = await getMovieCast(id);
+                        setCast(castData);
+                    } catch (error) {
+                        console.warn('Failed to fetch cast data:', error);
+                    }
+                }
             } catch (e) {
                 console.warn('Failed to fetch from TMDB:', e);
                 setMovie(null);
@@ -111,10 +139,10 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
 
     const descriptionText = movie.description || tmdbData?.overview || '';
     const numericMovieRating = typeof movie.rating === 'number' ? movie.rating : null;
-    const averageRating = movie.averageRating ?? numericMovieRating ?? (typeof tmdbData?.rating === 'number' ? tmdbData.rating : null);
+    const averageRating = movie.hybridRating ?? movie.ratingSummary?.finalScore ?? movie.averageRating ?? numericMovieRating ?? (typeof tmdbData?.rating === 'number' ? tmdbData.rating : null);
     const maturityRating = typeof movie.rating === 'string' ? movie.rating : null;
     const rawGenres = Array.isArray(movie.genres) ? movie.genres : [];
-    const fallbackGenre = (movie as any).genre;
+    const fallbackGenre = (movie as MoviePick & { genre?: string | null }).genre;
     const normalizedGenres = rawGenres
         .flatMap((genre) => genre.split(','))
         .map((genre) => genre.trim())
@@ -139,6 +167,7 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
         const ratingLabel = `Rated ${maturityRating}`;
         tagItems.push(ratingLabel);
     }
+    const hostedAssetId = movie.assetId || (!/^\d+$/.test(id) ? movie.id : (movie as TitleApiData).assets?.[0]?.id);
 
     return (
         <>
@@ -313,6 +342,12 @@ export default function TitlePage({ params }: { params: Promise<{ id: string }> 
                                     )}
                                 </div>
                             )}
+
+                            <UserRatingPanel
+                                videoId={hostedAssetId}
+                                initialSummary={movie.ratingSummary}
+                                fallbackScore={averageRating}
+                            />
 
                             {descriptionText && (
                                 <div

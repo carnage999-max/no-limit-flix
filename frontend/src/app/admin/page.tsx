@@ -10,6 +10,7 @@ import {
     Gauge,
     Import,
     Settings,
+    Star,
     Upload,
     Users,
 } from 'lucide-react';
@@ -23,6 +24,8 @@ interface AdminDashboardData {
         completedViews: number;
         completionRate: number;
         totalMinutesWatched: number;
+        userRatingCount: number;
+        averageUserRating: number;
     };
     moviePerformance: Array<{
         videoId: string;
@@ -33,6 +36,8 @@ interface AdminDashboardData {
         completedCount: number;
         avgCompletion: number;
         minutesWatched: number;
+        userRatingCount: number;
+        avgUserRating: number;
     }>;
 }
 
@@ -90,6 +95,7 @@ export default function AdminDashboardPage() {
         { label: 'Users', value: stats?.totalUsers ?? 0, note: 'Registered accounts', icon: Users },
         { label: 'Views', value: stats?.totalViews ?? 0, note: `${stats?.completedViews ?? 0} completed`, icon: BarChart3 },
         { label: 'Completion', value: `${stats?.completionRate ?? 0}%`, note: `${stats?.totalMinutesWatched ?? 0} minutes watched`, icon: Gauge },
+        { label: 'User ratings', value: stats?.userRatingCount ?? 0, note: `${stats?.averageUserRating ?? 0}/10 average`, icon: Star },
     ];
 
     return (
@@ -150,10 +156,10 @@ export default function AdminDashboardPage() {
                     </div>
 
                     <div style={{ overflowX: 'auto', border: '1px solid rgba(167, 171, 180, 0.13)', borderRadius: '0.75rem' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '820px', background: 'rgba(18, 18, 24, 0.58)' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '920px', background: 'rgba(18, 18, 24, 0.58)' }}>
                             <thead>
                                 <tr style={{ borderBottom: '1px solid rgba(167, 171, 180, 0.14)' }}>
-                                    {['Movie', 'Category', 'Year', 'Views', 'Completed', 'Avg completion', 'Minutes'].map((header) => (
+                                    {['Movie', 'Category', 'Year', 'Views', 'Completed', 'Avg completion', 'User rating', 'Minutes'].map((header) => (
                                         <th key={header} style={{ textAlign: 'left', padding: '0.85rem 1rem', color: '#A7ABB4', fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                             {header}
                                         </th>
@@ -169,12 +175,15 @@ export default function AdminDashboardPage() {
                                         <td style={{ padding: '0.85rem 1rem', color: '#F3F4F6' }}>{movie.watchCount}</td>
                                         <td style={{ padding: '0.85rem 1rem', color: '#F3F4F6' }}>{movie.completedCount}</td>
                                         <td style={{ padding: '0.85rem 1rem', color: '#F3F4F6' }}>{movie.avgCompletion}%</td>
+                                        <td style={{ padding: '0.85rem 1rem', color: '#F3F4F6' }}>
+                                            {movie.userRatingCount > 0 ? `${movie.avgUserRating.toFixed(1)}/10 (${movie.userRatingCount})` : '-'}
+                                        </td>
                                         <td style={{ padding: '0.85rem 1rem', color: '#F3F4F6' }}>{movie.minutesWatched}</td>
                                     </tr>
                                 ))}
                                 {!loading && (!dashboard?.moviePerformance || dashboard.moviePerformance.length === 0) ? (
                                     <tr>
-                                        <td colSpan={7} style={{ padding: '2rem', textAlign: 'center', color: '#A7ABB4' }}>
+                                        <td colSpan={8} style={{ padding: '2rem', textAlign: 'center', color: '#A7ABB4' }}>
                                             No movie performance data yet.
                                         </td>
                                     </tr>
