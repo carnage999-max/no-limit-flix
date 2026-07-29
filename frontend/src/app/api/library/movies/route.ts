@@ -126,9 +126,12 @@ export async function GET(request: Request) {
             ? { AND: [baseWhere, buildCategoryWhere(category)] }
             : baseWhere;
 
-        const orderBy: Prisma.VideoOrderByWithRelationInput[] = searchParams.get('sort') === 'recent'
+        const sort = searchParams.get('sort');
+        const orderBy: Prisma.VideoOrderByWithRelationInput[] = sort === 'recent'
             ? [{ createdAt: 'desc' }]
-            : [{ title: 'asc' }, { createdAt: 'desc' }];
+            : sort === 'title-desc'
+                ? [{ title: 'desc' }, { createdAt: 'desc' }]
+                : [{ title: 'asc' }, { createdAt: 'desc' }];
 
         const [videos, total, categoryRows] = await Promise.all([
             prisma.video.findMany({

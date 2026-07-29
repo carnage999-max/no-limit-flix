@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import type { MediaPlayerInstance } from '@vidstack/react';
 import { DefaultVideoLayout, defaultLayoutIcons } from '@vidstack/react/player/layouts/default';
 import { AlertTriangle, Smartphone, Monitor } from 'lucide-react';
 import '@vidstack/react/player/styles/default/theme.css';
@@ -11,59 +12,52 @@ interface VideoPlayerProps {
     src: string;
     assetId?: string;  // Asset ID for fetching signed auth
     poster?: string;
-    onReady?: (player: any) => void;
+    onReady?: (player: MediaPlayerInstance | null) => void;
     title?: string;
     enableWatchTracking?: boolean;
 }
 
 export default function VideoPlayer({ src, assetId, poster, onReady, title, enableWatchTracking = true }: VideoPlayerProps) {
-    const playerRef = useRef<any>(null);
+    const playerRef = useRef<MediaPlayerInstance | null>(null);
     const lastReportRef = useRef<{ time: number; sentAt: number }>({ time: 0, sentAt: 0 });
     const [error, setError] = useState<string | null>(null);
-    const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
-    const [playbackType, setPlaybackType] = useState<'mp4' | 'hls'>('mp4');
-    const [isLoading, setIsLoading] = useState(true);
-    const [isTouch, setIsTouch] = useState(false);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        const touch = window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
-        setIsTouch(Boolean(touch));
-    }, []);
-
+    const [signedPlaybackUrl, setSignedPlaybackUrl] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(Boolean(assetId));
     // Fetch signed playback credentials if assetId provided
     useEffect(() => {
-        if (assetId) {
-            const fetchSignedAuth = async () => {
-                try {
-                    const response = await fetch(`/api/watch/start`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ assetId }),
-                    });
+        if (!assetId) return;
 
-                    if (!response.ok) {
-                        setPlaybackUrl(src);
-                        setIsLoading(false);
-                        return;
-                    }
+        let cancelled = false;
+        const fetchSignedAuth = async () => {
+            try {
+                setIsLoading(true);
+                const response = await fetch(`/api/watch/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ assetId }),
+                });
 
-                    const data = await response.json();
-                    setPlaybackType(data.playbackType);
-                    setPlaybackUrl(data.playbackUrl);
-                    setIsLoading(false);
-                } catch {
-                    setPlaybackUrl(src);
-                    setIsLoading(false);
+                if (!response.ok) {
+                    if (!cancelled) setSignedPlaybackUrl(null);
+                    return;
                 }
-            };
 
-            fetchSignedAuth();
-        } else {
-            setPlaybackUrl(src);
-            setIsLoading(false);
-        }
-    }, [assetId, src]);
+                const data = await response.json();
+                if (!cancelled) setSignedPlaybackUrl(data.playbackUrl || null);
+            } catch {
+                if (!cancelled) setSignedPlaybackUrl(null);
+            } finally {
+                if (!cancelled) setIsLoading(false);
+            }
+        };
+
+        fetchSignedAuth();
+        return () => {
+            cancelled = true;
+        };
+    }, [assetId]);
+
+    const playbackUrl = signedPlaybackUrl || src;
 
     const handleWatchProgress = async (force: boolean) => {
         if (!enableWatchTracking || !assetId) return;
@@ -147,9 +141,9 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 ref={playerRef}
                 src={playbackUrl}
                 poster={poster}
-                autoplay={!isTouch}
-                playsInline={!isTouch}
-                controls={isTouch}
+                autoPlay={false}
+                playsInline
+                controls
                 onCanPlay={() => onReady && onReady(playerRef.current)}
                 onTimeUpdate={() => handleWatchProgress(false)}
                 onPlay={() => handleWatchProgress(true)}

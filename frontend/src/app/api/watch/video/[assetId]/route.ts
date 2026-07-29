@@ -31,6 +31,9 @@ export async function GET(
             description: true,
             thumbnailUrl: true,
             s3Url: true,
+            cloudfrontPath: true,
+            s3KeyPlayback: true,
+            playbackType: true,
             resolution: true,
             duration: true,
             tmdbId: true,
@@ -78,7 +81,7 @@ export async function GET(
 
         const transformedVideo = {
             ...video,
-            s3Url: resolveMediaUrl(video.s3Url),
+            s3Url: resolveMediaUrl(video.s3Url || video.cloudfrontPath || video.s3KeyPlayback),
             thumbnailUrl: resolveMediaUrl(video.thumbnailUrl),
         };
 

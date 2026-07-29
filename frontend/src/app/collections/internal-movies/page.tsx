@@ -40,6 +40,7 @@ interface LibraryMoviesResponse {
 }
 
 const PAGE_SIZE = 60;
+type SortMode = 'title' | 'title-desc';
 
 const getGenresForMovie = (movie: MovieItem) => {
     if (!movie.genre) return [];
@@ -54,9 +55,9 @@ const formatRuntime = (duration?: number | null) => {
     return `${Math.floor(duration / 60)}m`;
 };
 
-const buildMoviesUrl = (page: number, category: string, includeCategories = false) => {
+const buildMoviesUrl = (page: number, category: string, sortMode: SortMode, includeCategories = false) => {
     const params = new URLSearchParams({
-        sort: 'title',
+        sort: sortMode,
         page: String(page),
         limit: String(PAGE_SIZE),
     });
@@ -76,6 +77,7 @@ export default function InternalMoviesPage() {
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
     const [categoryFilter, setCategoryFilter] = useState('all');
+    const [sortMode, setSortMode] = useState<SortMode>('title');
     const [page, setPage] = useState(1);
     const [totalMovies, setTotalMovies] = useState(0);
     const [hasMore, setHasMore] = useState(false);
@@ -110,7 +112,7 @@ export default function InternalMoviesPage() {
             setError(null);
 
             try {
-                const response = await fetch(buildMoviesUrl(1, categoryFilter, true), {
+                const response = await fetch(buildMoviesUrl(1, categoryFilter, sortMode, true), {
                     signal: controller.signal,
                 });
 
@@ -141,7 +143,7 @@ export default function InternalMoviesPage() {
         fetchFirstPage();
 
         return () => controller.abort();
-    }, [categoryFilter]);
+    }, [categoryFilter, sortMode]);
 
     useEffect(() => {
         if (categoryFilter === 'all' || categoryOptions.length === 0) return;
@@ -167,7 +169,7 @@ export default function InternalMoviesPage() {
         setError(null);
 
         try {
-            const response = await fetch(buildMoviesUrl(nextPage, categoryFilter));
+            const response = await fetch(buildMoviesUrl(nextPage, categoryFilter, sortMode));
 
             if (!response.ok) {
                 throw new Error('Failed to fetch more movies.');
@@ -187,6 +189,7 @@ export default function InternalMoviesPage() {
     };
 
     const activeCategoryLabel = categoryFilter === 'all' ? 'All Categories' : categoryFilter;
+    const sortLabel = sortMode === 'title' ? 'A-Z' : 'Z-A';
 
     return (
         <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
@@ -249,28 +252,101 @@ export default function InternalMoviesPage() {
                             </p>
                         </div>
                     </div>
+                </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setFilterOpen((prev) => !prev)}
-                        style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.55rem',
-                            border: '1px solid rgba(212, 175, 55, 0.35)',
-                            borderRadius: '999px',
-                            background: categoryFilter === 'all' ? 'rgba(18, 18, 24, 0.86)' : 'rgba(212, 175, 55, 0.16)',
-                            color: categoryFilter === 'all' ? '#F3F4F6' : '#F6D365',
-                            padding: '0.72rem 1rem',
-                            fontWeight: 700,
-                            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.28)',
-                        }}
-                        aria-expanded={filterOpen}
-                        aria-label="Filter by category"
-                    >
-                        <Filter className="w-4 h-4" />
-                        {activeCategoryLabel}
-                    </button>
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: '0.9rem',
+                        padding: '0.85rem 0',
+                        borderTop: '1px solid rgba(167, 171, 180, 0.12)',
+                        borderBottom: '1px solid rgba(167, 171, 180, 0.12)',
+                        marginBottom: '1.25rem',
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                        <button
+                            type="button"
+                            onClick={() => setFilterOpen((prev) => !prev)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.55rem',
+                                minHeight: '2.5rem',
+                                border: '1px solid rgba(212, 175, 55, 0.35)',
+                                borderRadius: '0.5rem',
+                                background: categoryFilter === 'all' ? 'rgba(18, 18, 24, 0.86)' : 'rgba(212, 175, 55, 0.16)',
+                                color: categoryFilter === 'all' ? '#F3F4F6' : '#F6D365',
+                                padding: '0.62rem 0.82rem',
+                                fontWeight: 800,
+                            }}
+                            aria-expanded={filterOpen}
+                            aria-label="Filter by category"
+                        >
+                            <Filter className="w-4 h-4" />
+                            Filter: {activeCategoryLabel}
+                        </button>
+                        {categoryFilter !== 'all' ? (
+                            <button
+                                type="button"
+                                onClick={() => setCategoryFilter('all')}
+                                style={{
+                                    minHeight: '2.5rem',
+                                    border: '1px solid rgba(167, 171, 180, 0.18)',
+                                    borderRadius: '0.5rem',
+                                    background: 'rgba(167, 171, 180, 0.06)',
+                                    color: '#A7ABB4',
+                                    padding: '0.56rem 0.72rem',
+                                    fontWeight: 700,
+                                }}
+                            >
+                                Clear
+                            </button>
+                        ) : null}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                        <span style={{ color: '#A7ABB4', fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase' }}>
+                            Sort
+                        </span>
+                        <div
+                            style={{
+                                display: 'inline-flex',
+                                border: '1px solid rgba(167, 171, 180, 0.16)',
+                                borderRadius: '0.55rem',
+                                overflow: 'hidden',
+                                background: 'rgba(18, 18, 24, 0.72)',
+                            }}
+                            aria-label="Sort movies"
+                        >
+                            {([
+                                ['title', 'A-Z'],
+                                ['title-desc', 'Z-A'],
+                            ] as Array<[SortMode, string]>).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => setSortMode(value)}
+                                    aria-pressed={sortMode === value}
+                                    style={{
+                                        minHeight: '2.4rem',
+                                        border: 'none',
+                                        borderRight: value === 'title' ? '1px solid rgba(167, 171, 180, 0.12)' : 'none',
+                                        background: sortMode === value ? '#D4AF37' : 'transparent',
+                                        color: sortMode === value ? '#0B0B0D' : '#F3F4F6',
+                                        padding: '0.58rem 0.84rem',
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 {filterOpen && (
@@ -368,7 +444,7 @@ export default function InternalMoviesPage() {
                     style={{
                         borderTop: '1px solid rgba(167, 171, 180, 0.15)',
                     }}
-                    aria-label={`${activeCategoryLabel} movies in alphabetical order`}
+                    aria-label={`${activeCategoryLabel} movies sorted by ${sortLabel}`}
                 >
                     {loading ? (
                         <div style={{ display: 'grid', gap: '0.65rem', paddingTop: '1rem' }}>
@@ -376,7 +452,7 @@ export default function InternalMoviesPage() {
                                 <div
                                     key={index}
                                     style={{
-                                        height: '76px',
+                                        height: '118px',
                                         borderRadius: '0.5rem',
                                         background: 'linear-gradient(90deg, rgba(167, 171, 180, 0.07), rgba(167, 171, 180, 0.13), rgba(167, 171, 180, 0.07))',
                                         animation: 'pulse 2s ease-in-out infinite',
@@ -400,11 +476,11 @@ export default function InternalMoviesPage() {
                                                 href={buildWatchHref(movie.id)}
                                                 style={{
                                                     display: 'grid',
-                                                    gridTemplateColumns: '4.25rem minmax(0, 1fr)',
+                                                    gridTemplateColumns: '4.25rem 72px minmax(0, 1fr)',
                                                     alignItems: 'center',
                                                     gap: '1rem',
-                                                    minHeight: '76px',
-                                                    padding: '0.85rem 0',
+                                                    minHeight: '116px',
+                                                    padding: '0.95rem 0',
                                                     borderBottom: '1px solid rgba(167, 171, 180, 0.12)',
                                                     color: 'inherit',
                                                     textDecoration: 'none',
@@ -419,6 +495,26 @@ export default function InternalMoviesPage() {
                                                     }}
                                                 >
                                                     {String(index + 1).padStart(2, '0')}
+                                                </span>
+                                                <span
+                                                    style={{
+                                                        position: 'relative',
+                                                        width: '72px',
+                                                        height: '96px',
+                                                        borderRadius: '0.5rem',
+                                                        overflow: 'hidden',
+                                                        background: 'rgba(167, 171, 180, 0.08)',
+                                                        border: '1px solid rgba(167, 171, 180, 0.12)',
+                                                    }}
+                                                >
+                                                    <Image
+                                                        src={movie.thumbnailUrl || '/poster-placeholder.svg'}
+                                                        alt={movie.title}
+                                                        fill
+                                                        sizes="72px"
+                                                        style={{ objectFit: 'cover' }}
+                                                        unoptimized
+                                                    />
                                                 </span>
                                                 <span style={{ minWidth: 0 }}>
                                                     <span
