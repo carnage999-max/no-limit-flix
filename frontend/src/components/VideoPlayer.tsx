@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MediaPlayer, MediaProvider } from '@vidstack/react';
 import type { MediaPlayerInstance, PlayerSrc } from '@vidstack/react';
 import { DefaultVideoLayout, defaultLayoutIcons } from '@vidstack/react/player/layouts/default';
-import { AlertTriangle, Smartphone, Monitor } from 'lucide-react';
+import { AlertTriangle, Smartphone, Monitor, Play } from 'lucide-react';
 import '@vidstack/react/player/styles/default/theme.css';
 import '@vidstack/react/player/styles/default/layouts/video.css';
 
@@ -49,6 +49,8 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
     const [signedPlaybackUrl, setSignedPlaybackUrl] = useState<string | null>(null);
     const [playbackType, setPlaybackType] = useState<'mp4' | 'hls' | null>(null);
     const [isLoading, setIsLoading] = useState(Boolean(assetId));
+    const [hasStarted, setHasStarted] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
     // Fetch signed playback credentials if assetId provided
     useEffect(() => {
         if (!assetId) return;
@@ -197,15 +199,56 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 onProviderChange={(provider) => restrictNativeVideoDownloads(provider)}
                 onCanPlay={() => onReady && onReady(playerRef.current)}
                 onTimeUpdate={() => handleWatchProgress(false)}
-                onPlay={() => handleWatchProgress(true)}
-                onPause={() => handleWatchProgress(true)}
-                onEnded={() => handleWatchProgress(true)}
+                onPlay={() => {
+                    setHasStarted(true);
+                    setIsPaused(false);
+                    handleWatchProgress(true);
+                }}
+                onPause={() => {
+                    setIsPaused(true);
+                    handleWatchProgress(true);
+                }}
+                onEnded={() => {
+                    setIsPaused(false);
+                    handleWatchProgress(true);
+                }}
                 onError={handleError}
                 style={{ width: '100%', height: '100%' }}
             >
                 <MediaProvider />
                 <DefaultVideoLayout icons={defaultLayoutIcons} />
             </MediaPlayer>
+            {hasStarted && isPaused && (
+                <div
+                    className="absolute inset-0 flex items-end animate-fade-in"
+                    style={{
+                        background: 'linear-gradient(180deg, rgba(6,8,12,0.15) 0%, rgba(5,6,8,0.55) 100%)',
+                        pointerEvents: 'none',
+                        zIndex: 15,
+                    }}
+                >
+                    <div className="flex items-center gap-4 p-6 sm:p-10">
+                        <button
+                            type="button"
+                            aria-label="Resume playback"
+                            onClick={() => playerRef.current?.play()}
+                            className="flex items-center justify-center rounded-full transition-transform hover:scale-105"
+                            style={{
+                                width: 64,
+                                height: 64,
+                                background: 'linear-gradient(135deg, #D4AF37 0%, #F6D365 100%)',
+                                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                                pointerEvents: 'auto',
+                            }}
+                        >
+                            <Play className="w-7 h-7 text-black" fill="black" style={{ marginLeft: 3 }} />
+                        </button>
+                        {title && (
+                            <p className="text-white text-lg sm:text-2xl font-bold drop-shadow-lg">{title}</p>
+                        )}
+                    </div>
+                </div>
+            )}
             <style jsx global>{`
                 .vds-media-player {
                     border-radius: 12px;

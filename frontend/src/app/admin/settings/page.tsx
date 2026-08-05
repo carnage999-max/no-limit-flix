@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, CheckCircle2, CreditCard, User as UserIcon } from 'lucide-react';
+import { formatDateTime } from '@/lib/format';
 
 interface User {
     id: string;
@@ -772,11 +773,11 @@ export default function AdminSettingsPage() {
                                         fontSize: '0.8rem'
                                     }}>
                                         <span>
-                                            Submitted: {new Date(request.createdAt).toLocaleString()}
+                                            Submitted: {formatDateTime(request.createdAt)}
                                         </span>
                                         {request.processedAt && (
                                             <span>
-                                                Processed: {new Date(request.processedAt).toLocaleString()}
+                                                Processed: {formatDateTime(request.processedAt)}
                                             </span>
                                         )}
                                     </div>

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Trash2 } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { safeBtoa } from '@/lib/base64';
+import { formatRelativeTime } from '@/lib/format';
 import { ConfirmModal, ShellPage, ShellPageHeader } from '@/components';
 import { useToast } from '@/components/Toast';
 
@@ -152,7 +153,7 @@ export default function WatchHistoryPage() {
                                         {entry.video?.releaseYear || '—'} {entry.video?.genre ? `· ${entry.video.genre}` : ''}
                                     </div>
                                     <div style={{ fontSize: '0.75rem', color: '#8C9099', marginTop: '0.4rem' }}>
-                                        Last watched {new Date(entry.watchedAt).toLocaleString()}
+                                        Last watched {formatRelativeTime(entry.watchedAt)}
                                     </div>
                                     {entry.completionPercent !== null && entry.completionPercent !== undefined && (
                                         <div style={{ marginTop: '0.5rem' }}>
