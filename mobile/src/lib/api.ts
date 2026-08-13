@@ -154,15 +154,17 @@ export const apiClient = {
     return data;
   },
 
-  getAvatarUploadUrl: async (fileName: string, fileType: string) => {
-    const response = await authFetch(`${BASE_URL}/api/account/avatar-presigned-url`, {
+  uploadAvatar: async (file: { uri: string; name: string; type: string }) => {
+    const formData = new FormData();
+    formData.append('file', file as any);
+
+    const response = await authFetch(`${BASE_URL}/api/account/avatar`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileName, fileType }),
+      body: formData,
     });
     const data = await parseJson(response);
     if (!response.ok) {
-      throw new Error(data?.error || 'Failed to create avatar upload');
+      throw new Error(data?.error || 'Failed to upload avatar');
     }
     return data;
   },

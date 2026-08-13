@@ -97,6 +97,112 @@ const extensionForResponse = (url, contentType) => {
   return IMAGE_TYPES.get(normalizedType) || extensionFromUrl(url) || 'jpg';
 };
 
+const contentTypeBase = (contentType) => String(contentType || '').split(';')[0].trim().toLowerCase();
+const isImageResponse = (response) => IMAGE_TYPES.has(contentTypeBase(response.headers.get('content-type')));
+const isHtmlResponse = (response) => contentTypeBase(response.headers.get('content-type')) === 'text/html';
+
+const decodeHtmlEntity = (value) =>
+  String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+
+const getHtmlAttribute = (tag, name) => {
+  const match = tag.match(new RegExp(`${name}\\\\s*=\\\\s*([\"'])(.*?)\\\\1`, 'i'));
+  return match ? decodeHtmlEntity(match[2]) : null;
+};
+
+const resolveHtmlImageUrl = (html, pageUrl) => {
+  const metaTags = html.match(/<meta\\b[^>]*>/gi) || [];
+  for (const tag of metaTags) {
+    const key = getHtmlAttribute(tag, 'property') || getHtmlAttribute(tag, 'name');
+    if (!key || !['og:image', 'og:image:url', 'twitter:image', 'twitter:image:src'].includes(key.toLowerCase())) {
+      continue;
+    }
+    const content = getHtmlAttribute(tag, 'content');
+    if (content) {
+      return new URL(content, pageUrl).toString();
+    }
+  }
+
+  const linkTags = html.match(/<link\\b[^>]*>/gi) || [];
+  for (const tag of linkTags) {
+    const rel = getHtmlAttribute(tag, 'rel');
+    if (!rel || !rel.toLowerCase().split(/\\s+/).includes('image_src')) {
+      continue;
+    }
+    const href = getHtmlAttribute(tag, 'href');
+    if (href) {
+      return new URL(href, pageUrl).toString();
+    }
+  }
+
+  return null;
+};
+
+const archiveIdentifierBase = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  return raw.split(':')[0] || null;
+};
+
+const fetchPosterCandidate = async (url) => {
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8',
+      'User-Agent': 'NoLimitFlix-PosterBackfill/1.0',
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Fetch failed with status ${response.status}`);
+  }
+
+  return response;
+};
+
+const resolvePosterResponse = async (video, sourceUrl) => {
+  const tried = new Set();
+
+  const tryUrl = async (candidateUrl) => {
+    if (!candidateUrl || tried.has(candidateUrl)) return null;
+    tried.add(candidateUrl);
+
+    const response = await fetchPosterCandidate(candidateUrl);
+    if (isImageResponse(response)) {
+      return { response, sourceUrl: candidateUrl };
+    }
+
+    if (isHtmlResponse(response)) {
+      const html = await response.text();
+      const htmlImageUrl = resolveHtmlImageUrl(html, response.url || candidateUrl);
+      if (htmlImageUrl && !tried.has(htmlImageUrl)) {
+        return tryUrl(htmlImageUrl);
+      }
+    }
+
+    return {
+      response,
+      sourceUrl: candidateUrl,
+    };
+  };
+
+  const first = await tryUrl(sourceUrl);
+  if (first && isImageResponse(first.response)) return first;
+
+  const archiveBase = archiveIdentifierBase(video.archiveIdentifier);
+  if (archiveBase) {
+    const archiveImage = await tryUrl(`https://archive.org/services/img/${encodeURIComponent(archiveBase)}`);
+    if (archiveImage && isImageResponse(archiveImage.response)) return archiveImage;
+  }
+
+  if (first) return first;
+  throw new Error('No poster candidate URL found');
+};
+
 const writePoster = async (video, sourceUrl, response) => {
   const contentLength = Number(response.headers.get('content-length') || 0);
   if (contentLength > MAX_IMAGE_BYTES) {
@@ -104,7 +210,7 @@ const writePoster = async (video, sourceUrl, response) => {
   }
 
   const contentType = response.headers.get('content-type') || '';
-  const normalizedType = contentType.split(';')[0].trim().toLowerCase();
+  const normalizedType = contentTypeBase(contentType);
   if (normalizedType && !IMAGE_TYPES.has(normalizedType)) {
     throw new Error(`Unexpected content type: ${contentType}`);
   }
@@ -145,19 +251,8 @@ const localizePoster = async (video) => {
     return { status: 'dry-run', previousThumbnailUrl };
   }
 
-  const response = await fetch(previousThumbnailUrl, {
-    headers: {
-      Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8',
-      'User-Agent': 'NoLimitFlix-PosterBackfill/1.0',
-    },
-    signal: AbortSignal.timeout(15000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Fetch failed with status ${response.status}`);
-  }
-
-  const nextThumbnailUrl = await writePoster(video, previousThumbnailUrl, response);
+  const poster = await resolvePosterResponse(video, previousThumbnailUrl);
+  const nextThumbnailUrl = await writePoster(video, poster.sourceUrl, poster.response);
 
   await prisma.video.update({
     where: { id: video.id },
@@ -180,6 +275,7 @@ const localizePoster = async (video) => {
       metadata: {
         previousThumbnailUrl,
         nextThumbnailUrl,
+        resolvedSourceUrl: poster.sourceUrl,
         sourceProvider: video.sourceProvider || null,
         archiveIdentifier: video.archiveIdentifier || null,
       },

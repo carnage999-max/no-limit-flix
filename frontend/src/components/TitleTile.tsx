@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { Heart } from 'lucide-react';
 import type { MoviePick } from '@/types';
 import { useFavorites } from '@/context/FavoritesContext';
-import { useCardView } from '@/context/CardViewContext';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from './Toast';
 import { buildWatchHref } from '@/lib/watch-asset';
@@ -19,7 +18,6 @@ interface TitleTileProps {
 export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
     const { isFavorite, toggleFavorite } = useFavorites();
     const { showToast } = useToast();
-    const { viewSize } = useCardView();
     const { user } = useSession();
     const [isFav, setIsFav] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -98,8 +96,7 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
                 textDecoration: 'none',
                 transform: 'translateY(0)',
                 width: '100%',
-                maxWidth: viewSize === 'large' ? '320px' : undefined,
-                margin: viewSize === 'large' ? '0 auto' : undefined,
+                minWidth: 0,
             }}
             onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-8px)';

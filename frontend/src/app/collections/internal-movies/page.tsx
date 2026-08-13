@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowRight, ArrowUp, Clapperboard, Filter, LayoutGrid, List, Star, X } from 'lucide-react';
+import { ArrowRight, ArrowUp, Clapperboard, Filter, LayoutGrid, List, Search, Star, X } from 'lucide-react';
 import { buildWatchHref } from '@/lib/watch-asset';
 import type { RatingSummary } from '@/types';
 
@@ -56,7 +56,7 @@ const formatRuntime = (duration?: number | null) => {
     return `${Math.floor(duration / 60)}m`;
 };
 
-const buildMoviesUrl = (page: number, category: string, sortMode: SortMode, includeCategories = false) => {
+const buildMoviesUrl = (page: number, category: string, sortMode: SortMode, query = '', includeCategories = false) => {
     const params = new URLSearchParams({
         sort: sortMode,
         page: String(page),
@@ -65,6 +65,10 @@ const buildMoviesUrl = (page: number, category: string, sortMode: SortMode, incl
 
     if (category !== 'all') {
         params.set('category', category);
+    }
+
+    if (query.trim()) {
+        params.set('q', query.trim());
     }
 
     if (includeCategories) {
@@ -88,6 +92,7 @@ export default function InternalMoviesPage() {
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [filterOpen, setFilterOpen] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('list');
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         try {
@@ -114,7 +119,7 @@ export default function InternalMoviesPage() {
             setError(null);
 
             try {
-                const response = await fetch(buildMoviesUrl(1, categoryFilter, sortMode, true), {
+                const response = await fetch(buildMoviesUrl(1, categoryFilter, sortMode, searchQuery, true), {
                     signal: controller.signal,
                 });
 
@@ -145,7 +150,7 @@ export default function InternalMoviesPage() {
         fetchFirstPage();
 
         return () => controller.abort();
-    }, [categoryFilter, sortMode]);
+    }, [categoryFilter, sortMode, searchQuery]);
 
     useEffect(() => {
         if (categoryFilter === 'all' || categoryOptions.length === 0) return;
@@ -171,7 +176,7 @@ export default function InternalMoviesPage() {
         setError(null);
 
         try {
-            const response = await fetch(buildMoviesUrl(nextPage, categoryFilter, sortMode));
+            const response = await fetch(buildMoviesUrl(nextPage, categoryFilter, sortMode, searchQuery));
 
             if (!response.ok) {
                 throw new Error('Failed to fetch more movies.');
@@ -193,6 +198,7 @@ export default function InternalMoviesPage() {
     const activeCategoryLabel = categoryFilter === 'all' ? 'All Categories' : categoryFilter;
     const sortLabel = sortMode === 'title' ? 'A-Z' : 'Z-A';
     const nextViewLabel = viewMode === 'list' ? 'Grid view' : 'List view';
+    const hasSearch = searchQuery.trim().length > 0;
 
     return (
         <main style={{ minHeight: '100vh', background: '#0B0B0D', paddingTop: '80px', paddingBottom: '140px' }}>
@@ -270,6 +276,54 @@ export default function InternalMoviesPage() {
                         marginBottom: '1.25rem',
                     }}
                 >
+                    <label
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.65rem',
+                            flex: '1 1 280px',
+                            minHeight: '2.7rem',
+                            border: '1px solid rgba(167, 171, 180, 0.16)',
+                            borderRadius: '0.65rem',
+                            background: 'rgba(18, 18, 24, 0.72)',
+                            padding: '0 0.85rem',
+                            color: '#A7ABB4',
+                        }}
+                    >
+                        <Search className="w-4 h-4" />
+                        <input
+                            type="search"
+                            value={searchQuery}
+                            onChange={(event) => setSearchQuery(event.target.value)}
+                            placeholder="Search movie library"
+                            style={{
+                                width: '100%',
+                                border: 'none',
+                                outline: 'none',
+                                background: 'transparent',
+                                color: '#F3F4F6',
+                                minHeight: '2.6rem',
+                            }}
+                        />
+                        {hasSearch ? (
+                            <button
+                                type="button"
+                                onClick={() => setSearchQuery('')}
+                                aria-label="Clear search"
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#A7ABB4',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        ) : null}
+                    </label>
+
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                         <button
                             type="button"
@@ -470,7 +524,7 @@ export default function InternalMoviesPage() {
                     style={{
                         borderTop: '1px solid rgba(167, 171, 180, 0.15)',
                     }}
-                    aria-label={`${activeCategoryLabel} movies sorted by ${sortLabel}`}
+                    aria-label={`${activeCategoryLabel} movies sorted by ${sortLabel}${hasSearch ? ` matching ${searchQuery}` : ''}`}
                 >
                     {loading ? (
                         <div style={{ display: 'grid', gap: '0.65rem', paddingTop: '1rem' }}>

@@ -367,9 +367,9 @@ export const InternalMoviesScreen = () => {
                         style={styles.filterRow}
                         onPress={() => setActiveDropdown(activeDropdown === 'year' ? null : 'year')}
                     >
-                        <Text style={[styles.filterLabel, selectedYear && styles.filterLabelActive]}>Year</Text>
+                        <Text style={[styles.filterLabel, selectedYear !== null ? styles.filterLabelActive : null]}>Year</Text>
                         <View style={styles.filterValueRow}>
-                            <Text style={[styles.filterValue, selectedYear && styles.filterValueActive]}>{selectedYear || 'All'}</Text>
+                            <Text style={[styles.filterValue, selectedYear !== null ? styles.filterValueActive : null]}>{selectedYear || 'All'}</Text>
                             <Ionicons name={activeDropdown === 'year' ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.silver} />
                         </View>
                     </TouchableOpacity>

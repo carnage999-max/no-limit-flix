@@ -14,7 +14,8 @@ import {
     User,
     ArrowRight,
     SlidersHorizontal,
-    X
+    X,
+    Search
 } from 'lucide-react';
 
 const MOOD_OPTIONS = [
@@ -165,6 +166,8 @@ export default function HomePage() {
     const [watchFilterOpen, setWatchFilterOpen] = useState(false);
     const [watchGenreFilter, setWatchGenreFilter] = useState('all');
     const [watchYearFilter, setWatchYearFilter] = useState('all');
+    const [watchSearchQuery, setWatchSearchQuery] = useState('');
+    const [debouncedWatchQuery, setDebouncedWatchQuery] = useState('');
     const { user, loading: sessionLoading } = useSession();
 
     useEffect(() => {
@@ -193,7 +196,7 @@ export default function HomePage() {
 
     const cardGridStyle: React.CSSProperties = {
         display: 'grid',
-        gap: viewSize === 'compact' ? '1rem' : viewSize === 'standard' ? '1.5rem' : '2rem',
+        gap: viewSize === 'compact' ? '0.85rem' : viewSize === 'standard' ? '1rem' : '1.15rem',
         width: '100%',
     };
 
@@ -204,10 +207,20 @@ export default function HomePage() {
                 ? 'grid-standard-responsive'
                 : 'grid-large-responsive';
 
-    const cardTileStyle: React.CSSProperties =
-        viewSize === 'compact'
-            ? { width: '100%', maxWidth: '220px', margin: '0 auto' }
-            : { width: '100%' };
+    const cardTileStyle: React.CSSProperties = {
+        width: '100%',
+        minWidth: 0,
+    };
+
+    const carouselTileStyle: React.CSSProperties = {
+        width: viewSize === 'compact'
+            ? 'clamp(8.5rem, 34vw, 10.5rem)'
+            : viewSize === 'standard'
+                ? 'clamp(9.5rem, 38vw, 12.5rem)'
+                : 'clamp(10.5rem, 42vw, 14.5rem)',
+        flex: '0 0 auto',
+        minWidth: 0,
+    };
 
     const pickRandomItems = <T,>(items: T[], count: number) => {
         const copy = [...items];
@@ -341,6 +354,14 @@ export default function HomePage() {
 
     // Fetch hosted content when authenticated
     useEffect(() => {
+        const timeout = setTimeout(() => {
+            setDebouncedWatchQuery(watchSearchQuery.trim());
+        }, 300);
+
+        return () => clearTimeout(timeout);
+    }, [watchSearchQuery]);
+
+    useEffect(() => {
         if (sessionLoading) return;
         if (!user) {
             setHostedMovies([]);
@@ -352,15 +373,24 @@ export default function HomePage() {
             return;
         }
         fetchHostedContent();
-    }, [user, sessionLoading]);
+    }, [user, sessionLoading, debouncedWatchQuery]);
 
     const fetchHostedContent = async () => {
         try {
             setIsWatchLoading(true);
             console.log('Fetching hosted content...');
             
+            const movieParams = new URLSearchParams({
+                sort: debouncedWatchQuery ? 'title' : 'recent',
+                page: '1',
+                limit: debouncedWatchQuery ? '24' : '10',
+            });
+            if (debouncedWatchQuery) {
+                movieParams.set('q', debouncedWatchQuery);
+            }
+
             const [moviesRes, tvRes, historyRes] = await Promise.all([
-                fetch('/api/library/movies?sort=recent&page=1&limit=10'),
+                fetch(`/api/library/movies?${movieParams.toString()}`),
                 fetch('/api/library/tv'),
                 fetch('/api/watch-history?page=1&limit=10')
             ]);
@@ -514,6 +544,16 @@ export default function HomePage() {
     ).sort((a, b) => (b as number) - (a as number));
 
     const applyWatchFilters = (item: MoviePick) => {
+        const query = debouncedWatchQuery.toLowerCase();
+        if (query) {
+            const searchable = [
+                item.title,
+                item.description,
+                item.explanation,
+                ...(item.genres || []),
+            ].filter(Boolean).join(' ').toLowerCase();
+            if (!searchable.includes(query)) return false;
+        }
         if (watchGenreFilter !== 'all') {
             const genres = normalizeGenres(item.genres);
             if (!genres.includes(watchGenreFilter)) return false;
@@ -927,10 +967,62 @@ export default function HomePage() {
                                 <div
                                     style={{
                                         display: 'flex',
-                                        justifyContent: 'flex-end',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: '0.85rem',
                                         marginBottom: '2rem',
                                     }}
                                 >
+                                    <label
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.65rem',
+                                            flex: '1 1 280px',
+                                            maxWidth: '520px',
+                                            minHeight: '2.75rem',
+                                            border: '1px solid rgba(167, 171, 180, 0.16)',
+                                            borderRadius: '999px',
+                                            background: 'rgba(18, 18, 24, 0.72)',
+                                            padding: '0 0.9rem',
+                                            color: '#A7ABB4',
+                                        }}
+                                    >
+                                        <Search className="w-4 h-4" />
+                                        <input
+                                            type="search"
+                                            value={watchSearchQuery}
+                                            onChange={(event) => setWatchSearchQuery(event.target.value)}
+                                            placeholder="Search your movie library"
+                                            style={{
+                                                width: '100%',
+                                                minWidth: 0,
+                                                minHeight: '2.65rem',
+                                                border: 'none',
+                                                outline: 'none',
+                                                background: 'transparent',
+                                                color: '#F3F4F6',
+                                            }}
+                                        />
+                                        {watchSearchQuery ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => setWatchSearchQuery('')}
+                                                aria-label="Clear watch search"
+                                                style={{
+                                                    border: 'none',
+                                                    background: 'transparent',
+                                                    color: '#A7ABB4',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                }}
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        ) : null}
+                                    </label>
                                     <CardViewToggle />
                                 </div>
 
@@ -988,10 +1080,9 @@ export default function HomePage() {
                                                 <div
                                                     key={movie.id}
                                                     style={{
-                                                        ...cardTileStyle,
+                                                        ...carouselTileStyle,
                                                         cursor: 'pointer',
                                                         transition: 'transform 0.2s',
-                                                        flex: '0 0 auto',
                                                         scrollSnapAlign: 'start',
                                                     }}
                                                     onMouseEnter={(e) => {

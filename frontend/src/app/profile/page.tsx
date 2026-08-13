@@ -156,28 +156,20 @@ export default function ProfilePage() {
         if (!user) return;
         setUploading(true);
         try {
-            const response = await fetch('/api/account/avatar-presigned-url', {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/api/account/avatar', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ fileName: file.name, fileType: file.type })
+                body: formData,
             });
             const data = await response.json();
             if (!response.ok) {
-                throw new Error(data?.error || 'Failed to prepare upload');
+                throw new Error(data?.error || 'Failed to upload avatar');
             }
 
-            const uploadRes = await fetch(data.presignedUrl, {
-                method: 'PUT',
-                headers: { 'Content-Type': file.type },
-                body: file
-            });
-
-            if (!uploadRes.ok) {
-                throw new Error('Upload failed');
-            }
-
-            setAvatar(data.publicUrl);
-            await updateProfile({ avatar: data.publicUrl });
+            setAvatar(data.avatarUrl);
+            await refresh();
             showToast('Profile updated', 'success');
         } catch (error: unknown) {
             showToast(getErrorMessage(error, 'Failed to upload avatar'), 'error');

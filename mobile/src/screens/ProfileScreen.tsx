@@ -123,22 +123,13 @@ export const ProfileScreen = ({ navigation }: any) => {
       const fileType = asset.mimeType || 'image/jpeg';
 
       setUploading(true);
-      const { presignedUrl, publicUrl } = await apiClient.getAvatarUploadUrl(fileName, fileType);
-
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-
-      const uploadRes = await fetch(presignedUrl, {
-        method: 'PUT',
-        headers: { 'Content-Type': fileType },
-        body: blob,
+      await apiClient.uploadAvatar({
+        uri: asset.uri,
+        name: fileName,
+        type: fileType,
       });
 
-      if (!uploadRes.ok) {
-        throw new Error('Upload failed');
-      }
-
-      await updateProfile({ avatar: publicUrl });
+      await refreshSession();
       showToast({ message: 'Avatar updated.', type: 'success' });
     } catch (error: any) {
       showToast({ message: getUserFacingError(error, ['avatar update failed', 'upload failed', 'failed to create avatar upload']), type: 'error' });

@@ -98,6 +98,7 @@ export async function GET(request: Request) {
         const usesPagedMode = searchParams.has('page')
             || searchParams.has('limit')
             || searchParams.has('category')
+            || searchParams.has('q')
             || searchParams.get('sort') === 'title'
             || searchParams.get('includeCategories') === '1';
 
@@ -121,10 +122,23 @@ export async function GET(request: Request) {
         const page = parsePositiveInt(searchParams.get('page'), 1);
         const limit = parsePositiveInt(searchParams.get('limit'), 60, 100);
         const category = (searchParams.get('category') || 'all').trim();
+        const query = (searchParams.get('q') || '').trim();
         const includeCategories = searchParams.get('includeCategories') === '1';
-        const where: Prisma.VideoWhereInput = category && category !== 'all'
-            ? { AND: [baseWhere, buildCategoryWhere(category)] }
-            : baseWhere;
+        const filters: Prisma.VideoWhereInput[] = [baseWhere];
+        if (category && category !== 'all') {
+            filters.push(buildCategoryWhere(category));
+        }
+        if (query) {
+            filters.push({
+                OR: [
+                    { title: { contains: query, mode: 'insensitive' } },
+                    { description: { contains: query, mode: 'insensitive' } },
+                    { genre: { contains: query, mode: 'insensitive' } },
+                    { seriesTitle: { contains: query, mode: 'insensitive' } },
+                ],
+            });
+        }
+        const where: Prisma.VideoWhereInput = filters.length > 1 ? { AND: filters } : baseWhere;
 
         const sort = searchParams.get('sort');
         const orderBy: Prisma.VideoOrderByWithRelationInput[] = sort === 'recent'

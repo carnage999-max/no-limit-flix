@@ -8,6 +8,7 @@ import {
   captureMonitoringMessage,
   setMonitoringUser,
 } from '../lib/monitoring';
+import { transformToCloudFront } from '../lib/utils';
 
 export interface SessionUser {
   id: string;
@@ -124,6 +125,14 @@ const isAuthLikeError = (error: any) => {
   );
 };
 
+const normalizeSessionUser = (value: SessionUser | null | undefined): SessionUser | null => {
+  if (!value) return null;
+  return {
+    ...value,
+    avatar: value.avatar ? transformToCloudFront(value.avatar) : value.avatar,
+  };
+};
+
 export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -184,7 +193,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
       try {
         const data = await apiClient.getSession();
-        setUser(data?.user || null);
+        setUser(normalizeSessionUser(data?.user));
         return;
       } catch (error: any) {
         let activeRefresh = refreshTokenOverride ?? refreshTokenRef.current;
@@ -219,7 +228,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
           await applyRefreshToken(nextRefresh);
         }
         const data = await apiClient.getSession();
-        setUser(data?.user || null);
+        setUser(normalizeSessionUser(data?.user));
       }
     } catch (error: any) {
       // Keep local auth state on transient network failures.
@@ -328,7 +337,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (nextRefresh) {
         await applyRefreshToken(nextRefresh);
       }
-      setUser(data?.user || null);
+      setUser(normalizeSessionUser(data?.user));
       triggerWelcome(data?.user?.username || email.split('@')[0], data?.user?.showWelcomeScreen !== false);
     } catch (error: any) {
       captureMonitoringMessage(
@@ -361,7 +370,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (nextRefresh) {
         await applyRefreshToken(nextRefresh);
       }
-      setUser(data?.user || null);
+      setUser(normalizeSessionUser(data?.user));
       triggerWelcome(data?.user?.username || username, data?.user?.showWelcomeScreen !== false);
     } catch (error: any) {
       captureMonitoringMessage(
@@ -395,7 +404,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (nextRefresh) {
         await applyRefreshToken(nextRefresh);
       }
-      setUser(data?.user || null);
+      setUser(normalizeSessionUser(data?.user));
       triggerWelcome(
         data?.user?.username || data?.user?.email?.split('@')[0] || 'Guest',
         data?.user?.showWelcomeScreen !== false
@@ -428,7 +437,7 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
       if (nextRefresh) {
         await applyRefreshToken(nextRefresh);
       }
-      setUser(data?.user || null);
+      setUser(normalizeSessionUser(data?.user));
       triggerWelcome(
         data?.user?.username || data?.user?.email?.split('@')[0] || 'Guest',
         data?.user?.showWelcomeScreen !== false
@@ -472,8 +481,9 @@ export const SessionProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       const data = await apiClient.updateProfile(payload);
       const updated = data?.user || data;
-      setUser(updated);
-      return updated;
+      const normalized = normalizeSessionUser(updated);
+      setUser(normalized);
+      return normalized as SessionUser;
     } catch (error) {
       captureMonitoringMessage(
         'PROFILE_UPDATE_FAILED',

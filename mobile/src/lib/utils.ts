@@ -1,5 +1,14 @@
 import { Platform } from 'react-native';
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
+
+const buildAbsoluteApiUrl = (path: string) => {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${normalizeBaseUrl(API_BASE_URL)}${normalizedPath}`;
+};
+
 /**
  * Standardizes S3/CloudFront URLs for the mobile app.
  * Handles regional S3 patterns, ensures HTTPS protocol, and encodes for iOS stability.
@@ -8,9 +17,17 @@ export const transformToCloudFront = (url: string | null) => {
     if (!url) return '';
 
     // 1. Ensure the input URL has a protocol if it's already a CloudFront link
-    let finalizedUrl = url;
-    if (url.includes('cloudfront.net') && !url.startsWith('http')) {
-        finalizedUrl = `https://${url}`;
+    let finalizedUrl = url.trim();
+    if (!finalizedUrl) return '';
+
+    if (finalizedUrl.startsWith('/media/')) {
+        finalizedUrl = buildAbsoluteApiUrl(finalizedUrl);
+    } else if (/^(media|avatars|thumbnails|videos|issues|ia)\//i.test(finalizedUrl)) {
+        finalizedUrl = buildAbsoluteApiUrl(`/media/${finalizedUrl.replace(/^media\//i, '')}`);
+    }
+
+    if (finalizedUrl.includes('cloudfront.net') && !finalizedUrl.startsWith('http')) {
+        finalizedUrl = `https://${finalizedUrl}`;
     }
 
     // Use the environment variable for CloudFront base URL
