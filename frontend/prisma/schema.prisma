@@ -42,6 +42,10 @@ model Video {
   format            String?
 
   thumbnailUrl    String?
+  thumbnailSource String?  // upload | manual | import | refresh | backfill | external
+  thumbnailLocked Boolean  @default(false) // true when an admin manually chooses a poster
+  thumbnailUpdatedByUserId String?
+  thumbnailUpdatedAt DateTime?
   status          String   @default("pending") // pending, uploading, completed, failed
   releaseYear     Int?
   duration        Float?   // Duration in seconds
@@ -70,6 +74,7 @@ model Video {
   favorites    Favorite[]
   actors       ActorOnVideo[]
   userRatings  UserRating[]
+  adminActions AdminActionLog[]
 }
 
 model Actor {
@@ -141,11 +146,32 @@ model User {
   sessions          UserSession[]
   subscriptions     BillingSubscription[]
   ratings           UserRating[]
+  adminActions      AdminActionLog[]
 
   @@index([email])
   @@index([username])
   @@index([role])
   @@index([subscriptionStatus])
+}
+
+model AdminActionLog {
+  id           String   @id @default(cuid())
+  actorId      String?
+  action       String
+  entityType   String
+  entityId     String?
+  videoId      String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  actor        User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  video        Video?   @relation(fields: [videoId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([videoId])
+  @@index([createdAt])
 }
 
 model BillingPlan {

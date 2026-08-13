@@ -11,7 +11,28 @@ const { inferMimeType } = require('./internet-archive');
 let ffmpegAvailable;
 
 const getMediaRoot = () => process.env.MEDIA_ROOT || '/app/media';
-const getMediaBaseUrl = () => (process.env.MEDIA_BASE_URL || 'https://nolimitflix.com/media').replace(/\/+$/, '');
+const SAME_SITE_MEDIA_HOSTS = new Set(['nolimitflix.com', 'www.nolimitflix.com']);
+const IMAGE_CONTENT_TYPES = new Map([
+    ['image/jpeg', 'jpg'],
+    ['image/jpg', 'jpg'],
+    ['image/png', 'png'],
+    ['image/webp', 'webp']
+]);
+
+const getMediaBaseUrl = () => {
+    const configured = (process.env.MEDIA_BASE_URL || '/media').replace(/\/+$/, '');
+    if (/^https?:\/\//i.test(configured)) {
+        try {
+            const url = new URL(configured);
+            if (SAME_SITE_MEDIA_HOSTS.has(url.hostname) && url.pathname.startsWith('/media')) {
+                return url.pathname.replace(/\/+$/, '') || '/media';
+            }
+        } catch {
+            return configured;
+        }
+    }
+    return configured;
+};
 
 const collapsePath = (value) =>
     String(value || '')
@@ -53,8 +74,8 @@ const isMp4FileName = (name) => /\.mp4$/i.test(String(name || ''));
 const toMp4Name = (name) => sanitizeFileName(String(name || 'video.mp4').replace(/\.[^.]+$/, '') + '.mp4');
 
 const resolveMoviePlaybackMode = () => {
-    const value = String(process.env.MOVIE_PLAYBACK_MODE || 'hls').trim().toLowerCase();
-    return value === 'mp4' ? 'mp4' : 'hls';
+    const value = String(process.env.MOVIE_PLAYBACK_MODE || 'mp4').trim().toLowerCase();
+    return value === 'hls' ? 'hls' : 'mp4';
 };
 
 const buildMediaPath = (identifier, fileName, options = {}) => {
@@ -184,6 +205,63 @@ const downloadToTempFile = async (downloadUrl, fileName = 'source.mp4') => {
     return { tempDir, tempPath, response };
 };
 
+const extensionFromPosterResponse = (posterUrl, contentType) => {
+    const normalizedType = String(contentType || '').split(';')[0].trim().toLowerCase();
+    if (IMAGE_CONTENT_TYPES.has(normalizedType)) {
+        return IMAGE_CONTENT_TYPES.get(normalizedType);
+    }
+
+    try {
+        const pathname = new URL(posterUrl).pathname.toLowerCase();
+        const match = pathname.match(/\.([a-z0-9]+)$/);
+        const ext = match?.[1];
+        if (ext === 'jpeg') return 'jpg';
+        if (['jpg', 'png', 'webp'].includes(ext)) return ext;
+    } catch {
+        // ignore malformed poster URL
+    }
+
+    return 'jpg';
+};
+
+const storePosterImage = async (posterUrl, identifier, fileName = 'poster') => {
+    if (!posterUrl || !/^https?:\/\//i.test(String(posterUrl))) {
+        return posterUrl || null;
+    }
+
+    try {
+        const response = await fetch(posterUrl, {
+            headers: {
+                Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8',
+                'User-Agent': 'NoLimitFlix-Ingest/1.0'
+            }
+        });
+
+        if (!response.ok || !response.body) {
+            return posterUrl;
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        const normalizedType = contentType.split(';')[0].trim().toLowerCase();
+        if (normalizedType && !IMAGE_CONTENT_TYPES.has(normalizedType)) {
+            return posterUrl;
+        }
+
+        const extension = extensionFromPosterResponse(posterUrl, contentType);
+        const safeIdentifier = sanitizeFileName(identifier || 'imported').replace(/\.[^.]+$/, '');
+        const safeBase = sanitizeFileName(fileName || 'poster').replace(/\.[^.]+$/, '') || 'poster';
+        const relativePath = normalizeMediaPath(`thumbnails/imported/${safeIdentifier}/${safeBase}.${extension}`);
+        const destinationPath = getAbsoluteMediaPath(relativePath);
+
+        await ensureParentDirectory(destinationPath);
+        await pipeline(toNodeReadable(response.body), fs.createWriteStream(destinationPath));
+        return buildPublicMediaUrl(relativePath);
+    } catch (error) {
+        console.warn(`Poster download failed for ${posterUrl}:`, error.message);
+        return posterUrl;
+    }
+};
+
 const runFfmpeg = (args) =>
     new Promise((resolve, reject) => {
         let stderr = '';
@@ -311,8 +389,11 @@ async function uploadToS3(downloadUrl, key, fileMeta, options = {}) {
     return storeFileAtRelativePath(downloadUrl, normalizeMediaPath(key), fileMeta, options);
 }
 
-const storeMoviePlayback = async (downloadUrl, identifier, fileMeta) => {
-    const preferredPlaybackType = resolveMoviePlaybackMode();
+const storeMoviePlayback = async (downloadUrl, identifier, fileMeta, options = {}) => {
+    const requestedPlaybackType = String(options.playbackType || '').trim().toLowerCase();
+    const preferredPlaybackType = requestedPlaybackType === 'hls' || requestedPlaybackType === 'mp4'
+        ? requestedPlaybackType
+        : resolveMoviePlaybackMode();
 
     if (preferredPlaybackType === 'hls') {
         if (!checkFfmpegAvailable()) {
@@ -401,6 +482,7 @@ module.exports = {
     buildPublicUrl,
     uploadToS3,
     storeMoviePlayback,
+    storePosterImage,
     listS3Objects,
     isTranscoderAvailable,
     resolveMoviePlaybackMode,

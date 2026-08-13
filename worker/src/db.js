@@ -28,6 +28,9 @@ async function upsertVideo(payload) {
             "s3KeySource",
             "s3Url",
             "thumbnailUrl",
+            "thumbnailSource",
+            "thumbnailLocked",
+            "thumbnailUpdatedAt",
             "status",
             "releaseYear",
             "duration",
@@ -56,7 +59,7 @@ async function upsertVideo(payload) {
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-            $31, $32::jsonb, $33, $34
+            $31, $32, $33, $34, $35::jsonb, $36, $37
         )
         ON CONFLICT ("archiveIdentifier") DO UPDATE SET
             "title" = EXCLUDED."title",
@@ -67,7 +70,22 @@ async function upsertVideo(payload) {
             "cloudfrontPath" = EXCLUDED."cloudfrontPath",
             "s3KeySource" = EXCLUDED."s3KeySource",
             "s3Url" = EXCLUDED."s3Url",
-            "thumbnailUrl" = EXCLUDED."thumbnailUrl",
+            "thumbnailUrl" = CASE
+                WHEN COALESCE("Video"."thumbnailLocked", false) = true THEN "Video"."thumbnailUrl"
+                ELSE EXCLUDED."thumbnailUrl"
+            END,
+            "thumbnailSource" = CASE
+                WHEN COALESCE("Video"."thumbnailLocked", false) = true THEN "Video"."thumbnailSource"
+                ELSE EXCLUDED."thumbnailSource"
+            END,
+            "thumbnailLocked" = CASE
+                WHEN COALESCE("Video"."thumbnailLocked", false) = true THEN "Video"."thumbnailLocked"
+                ELSE EXCLUDED."thumbnailLocked"
+            END,
+            "thumbnailUpdatedAt" = CASE
+                WHEN COALESCE("Video"."thumbnailLocked", false) = true THEN "Video"."thumbnailUpdatedAt"
+                ELSE EXCLUDED."thumbnailUpdatedAt"
+            END,
             "status" = EXCLUDED."status",
             "releaseYear" = EXCLUDED."releaseYear",
             "duration" = EXCLUDED."duration",
@@ -104,6 +122,11 @@ async function upsertVideo(payload) {
         payload.s3KeySource,
         payload.s3Url,
         payload.thumbnailUrl,
+        payload.thumbnailSource || (payload.thumbnailUrl
+            ? (String(payload.thumbnailUrl).startsWith('/media/thumbnails/') ? 'import' : 'external')
+            : null),
+        false,
+        payload.thumbnailUrl ? now : null,
         payload.status,
         payload.releaseYear,
         payload.duration,
@@ -244,7 +267,15 @@ module.exports = {
     pool,
     updateVideoPoster: async (id, thumbnailUrl, tmdbId) => {
         const result = await pool.query(
-            'UPDATE "Video" SET "thumbnailUrl" = $1, "tmdbId" = COALESCE($2, "tmdbId"), "updatedAt" = NOW() WHERE "id" = $3',
+            `UPDATE "Video"
+             SET "thumbnailUrl" = $1,
+                 "thumbnailSource" = 'refresh',
+                 "thumbnailLocked" = false,
+                 "thumbnailUpdatedAt" = NOW(),
+                 "tmdbId" = COALESCE($2, "tmdbId"),
+                 "updatedAt" = NOW()
+             WHERE "id" = $3
+               AND COALESCE("thumbnailLocked", false) = false`,
             [thumbnailUrl, tmdbId, id]
         );
         return result.rowCount || 0;
@@ -252,7 +283,18 @@ module.exports = {
     updateVideoMetadata: async (id, payload) => {
         const result = await pool.query(
             `UPDATE "Video"
-             SET "thumbnailUrl" = COALESCE($1, "thumbnailUrl"),
+             SET "thumbnailUrl" = CASE
+                     WHEN $1 IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUrl"
+                     ELSE $1
+                 END,
+                 "thumbnailSource" = CASE
+                     WHEN $1 IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailSource"
+                     ELSE 'refresh'
+                 END,
+                 "thumbnailUpdatedAt" = CASE
+                     WHEN $1 IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUpdatedAt"
+                     ELSE NOW()
+                 END,
                  "tmdbId" = COALESCE($2, "tmdbId"),
                  "description" = COALESCE($3, "description"),
                  "releaseYear" = COALESCE($4, "releaseYear"),

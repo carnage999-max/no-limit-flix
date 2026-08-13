@@ -18,6 +18,35 @@ interface ImportResult {
     reason?: string;
 }
 
+interface ImportSummary {
+    requested?: number;
+    imported?: number;
+    updated?: number;
+    refreshed?: number;
+    skipped?: number;
+    failed?: number;
+    ready?: number;
+    searchQuery?: string | null;
+    shuffleSeed?: string | null;
+    totalAvailable?: number | null;
+}
+
+interface WorkerJobStatus {
+    status?: string;
+    total?: number;
+    processed?: number;
+    reconciled?: number;
+    refreshed?: number;
+    existing?: number;
+    imported?: number;
+    updated?: number;
+    skipped?: number;
+    failed?: number;
+}
+
+const getErrorMessage = (error: unknown, fallback: string) =>
+    error instanceof Error ? error.message : fallback;
+
 export default function AdminImportPage() {
     const [preset, setPreset] = useState(DEFAULT_ARCHIVE_PRESET_ID);
     const [limit, setLimit] = useState(6);
@@ -32,13 +61,12 @@ export default function AdminImportPage() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [results, setResults] = useState<ImportResult[]>([]);
-    const [summary, setSummary] = useState<any>(null);
+    const [summary, setSummary] = useState<ImportSummary | null>(null);
     const [selectedIdentifiers, setSelectedIdentifiers] = useState<Record<string, boolean>>({});
     const [jobId, setJobId] = useState<string | null>(null);
-    const [jobStatus, setJobStatus] = useState<any>(null);
+    const [jobStatus, setJobStatus] = useState<WorkerJobStatus | null>(null);
     const [reconcileLoading, setReconcileLoading] = useState(false);
     const [refreshLoading, setRefreshLoading] = useState(false);
-    const [posterOffset, setPosterOffset] = useState(0);
 
     const presetOptions = useMemo(() => ARCHIVE_PRESETS, []);
 
@@ -100,8 +128,8 @@ export default function AdminImportPage() {
             setShuffleSeed(data.summary?.shuffleSeed || shuffleSeed);
             setTotalAvailable(data.summary?.totalAvailable ?? null);
             setPage(targetPage);
-        } catch (err: any) {
-            setError(err.message || 'Import failed');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Import failed'));
         } finally {
             setLoading(false);
         }
@@ -147,8 +175,8 @@ export default function AdminImportPage() {
             setSelectedIdentifiers({});
             setJobId(data.jobId || null);
             setJobStatus(null);
-        } catch (err: any) {
-            setError(err.message || 'Import failed');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Import failed'));
         } finally {
             setLoading(false);
         }
@@ -178,8 +206,8 @@ export default function AdminImportPage() {
             setJobId(data.jobId || null);
             setJobStatus(null);
             setSummary(data.summary || null);
-        } catch (err: any) {
-            setError(err.message || 'Reconcile failed');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Reconcile failed'));
         } finally {
             setReconcileLoading(false);
         }
@@ -192,13 +220,12 @@ export default function AdminImportPage() {
         setResults([]);
 
         try {
-            const batchOffset = posterOffset;
             const res = await fetch('/api/admin/archive/posters', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     limit: 500,
-                    offset: batchOffset
+                    offset: 0
                 })
             });
 
@@ -207,19 +234,18 @@ export default function AdminImportPage() {
                 throw new Error(data.error || 'Poster refresh failed');
             }
 
-            setPosterOffset(batchOffset + 500);
             setJobId(data.jobId || null);
             setJobStatus(null);
             setSummary(data.summary || null);
-        } catch (err: any) {
-            setError(err.message || 'Poster refresh failed');
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Poster refresh failed'));
         } finally {
             setRefreshLoading(false);
         }
     };
 
     const progressPercent = jobStatus?.total
-        ? Math.min(100, Math.round((jobStatus.processed / jobStatus.total) * 100))
+        ? Math.min(100, Math.round(((jobStatus.processed ?? 0) / jobStatus.total) * 100))
         : 0;
 
     const pollJobStatus = async (id: string) => {
@@ -595,7 +621,7 @@ export default function AdminImportPage() {
                             opacity: refreshLoading ? 0.6 : 1
                         }}
                     >
-                        {refreshLoading ? 'Refreshing...' : `Refresh Posters (${posterOffset + 1}–${posterOffset + 500})`}
+                        {refreshLoading ? 'Refreshing...' : 'Refresh Posters'}
                     </button>
                     {error && (
                         <div style={{ color: '#F87171', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

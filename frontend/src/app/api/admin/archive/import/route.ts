@@ -10,6 +10,8 @@ import {
     searchArchiveIdentifiers
 } from '@/lib/internet-archive';
 import { requireAdmin } from '@/lib/admin-auth';
+import { writeMediaBuffer } from '@/lib/media-storage';
+import { recordAdminAction } from '@/lib/admin-actions';
 
 type ImportResultStatus = 'imported' | 'updated' | 'skipped' | 'failed' | 'ready';
 
@@ -171,6 +173,76 @@ const isGenericBundleTitle = (value?: string) => {
 };
 
 const DEFAULT_POSTER_URL = 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
+const POSTER_CONTENT_TYPES = new Map([
+    ['image/jpeg', 'jpg'],
+    ['image/jpg', 'jpg'],
+    ['image/png', 'png'],
+    ['image/webp', 'webp'],
+]);
+
+const sanitizePosterSegment = (value: string) =>
+    value
+        .replace(/[^a-z0-9._-]+/gi, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 140)
+    || 'poster';
+
+const extensionFromPosterResponse = (posterUrl: string, contentType: string | null) => {
+    const normalizedType = String(contentType || '').split(';')[0].trim().toLowerCase();
+    if (POSTER_CONTENT_TYPES.has(normalizedType)) {
+        return POSTER_CONTENT_TYPES.get(normalizedType) || 'jpg';
+    }
+
+    try {
+        const pathname = new URL(posterUrl).pathname.toLowerCase();
+        const match = pathname.match(/\.([a-z0-9]+)$/);
+        const extension = match?.[1];
+        if (extension === 'jpeg') return 'jpg';
+        if (extension && ['jpg', 'png', 'webp'].includes(extension)) return extension;
+    } catch {
+        // ignore malformed poster URL
+    }
+
+    return 'jpg';
+};
+
+const storeImportedPoster = async (posterUrl: string | null, archiveIdentifier: string, fileName: string | null) => {
+    if (!posterUrl || !/^https?:\/\//i.test(posterUrl)) {
+        return posterUrl;
+    }
+
+    try {
+        const response = await fetch(posterUrl, {
+            headers: {
+                Accept: 'image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8',
+                'User-Agent': 'NoLimitFlix-Importer/1.0',
+            },
+            signal: AbortSignal.timeout(12000),
+        });
+
+        if (!response.ok) return posterUrl;
+
+        const contentType = response.headers.get('content-type');
+        const normalizedType = String(contentType || '').split(';')[0].trim().toLowerCase();
+        if (normalizedType && !POSTER_CONTENT_TYPES.has(normalizedType)) {
+            return posterUrl;
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+        if (buffer.length === 0 || buffer.length > 10 * 1024 * 1024) {
+            return posterUrl;
+        }
+
+        const extension = extensionFromPosterResponse(posterUrl, contentType);
+        const identifierSegment = sanitizePosterSegment(archiveIdentifier);
+        const fileSegment = sanitizePosterSegment(fileName || 'poster').replace(/\.[^.]+$/, '');
+        const stored = await writeMediaBuffer(`thumbnails/imported/${identifierSegment}/${fileSegment}.${extension}`, buffer);
+        return stored.publicUrl;
+    } catch (error) {
+        console.warn('Failed to store imported poster locally:', error);
+        return posterUrl;
+    }
+};
 
 const findThumbnailForFile = (files: any[], identifier: string, fileName: string) => {
     if (!fileName) return null;
@@ -723,6 +795,7 @@ export async function POST(request: NextRequest) {
                     seriesTitle: seriesTitleInput || null,
                     seasonNumber: seasonNumberInput,
                     startEpisodeNumber: startEpisodeInput,
+                    playbackMode: 'mp4',
                     async: true,
                     items: itemsToProcess.map((item: any) => ({
                         identifier: item.identifier,
@@ -848,18 +921,28 @@ export async function POST(request: NextRequest) {
                 const posterMatch = await findBestPoster(posterTitle, releaseYear ?? yearHint, contentType);
                 const resolvedReleaseYear = releaseYear ?? posterMatch?.releaseYear ?? omdbYear ?? null;
                 const tmdbId = posterMatch?.tmdbId || null;
-                const thumbnailUrl = posterMatch?.posterUrl || (
+                const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier);
+                const posterSourceUrl = posterMatch?.posterUrl || (
                     isBundleItem
                         ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                         : `https://archive.org/services/img/${identifier}`
                 );
-                const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier);
+                const thumbnailUrl = dryRun
+                    ? posterSourceUrl
+                    : await storeImportedPoster(posterSourceUrl, archiveIdentifier, bestFile.name);
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
                 if (!dryRun) {
                     const existing = await prisma.video.findUnique({
-                        where: { archiveIdentifier }
+                        where: { archiveIdentifier },
+                        select: {
+                            id: true,
+                            thumbnailLocked: true,
+                            thumbnailUrl: true,
+                        },
                     });
+                    const shouldUpdateThumbnail = !existing?.thumbnailLocked;
+                    const thumbnailSource = thumbnailUrl?.startsWith('/media/thumbnails/') ? 'import' : 'external';
 
                     const upserted = await prisma.video.upsert({
                         where: { archiveIdentifier },
@@ -873,6 +956,9 @@ export async function POST(request: NextRequest) {
                             s3KeySource: null,
                             s3Url: playbackUrl,
                             thumbnailUrl,
+                            thumbnailSource,
+                            thumbnailLocked: false,
+                            thumbnailUpdatedAt: thumbnailUrl ? new Date() : null,
                             status: 'completed',
                             releaseYear: resolvedReleaseYear,
                             duration,
@@ -903,7 +989,12 @@ export async function POST(request: NextRequest) {
                             s3KeyPlayback,
                             cloudfrontPath: playbackUrl,
                             s3Url: playbackUrl,
-                            thumbnailUrl,
+                            ...(shouldUpdateThumbnail ? {
+                                thumbnailUrl,
+                                thumbnailSource,
+                                thumbnailLocked: false,
+                                thumbnailUpdatedAt: thumbnailUrl ? new Date() : null,
+                            } : {}),
                             status: 'completed',
                             releaseYear: resolvedReleaseYear,
                             duration,
@@ -936,6 +1027,21 @@ export async function POST(request: NextRequest) {
                     result.duration = duration;
                     result.sourcePageUrl = sourcePageUrl;
                     result.status = existing ? 'updated' : 'imported';
+
+                    await recordAdminAction({
+                        actorId: auth.user?.id,
+                        action: existing ? 'video.import.update' : 'video.import.create',
+                        entityType: 'Video',
+                        entityId: upserted.id,
+                        videoId: upserted.id,
+                        metadata: {
+                            archiveIdentifier,
+                            thumbnailUrl,
+                            previousThumbnailUrl: existing?.thumbnailUrl || null,
+                            thumbnailSkippedDueToLock: Boolean(existing?.thumbnailLocked),
+                            playbackType: 'mp4',
+                        },
+                    });
                 } else {
                     result.title = title;
                     result.fileName = bestFile.name;

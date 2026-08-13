@@ -18,18 +18,27 @@ test('buildMediaPath keeps reels as mp4 files under ia/reels/<identifier>', () =
 });
 
 test('buildPublicMediaUrl builds local media urls from relative paths', () => {
-    process.env.MEDIA_BASE_URL = 'https://nolimitflix.com/media';
+    process.env.MEDIA_BASE_URL = '/media';
 
     assert.equal(
-        buildPublicMediaUrl('ia/publicmovies212/hls/master.m3u8'),
-        'https://nolimitflix.com/media/ia/publicmovies212/hls/master.m3u8'
+        buildPublicMediaUrl('ia/publicmovies212/Karate Kids USA.mp4'),
+        '/media/ia/publicmovies212/Karate Kids USA.mp4'
     );
 });
 
-test('resolveMoviePlaybackMode defaults to hls and can be overridden to mp4', () => {
-    delete process.env.MOVIE_PLAYBACK_MODE;
-    assert.equal(resolveMoviePlaybackMode(), 'hls');
+test('buildPublicMediaUrl normalizes same-site absolute media urls to current origin paths', () => {
+    process.env.MEDIA_BASE_URL = 'https://nolimitflix.com/media';
 
-    process.env.MOVIE_PLAYBACK_MODE = 'mp4';
+    assert.equal(
+        buildPublicMediaUrl('ia/publicmovies212/Karate Kids USA.mp4'),
+        '/media/ia/publicmovies212/Karate Kids USA.mp4'
+    );
+});
+
+test('resolveMoviePlaybackMode defaults to mp4 and can be overridden to hls', () => {
+    delete process.env.MOVIE_PLAYBACK_MODE;
     assert.equal(resolveMoviePlaybackMode(), 'mp4');
+
+    process.env.MOVIE_PLAYBACK_MODE = 'hls';
+    assert.equal(resolveMoviePlaybackMode(), 'hls');
 });

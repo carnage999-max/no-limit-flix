@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
+import { recordAdminAction } from '@/lib/admin-actions';
 
 // Helper to convert BigInt to string for JSON serialization
 function serializeData(data: any): any {
@@ -82,6 +83,10 @@ export async function PUT(
             );
         }
 
+        const nextThumbnailUrl = typeof thumbnailUrl === 'string' && thumbnailUrl.trim() ? thumbnailUrl.trim() : null;
+        const previousThumbnailUrl = video.thumbnailUrl || null;
+        const thumbnailChanged = nextThumbnailUrl !== previousThumbnailUrl;
+
         const updated = await prisma.video.update({
             where: { id },
             data: {
@@ -89,7 +94,11 @@ export async function PUT(
                 description: typeof description === 'string' ? description : null,
                 releaseYear: releaseYear ? Number(releaseYear) : null,
                 tmdbId: typeof tmdbId === 'string' && tmdbId.trim() ? tmdbId.trim() : null,
-                thumbnailUrl: typeof thumbnailUrl === 'string' && thumbnailUrl.trim() ? thumbnailUrl.trim() : null,
+                thumbnailUrl: nextThumbnailUrl,
+                thumbnailSource: thumbnailChanged ? 'manual' : undefined,
+                thumbnailLocked: thumbnailChanged ? true : undefined,
+                thumbnailUpdatedByUserId: thumbnailChanged ? auth.user?.id || null : undefined,
+                thumbnailUpdatedAt: thumbnailChanged ? new Date() : undefined,
                 genre: typeof genre === 'string' && genre.trim() ? genre.trim() : null,
                 rating: typeof rating === 'string' && rating.trim() ? rating.trim() : null,
                 sourceProvider: typeof sourceProvider === 'string' && sourceProvider.trim() ? sourceProvider.trim() : null,
@@ -99,6 +108,20 @@ export async function PUT(
                 updatedAt: new Date(),
             },
         });
+
+        if (thumbnailChanged) {
+            await recordAdminAction({
+                actorId: auth.user?.id,
+                action: 'video.thumbnail.manual_update',
+                entityType: 'Video',
+                entityId: id,
+                videoId: id,
+                metadata: {
+                    previousThumbnailUrl,
+                    nextThumbnailUrl,
+                },
+            });
+        }
 
         // Serialize the response to handle BigInt values
         const serialized = serializeData(updated);

@@ -4,6 +4,7 @@ import path from 'path';
 import prisma from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
 import { writeMediaBuffer } from '@/lib/media-storage';
+import { recordAdminAction } from '@/lib/admin-actions';
 
 const ALLOWED_THUMBNAIL_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -85,6 +86,10 @@ export async function POST(request: NextRequest) {
                 genre: optionalString(formData.get('genre')),
                 rating: optionalString(formData.get('rating')),
                 thumbnailUrl,
+                thumbnailSource: thumbnailUrl ? 'upload' : null,
+                thumbnailLocked: false,
+                thumbnailUpdatedByUserId: thumbnailUrl ? auth.user?.id || null : null,
+                thumbnailUpdatedAt: thumbnailUrl ? new Date() : null,
                 status: 'completed',
                 playbackType: 'mp4',
                 s3KeyPlayback: videoStored.relativePath,
@@ -95,6 +100,19 @@ export async function POST(request: NextRequest) {
                 sourceType: 'internal',
                 fileSize: BigInt(file.size),
                 mimeType: file.type || 'video/mp4',
+            },
+        });
+
+        await recordAdminAction({
+            actorId: auth.user?.id,
+            action: 'video.upload',
+            entityType: 'Video',
+            entityId: video.id,
+            videoId: video.id,
+            metadata: {
+                title: video.title,
+                thumbnailUrl,
+                playbackType: video.playbackType,
             },
         });
 

@@ -24,6 +24,7 @@ const {
     buildS3Key,
     uploadToS3,
     storeMoviePlayback,
+    storePosterImage,
     listS3Objects,
     buildPublicUrl,
     isTranscoderAvailable,
@@ -339,7 +340,20 @@ const fetchVideosNeedingPoster = async (limit, offset = 0) => {
          FROM "Video"
          WHERE "status" = 'completed'
            AND "type" = 'movie'
-         ORDER BY "createdAt" ASC
+           AND COALESCE("thumbnailLocked", false) = false
+           AND (
+                "sourceProvider" = 'internet_archive'
+                OR "sourceType" = 'external_legal'
+                OR "archiveIdentifier" IS NOT NULL
+                OR "s3KeyPlayback" LIKE 'ia:%'
+                OR "s3Url" LIKE 'https://archive.org/%'
+           )
+           AND (
+                "thumbnailUrl" IS NULL
+                OR "thumbnailUrl" = ''
+                OR "thumbnailUrl" NOT LIKE '/media/thumbnails/%'
+           )
+         ORDER BY "updatedAt" ASC, "createdAt" ASC
          LIMIT $1 OFFSET $2`,
         [limit, offset]
     );
@@ -617,10 +631,11 @@ app.post('/reconcile', async (req, res) => {
                         type: 'movie'
                     });
                     const tmdbId = posterMatch?.tmdbId || null;
-                    const thumbnailUrl = posterMatch?.posterUrl
+                    const posterSourceUrl = posterMatch?.posterUrl
                         || findThumbnailForFile(files, bundleIdentifier, fileName)
                         || DEFAULT_POSTER_URL;
                     const archiveIdentifier = buildArchiveIdentifier(bundleIdentifier, fileName, bundleIdentifier);
+                    const thumbnailUrl = await storePosterImage(posterSourceUrl, archiveIdentifier, fileName);
 
                     await upsertVideo({
                         title,
@@ -777,8 +792,11 @@ app.post('/refresh-posters', async (req, res) => {
                     const omdbYear = parseYear(omdbDetails?.year);
                     const posterYear = posterMatch?.releaseYear ?? null;
                     const releaseYear = yearHint ?? posterYear ?? omdbYear ?? null;
+                    const refreshedThumbnailUrl = posterMatch?.posterUrl
+                        ? await storePosterImage(posterMatch.posterUrl, row.archiveIdentifier || row.id, title)
+                        : null;
                     const payload = {
-                        thumbnailUrl: posterMatch?.posterUrl || null,
+                        thumbnailUrl: refreshedThumbnailUrl,
                         tmdbId: posterMatch?.tmdbId || null,
                         description: omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null,
                         releaseYear,
@@ -885,6 +903,7 @@ app.post('/import', async (req, res) => {
         const seasonNumberInput = contentType === 'series' ? Number(req.body?.seasonNumber) || 1 : null;
         const startEpisodeInput = contentType === 'series' ? Number(req.body?.startEpisodeNumber) || 1 : null;
         const bundleIdentifier = req.body?.bundleIdentifier ? String(req.body.bundleIdentifier) : null;
+        const playbackMode = String(req.body?.playbackMode || 'mp4').toLowerCase() === 'hls' ? 'hls' : 'mp4';
 
         if (contentType === 'series' && !seriesTitleInput) {
             return res.status(400).json({ error: 'Series title is required for series imports' });
@@ -964,7 +983,7 @@ app.post('/import', async (req, res) => {
                     relativePath: s3KeyPlayback,
                     contentType: uploadedContentType,
                     playbackType
-                } = await storeMoviePlayback(playbackUrl, identifier, bestFile);
+                } = await storeMoviePlayback(playbackUrl, identifier, bestFile, { playbackType: playbackMode });
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 let title = stringifyMetadata(metadata?.title) || identifier;
@@ -1025,17 +1044,17 @@ app.post('/import', async (req, res) => {
                     type: contentType
                 });
                 const tmdbId = posterMatch?.tmdbId || null;
-                const thumbnailUrl = posterMatch?.posterUrl || (
+                let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier);
+                const posterSourceUrl = posterMatch?.posterUrl || (
                     isBundleItem
                         ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                         : `https://archive.org/services/img/${identifier}`
                 );
-
-                let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier);
                 const existingByKey = await findVideoByS3KeyPlayback(s3KeyPlayback);
                 if (existingByKey?.archiveIdentifier && existingByKey.archiveIdentifier !== archiveIdentifier) {
                     archiveIdentifier = existingByKey.archiveIdentifier;
                 }
+                const thumbnailUrl = await storePosterImage(posterSourceUrl, archiveIdentifier, bestFile.name);
 
                 const dbRow = await upsertVideo({
                     title,
@@ -1399,12 +1418,13 @@ app.post('/reels/import', async (req, res) => {
                     const height = bestFile.height ? Number(bestFile.height) : null;
                     const resolution = height ? `${height}p` : null;
                     const mimeType = uploadedContentType || normalizeMimeType(bestFile) || inferMimeType(bestFile);
-                    const thumbnailUrl = findThumbnailForFile(files, identifier, bestFile.name) || `https://archive.org/services/img/${identifier}`;
+                    const posterSourceUrl = findThumbnailForFile(files, identifier, bestFile.name) || `https://archive.org/services/img/${identifier}`;
                     let archiveIdentifier = `${identifier}:${bestFile.name}`;
                     const existingByKey = await findReelByS3KeyPlayback(s3KeyPlayback);
                     if (existingByKey?.archiveIdentifier && existingByKey.archiveIdentifier !== archiveIdentifier) {
                         archiveIdentifier = existingByKey.archiveIdentifier;
                     }
+                    const thumbnailUrl = await storePosterImage(posterSourceUrl, archiveIdentifier, bestFile.name);
 
                     const dbRow = await upsertReel({
                         title,

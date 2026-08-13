@@ -24,7 +24,6 @@ test('getAssetReferenceCandidates includes route-safe and local-media variants f
       'ia/publicmovies212/Karate_Kids_USA.mp4',
       '/ia/publicmovies212/Karate_Kids_USA.mp4',
       '/media/ia/publicmovies212/Karate_Kids_USA.mp4',
-      'https://nolimitflix.com/media/ia/publicmovies212/Karate_Kids_USA.mp4',
     ]
   );
 });

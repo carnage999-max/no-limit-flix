@@ -3,8 +3,8 @@
 This worker imports Internet Archive media into the NoLimitFlix Postgres catalog and stores playback assets on local disk.
 
 Movies:
-- default to `HLS` output under `/app/media/ia/<identifier>/hls/`
-- can be forced back to MP4 with `MOVIE_PLAYBACK_MODE=mp4`
+- default to `MP4` output under `/app/media/ia/<identifier>/`
+- can be forced to HLS with `MOVIE_PLAYBACK_MODE=hls`
 
 Reels:
 - stay `MP4`
@@ -17,13 +17,13 @@ The worker keeps writing the existing DB fields (`s3KeyPlayback`, `cloudfrontPat
 - `INGEST_WORKER_SECRET`
 - `DATABASE_URL`
 - `MEDIA_ROOT` (use `/app/media` in Docker)
-- `MEDIA_BASE_URL` (for example `https://nolimitflix.com/media`)
+- `MEDIA_BASE_URL` (use `/media` for same-origin web playback)
 - `OMDB_API_KEY`
 
 ## Optional env vars
 
 - `PORT` (defaults to `8080`)
-- `MOVIE_PLAYBACK_MODE` (`hls` by default, set to `mp4` to disable HLS generation)
+- `MOVIE_PLAYBACK_MODE` (`mp4` by default, set to `hls` only when HLS generation is needed)
 - `MOVIE_HLS_SEGMENT_SECONDS`
 - `MOVIE_HLS_PRESET`
 - `MOVIE_HLS_CRF`

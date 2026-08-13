@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
+import { recordAdminAction } from '@/lib/admin-actions';
+
+interface WorkerPosterRefreshResponse {
+    error?: string;
+    details?: string;
+    jobId?: string;
+    [key: string]: unknown;
+}
 
 export async function POST(request: NextRequest) {
     try {
@@ -29,7 +37,7 @@ export async function POST(request: NextRequest) {
         });
 
         const contentType = workerRes.headers.get('content-type') || '';
-        let data: any = null;
+        let data: WorkerPosterRefreshResponse | null = null;
         let rawText: string | null = null;
 
         if (contentType.includes('application/json')) {
@@ -49,14 +57,25 @@ export async function POST(request: NextRequest) {
         }
 
         if (data) {
+            await recordAdminAction({
+                actorId: auth.user?.id,
+                action: 'video.thumbnail.refresh_queued',
+                entityType: 'Video',
+                metadata: {
+                    jobId: data.jobId || null,
+                    limit: body?.limit || null,
+                    offset: body?.offset || null,
+                },
+            });
             return NextResponse.json(data);
         }
 
         return NextResponse.json({ error: 'Worker returned non-JSON response', details: rawText || 'No response body' }, { status: 502 });
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
         console.error('Worker refresh posters proxy error:', error);
         return NextResponse.json(
-            { error: 'Failed to refresh posters', details: error.message },
+            { error: 'Failed to refresh posters', details: message },
             { status: 500 }
         );
     }
