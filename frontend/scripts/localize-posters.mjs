@@ -17,10 +17,12 @@ const MAX_IMAGE_BYTES = Number(process.env.POSTER_BACKFILL_MAX_BYTES || 10 * 102
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const includeLocked = args.has('--include-locked');
+const repairArchiveBundlePosters = args.has('--repair-archive-bundle-posters');
 const limitArg = process.argv.slice(2).find((arg) => arg.startsWith('--limit='));
 const concurrencyArg = process.argv.slice(2).find((arg) => arg.startsWith('--concurrency='));
 const limit = Math.max(Number(limitArg?.split('=')[1]) || 1000, 1);
 const concurrency = Math.min(Math.max(Number(concurrencyArg?.split('=')[1]) || 4, 1), 12);
+const archiveMetadataCache = new Map();
 
 const getMediaRoot = () => process.env.MEDIA_ROOT?.trim() || '/app/media';
 
@@ -148,6 +150,86 @@ const archiveIdentifierBase = (value) => {
   return raw.split(':')[0] || null;
 };
 
+const parseArchiveIdentifier = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const separatorIndex = raw.indexOf(':');
+  if (separatorIndex === -1) {
+    return { identifier: raw, fileName: null, isBundleItem: false };
+  }
+  return {
+    identifier: raw.slice(0, separatorIndex),
+    fileName: raw.slice(separatorIndex + 1),
+    isBundleItem: true,
+  };
+};
+
+const buildArchiveDownloadUrl = (identifier, fileName) => {
+  let safeName = fileName;
+  try {
+    safeName = decodeURIComponent(fileName);
+  } catch {
+    safeName = fileName;
+  }
+  return `https://archive.org/download/${identifier}/${encodeURIComponent(safeName)}`;
+};
+
+const fetchArchiveMetadata = async (identifier) => {
+  if (archiveMetadataCache.has(identifier)) return archiveMetadataCache.get(identifier);
+
+  const promise = fetch(`https://archive.org/metadata/${encodeURIComponent(identifier)}`, {
+    headers: {
+      Accept: 'application/json',
+      'User-Agent': 'NoLimitFlix-PosterBackfill/1.0',
+    },
+    signal: AbortSignal.timeout(15000),
+  }).then(async (response) => {
+    if (!response.ok) return null;
+    return response.json();
+  }).catch(() => null);
+
+  archiveMetadataCache.set(identifier, promise);
+  return promise;
+};
+
+const findThumbnailForArchiveFile = (files, identifier, fileName) => {
+  if (!Array.isArray(files) || !fileName) return null;
+  const base = String(fileName).replace(/\.[a-z0-9]+$/i, '').toLowerCase();
+  if (!base) return null;
+
+  const imageCandidates = files.filter((file) => {
+    const name = String(file?.name || '').toLowerCase();
+    if (!name) return false;
+    if (!name.includes(base)) return false;
+    return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.endsWith('.webp');
+  });
+
+  const best = imageCandidates[0];
+  if (!best?.name) return null;
+  return buildArchiveDownloadUrl(identifier, best.name);
+};
+
+const resolveArchiveFilePosterUrl = async (video) => {
+  const parts = parseArchiveIdentifier(video.archiveIdentifier);
+  if (!parts?.isBundleItem || !parts.identifier || !parts.fileName) return null;
+
+  const metadata = await fetchArchiveMetadata(parts.identifier);
+  return findThumbnailForArchiveFile(metadata?.files, parts.identifier, parts.fileName);
+};
+
+const isArchiveCollectionPosterUrl = (video, value) => {
+  const parts = parseArchiveIdentifier(video.archiveIdentifier);
+  if (!parts?.isBundleItem || !parts.identifier || !value) return false;
+
+  try {
+    const url = new URL(value);
+    return url.hostname === 'archive.org'
+      && url.pathname === `/services/img/${parts.identifier}`;
+  } catch {
+    return false;
+  }
+};
+
 const fetchPosterCandidate = async (url) => {
   const response = await fetch(url, {
     headers: {
@@ -166,6 +248,7 @@ const fetchPosterCandidate = async (url) => {
 
 const resolvePosterResponse = async (video, sourceUrl) => {
   const tried = new Set();
+  let unsafeCollectionImage = null;
 
   const tryUrl = async (candidateUrl) => {
     if (!candidateUrl || tried.has(candidateUrl)) return null;
@@ -173,6 +256,10 @@ const resolvePosterResponse = async (video, sourceUrl) => {
 
     const response = await fetchPosterCandidate(candidateUrl);
     if (isImageResponse(response)) {
+      if (isArchiveCollectionPosterUrl(video, candidateUrl)) {
+        unsafeCollectionImage = { response, sourceUrl: candidateUrl };
+        return null;
+      }
       return { response, sourceUrl: candidateUrl };
     }
 
@@ -193,13 +280,21 @@ const resolvePosterResponse = async (video, sourceUrl) => {
   const first = await tryUrl(sourceUrl);
   if (first && isImageResponse(first.response)) return first;
 
+  const archiveFilePosterUrl = await resolveArchiveFilePosterUrl(video);
+  const archiveFilePoster = await tryUrl(archiveFilePosterUrl);
+  if (archiveFilePoster && isImageResponse(archiveFilePoster.response)) return archiveFilePoster;
+
+  const archiveParts = parseArchiveIdentifier(video.archiveIdentifier);
   const archiveBase = archiveIdentifierBase(video.archiveIdentifier);
-  if (archiveBase) {
+  if (archiveBase && !archiveParts?.isBundleItem) {
     const archiveImage = await tryUrl(`https://archive.org/services/img/${encodeURIComponent(archiveBase)}`);
     if (archiveImage && isImageResponse(archiveImage.response)) return archiveImage;
   }
 
   if (first) return first;
+  if (unsafeCollectionImage) {
+    throw new Error(`Refusing collection-level archive poster for bundle item: ${unsafeCollectionImage.sourceUrl}`);
+  }
   throw new Error('No poster candidate URL found');
 };
 
@@ -236,22 +331,17 @@ const writePoster = async (video, sourceUrl, response) => {
   return `${getMediaBaseUrl()}/${relativePath}`;
 };
 
-const localizePoster = async (video) => {
-  const previousThumbnailUrl = video.thumbnailUrl;
-
-  if (!previousThumbnailUrl || isLocalMediaUrl(previousThumbnailUrl)) {
-    return { status: 'skipped', reason: 'already local' };
-  }
-
+const localizePosterFromSource = async (video, sourceUrl, action = 'video.thumbnail.backfill_localized', extraMetadata = {}) => {
   if (video.thumbnailLocked && !includeLocked) {
     return { status: 'skipped', reason: 'locked' };
   }
 
   if (dryRun) {
-    return { status: 'dry-run', previousThumbnailUrl };
+    return { status: 'dry-run', previousThumbnailUrl: video.thumbnailUrl, sourceUrl };
   }
 
-  const poster = await resolvePosterResponse(video, previousThumbnailUrl);
+  const previousThumbnailUrl = video.thumbnailUrl;
+  const poster = await resolvePosterResponse(video, sourceUrl);
   const nextThumbnailUrl = await writePoster(video, poster.sourceUrl, poster.response);
 
   await prisma.video.update({
@@ -268,12 +358,14 @@ const localizePoster = async (video) => {
   await prisma.adminActionLog.create({
     data: {
       actorId: null,
-      action: 'video.thumbnail.backfill_localized',
+      action,
       entityType: 'Video',
       entityId: video.id,
       videoId: video.id,
       metadata: {
+        ...extraMetadata,
         previousThumbnailUrl,
+        requestedSourceUrl: sourceUrl,
         nextThumbnailUrl,
         resolvedSourceUrl: poster.sourceUrl,
         sourceProvider: video.sourceProvider || null,
@@ -283,6 +375,75 @@ const localizePoster = async (video) => {
   });
 
   return { status: 'localized', previousThumbnailUrl, nextThumbnailUrl };
+};
+
+const localizePoster = async (video) => {
+  const previousThumbnailUrl = video.thumbnailUrl;
+
+  if (!previousThumbnailUrl || isLocalMediaUrl(previousThumbnailUrl)) {
+    return { status: 'skipped', reason: 'already local' };
+  }
+
+  return localizePosterFromSource(video, previousThumbnailUrl);
+};
+
+const getStringMetadataValue = (metadata, key) => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
+  const value = metadata[key];
+  return typeof value === 'string' ? value : null;
+};
+
+const fetchRepairCandidates = async () => {
+  const logs = await prisma.adminActionLog.findMany({
+    where: {
+      action: 'video.thumbnail.backfill_localized',
+      videoId: { not: null },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: limit * 8,
+    select: {
+      id: true,
+      videoId: true,
+      metadata: true,
+      createdAt: true,
+      video: {
+        select: {
+          id: true,
+          title: true,
+          thumbnailUrl: true,
+          thumbnailLocked: true,
+          sourceProvider: true,
+          archiveIdentifier: true,
+        },
+      },
+    },
+  });
+
+  const seen = new Set();
+  const candidates = [];
+  for (const log of logs) {
+    if (!log.videoId || seen.has(log.videoId) || !log.video) continue;
+    seen.add(log.videoId);
+
+    const resolvedSourceUrl = getStringMetadataValue(log.metadata, 'resolvedSourceUrl');
+    const nextThumbnailUrl = getStringMetadataValue(log.metadata, 'nextThumbnailUrl');
+    const previousThumbnailUrl = getStringMetadataValue(log.metadata, 'previousThumbnailUrl');
+    if (!resolvedSourceUrl || !previousThumbnailUrl) continue;
+    if (!isArchiveCollectionPosterUrl(log.video, resolvedSourceUrl)) continue;
+    if (nextThumbnailUrl && log.video.thumbnailUrl !== nextThumbnailUrl) continue;
+
+    candidates.push({
+      ...log.video,
+      repairSourceUrl: previousThumbnailUrl,
+      badResolvedSourceUrl: resolvedSourceUrl,
+      badBackfillActionId: log.id,
+      badBackfillCreatedAt: log.createdAt,
+    });
+
+    if (candidates.length >= limit) break;
+  }
+
+  return candidates;
 };
 
 const runPool = async (items, worker) => {
@@ -300,22 +461,24 @@ const runPool = async (items, worker) => {
 };
 
 const main = async () => {
-  const videos = await prisma.video.findMany({
-    where: {
-      thumbnailUrl: { startsWith: 'http' },
-      ...(includeLocked ? {} : { thumbnailLocked: false }),
-    },
-    select: {
-      id: true,
-      title: true,
-      thumbnailUrl: true,
-      thumbnailLocked: true,
-      sourceProvider: true,
-      archiveIdentifier: true,
-    },
-    orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
-    take: limit,
-  });
+  const videos = repairArchiveBundlePosters
+    ? await fetchRepairCandidates()
+    : await prisma.video.findMany({
+      where: {
+        thumbnailUrl: { startsWith: 'http' },
+        ...(includeLocked ? {} : { thumbnailLocked: false }),
+      },
+      select: {
+        id: true,
+        title: true,
+        thumbnailUrl: true,
+        thumbnailLocked: true,
+        sourceProvider: true,
+        archiveIdentifier: true,
+      },
+      orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
+      take: limit,
+    });
 
   const summary = {
     candidates: videos.length,
@@ -327,7 +490,18 @@ const main = async () => {
 
   await runPool(videos, async (video) => {
     try {
-      const result = await localizePoster(video);
+      const result = repairArchiveBundlePosters
+        ? await localizePosterFromSource(
+          video,
+          video.repairSourceUrl,
+          'video.thumbnail.backfill_repaired',
+          {
+            badResolvedSourceUrl: video.badResolvedSourceUrl,
+            badBackfillActionId: video.badBackfillActionId,
+            badBackfillCreatedAt: video.badBackfillCreatedAt?.toISOString?.() || null,
+          },
+        )
+        : await localizePoster(video);
       summary[result.status === 'dry-run' ? 'dryRun' : result.status === 'localized' ? 'localized' : 'skipped'] += 1;
       console.log(`${result.status}: ${video.title} (${video.id})${result.reason ? ` - ${result.reason}` : ''}`);
     } catch (error) {

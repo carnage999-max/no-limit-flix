@@ -42,6 +42,26 @@ const getErrorMessage = (error: unknown, fallback: string) => {
     return error instanceof Error ? error.message : fallback;
 };
 
+const parseUploadResponse = async (response: Response) => {
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+        return response.json();
+    }
+
+    const text = await response.text().catch(() => '');
+    if (response.status === 413) {
+        throw new Error('Image is too large for the server upload limit.');
+    }
+    if (response.status === 404) {
+        throw new Error('Avatar upload endpoint was not found. Rebuild and restart the app container.');
+    }
+    if (!response.ok) {
+        throw new Error(text ? `Upload failed with HTTP ${response.status}` : 'Upload failed before the app could process it.');
+    }
+
+    throw new Error('Avatar upload returned an unexpected response.');
+};
+
 export default function ProfilePage() {
     const router = useRouter();
     const { user, loading, refresh } = useSession();
@@ -163,7 +183,7 @@ export default function ProfilePage() {
                 method: 'POST',
                 body: formData,
             });
-            const data = await response.json();
+            const data = await parseUploadResponse(response);
             if (!response.ok) {
                 throw new Error(data?.error || 'Failed to upload avatar');
             }
