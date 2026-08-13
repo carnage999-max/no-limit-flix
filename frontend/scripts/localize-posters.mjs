@@ -13,16 +13,22 @@ const IMAGE_TYPES = new Map([
 
 const SAME_SITE_MEDIA_HOSTS = new Set(['nolimitflix.com', 'www.nolimitflix.com']);
 const MAX_IMAGE_BYTES = Number(process.env.POSTER_BACKFILL_MAX_BYTES || 10 * 1024 * 1024);
+const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
+const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const includeLocked = args.has('--include-locked');
 const repairArchiveBundlePosters = args.has('--repair-archive-bundle-posters');
+const allowArchiveFrameFallback = args.has('--allow-archive-frame-fallback');
 const limitArg = process.argv.slice(2).find((arg) => arg.startsWith('--limit='));
 const concurrencyArg = process.argv.slice(2).find((arg) => arg.startsWith('--concurrency='));
 const limit = Math.max(Number(limitArg?.split('=')[1]) || 1000, 1);
 const concurrency = Math.min(Math.max(Number(concurrencyArg?.split('=')[1]) || 4, 1), 12);
 const archiveMetadataCache = new Map();
+
+const getTmdbApiKey = () => process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY || '';
+const getOmdbApiKey = () => process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '';
 
 const getMediaRoot = () => process.env.MEDIA_ROOT?.trim() || '/app/media';
 
@@ -102,6 +108,246 @@ const extensionForResponse = (url, contentType) => {
 const contentTypeBase = (contentType) => String(contentType || '').split(';')[0].trim().toLowerCase();
 const isImageResponse = (response) => IMAGE_TYPES.has(contentTypeBase(response.headers.get('content-type')));
 const isHtmlResponse = (response) => contentTypeBase(response.headers.get('content-type')) === 'text/html';
+
+const parseYear = (value) => {
+  if (!value) return null;
+  const match = String(value).match(/(19|20)\d{2}/);
+  return match ? Number(match[0]) : null;
+};
+
+const stripYear = (value) => String(value || '').replace(/\((19|20)\d{2}\)/g, '').replace(/\b(19|20)\d{2}\b/g, '');
+
+const sanitizeSearchTitle = (value) => {
+  if (!value) return '';
+  let cleaned = String(value);
+  cleaned = cleaned.replace(/\.[a-z0-9]+$/i, '');
+  cleaned = cleaned.replace(/\[[^\]]*\]/g, ' ');
+  cleaned = cleaned.replace(/\([^)]*\)/g, ' ');
+  cleaned = cleaned.replace(/\b(480|720|1080|2160)p\b/gi, ' ');
+  cleaned = cleaned.replace(/\b(x264|x265|h264|h265|hevc|hdrip|webrip|web|dvdrip|bluray|brrip|hd|sd|uhd)\b/gi, ' ');
+  cleaned = cleaned.replace(/[_-]+/g, ' ');
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  return cleaned;
+};
+
+const normalizeTitle = (value) => {
+  const cleaned = stripYear(value)
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  return cleaned.replace(/^(the|a|an)\s+/i, '');
+};
+
+const yearsMatch = (a, b, tolerance = 1) => {
+  if (!a || !b) return true;
+  return Math.abs(a - b) <= tolerance;
+};
+
+const getCandidateYear = (item) => parseYear(item?.release_date || item?.first_air_date || item?.Year);
+
+const scoreCandidate = (candidate, target, candidateYear, targetYear) => {
+  if (!candidate || !target) return 0;
+  let score = 0;
+  if (candidate === target) score += 5;
+  if (candidate.startsWith(target) || target.startsWith(candidate)) score += 3;
+  if (candidate.includes(target) || target.includes(candidate)) score += 2;
+
+  if (targetYear && candidateYear) {
+    const delta = Math.abs(candidateYear - targetYear);
+    if (delta === 0) score += 4;
+    else if (delta === 1) score += 2;
+    else if (delta <= 3) score += 1;
+    else score -= 8;
+  }
+
+  return score;
+};
+
+const compareCandidates = (a, b, targetYear, preferOlder = false) => {
+  if (b.score !== a.score) return b.score - a.score;
+
+  const aYear = getCandidateYear(a.item);
+  const bYear = getCandidateYear(b.item);
+
+  if (targetYear) {
+    const aDist = aYear ? Math.abs(aYear - targetYear) : Number.POSITIVE_INFINITY;
+    const bDist = bYear ? Math.abs(bYear - targetYear) : Number.POSITIVE_INFINITY;
+    if (aDist !== bDist) return aDist - bDist;
+    if (aYear && bYear && aYear !== bYear) return aYear - bYear;
+  } else if (preferOlder && aYear && bYear && aYear !== bYear) {
+    return aYear - bYear;
+  }
+
+  return 0;
+};
+
+const fetchJson = async (url) => {
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json', 'User-Agent': 'NoLimitFlix-PosterBackfill/1.0' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) return null;
+  return response.json();
+};
+
+const resolveSearchTitle = (video) => {
+  const title = sanitizeSearchTitle(video.title) || video.title;
+  if (title) return title;
+
+  const parts = parseArchiveIdentifier(video.archiveIdentifier);
+  if (parts?.fileName) return sanitizeSearchTitle(parts.fileName);
+  return '';
+};
+
+const findOmdbPoster = async (video) => {
+  const apiKey = getOmdbApiKey();
+  const title = resolveSearchTitle(video);
+  if (!apiKey || !title) return null;
+
+  const type = video.type === 'series' ? 'series' : 'movie';
+  const year = video.releaseYear ?? parseYear(video.title) ?? parseYear(video.archiveIdentifier);
+  const baseParams = new URLSearchParams({
+    apikey: apiKey,
+    t: title,
+    type,
+  });
+  if (year) baseParams.set('y', String(year));
+
+  let data = await fetchJson(`https://www.omdbapi.com/?${baseParams.toString()}`);
+  if (data && data.Response !== 'False' && year) {
+    const matchedYear = parseYear(data.Year);
+    if (matchedYear && !yearsMatch(matchedYear, year)) data = null;
+  }
+
+  if (!data || data.Response === 'False') {
+    const searchParams = new URLSearchParams({
+      apikey: apiKey,
+      s: title,
+      type,
+    });
+    if (year) searchParams.set('y', String(year));
+
+    const searchData = await fetchJson(`https://www.omdbapi.com/?${searchParams.toString()}`);
+    const results = searchData?.Search || [];
+    if (!results.length) return null;
+
+    const target = normalizeTitle(title);
+    const scored = results.map((item) => ({
+      item,
+      score: scoreCandidate(normalizeTitle(item?.Title), target, parseYear(item?.Year), year),
+    }));
+    scored.sort((a, b) => compareCandidates(a, b, year, type === 'movie' && !year));
+
+    const best = scored.find((entry) => {
+      if (entry.score < 2 || !entry.item?.imdbID) return false;
+      const candidateYear = parseYear(entry.item?.Year);
+      return !year || !candidateYear || yearsMatch(candidateYear, year);
+    });
+    if (!best?.item?.imdbID) return null;
+
+    data = await fetchJson(`https://www.omdbapi.com/?${new URLSearchParams({
+      apikey: apiKey,
+      i: best.item.imdbID,
+      plot: 'short',
+    }).toString()}`);
+  }
+
+  if (!data || data.Response === 'False') return null;
+
+  const imdbId = data.imdbID;
+  if (imdbId) {
+    return {
+      posterUrl: `https://img.omdbapi.com/?i=${encodeURIComponent(imdbId)}&h=600&apikey=${encodeURIComponent(apiKey)}`,
+      source: 'omdb',
+    };
+  }
+
+  if (data.Poster && data.Poster !== 'N/A') {
+    return { posterUrl: data.Poster, source: 'omdb' };
+  }
+
+  return null;
+};
+
+const findTmdbPoster = async (video, ignoreYear = false) => {
+  const apiKey = getTmdbApiKey();
+  const title = resolveSearchTitle(video);
+  if (!apiKey || !title) return null;
+
+  const type = video.type === 'series' ? 'series' : 'movie';
+  const endpoint = type === 'series' ? 'tv' : 'movie';
+  const year = video.releaseYear ?? parseYear(video.title) ?? parseYear(video.archiveIdentifier);
+  const params = new URLSearchParams({
+    api_key: apiKey,
+    query: title,
+  });
+  if (year && !ignoreYear) {
+    params.set(type === 'series' ? 'first_air_date_year' : 'year', String(year));
+  }
+
+  const data = await fetchJson(`${TMDB_BASE_URL}/search/${endpoint}?${params.toString()}`);
+  const results = data?.results || [];
+  if (!results.length) return null;
+
+  const target = normalizeTitle(title);
+  const scored = results.map((item) => {
+    const candidateTitle = item?.title || item?.name || '';
+    return {
+      item,
+      score: scoreCandidate(normalizeTitle(candidateTitle), target, getCandidateYear(item), year),
+    };
+  });
+  scored.sort((a, b) => compareCandidates(a, b, year, type === 'movie' && !year));
+
+  const best = scored.find((entry) => {
+    if (entry.score < (year && !ignoreYear ? 3 : 2) || !entry.item?.poster_path) return false;
+    const candidateYear = getCandidateYear(entry.item);
+    return !year || !candidateYear || ignoreYear || yearsMatch(candidateYear, year);
+  });
+
+  if (!best?.item?.poster_path) return null;
+  return {
+    posterUrl: `${TMDB_IMAGE_BASE}${best.item.poster_path}`,
+    source: 'tmdb',
+  };
+};
+
+const findWikipediaPoster = async (video) => {
+  const title = resolveSearchTitle(video);
+  if (!title) return null;
+
+  const type = video.type === 'series' ? 'tv series' : 'film';
+  const year = video.releaseYear ?? parseYear(video.title) ?? parseYear(video.archiveIdentifier);
+  const search = `${title} ${year || ''} ${type}`.trim();
+  const searchData = await fetchJson(`https://en.wikipedia.org/w/api.php?${new URLSearchParams({
+    action: 'query',
+    list: 'search',
+    srsearch: search,
+    srlimit: '5',
+    format: 'json',
+    origin: '*',
+  }).toString()}`);
+  const pageIds = (searchData?.query?.search || []).map((hit) => hit.pageid).filter(Boolean);
+  if (!pageIds.length) return null;
+
+  const imageData = await fetchJson(`https://en.wikipedia.org/w/api.php?${new URLSearchParams({
+    action: 'query',
+    prop: 'pageimages',
+    piprop: 'thumbnail',
+    pithumbsize: '500',
+    format: 'json',
+    pageids: pageIds.join(','),
+    origin: '*',
+  }).toString()}`);
+
+  const pages = imageData?.query?.pages || {};
+  for (const pageId of pageIds) {
+    const source = pages[pageId]?.thumbnail?.source;
+    if (source) return { posterUrl: source, source: 'wikipedia' };
+  }
+  return null;
+};
 
 const decodeHtmlEntity = (value) =>
   String(value || '')
@@ -230,6 +476,17 @@ const isArchiveCollectionPosterUrl = (video, value) => {
   }
 };
 
+const isArchiveGeneratedThumbnailUrl = (value) => {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    if (!url.hostname.endsWith('archive.org')) return false;
+    return url.pathname.includes('.thumbs') || url.pathname.startsWith('/services/img/');
+  } catch {
+    return false;
+  }
+};
+
 const fetchPosterCandidate = async (url) => {
   const response = await fetch(url, {
     headers: {
@@ -249,45 +506,77 @@ const fetchPosterCandidate = async (url) => {
 const resolvePosterResponse = async (video, sourceUrl) => {
   const tried = new Set();
   let unsafeCollectionImage = null;
+  let lastFetchError = null;
 
-  const tryUrl = async (candidateUrl) => {
+  const tryUrl = async (candidateUrl, sourceType = 'external') => {
     if (!candidateUrl || tried.has(candidateUrl)) return null;
     tried.add(candidateUrl);
 
-    const response = await fetchPosterCandidate(candidateUrl);
+    let response;
+    try {
+      response = await fetchPosterCandidate(candidateUrl);
+    } catch (error) {
+      lastFetchError = error;
+      return null;
+    }
+
     if (isImageResponse(response)) {
       if (isArchiveCollectionPosterUrl(video, candidateUrl)) {
         unsafeCollectionImage = { response, sourceUrl: candidateUrl };
         return null;
       }
-      return { response, sourceUrl: candidateUrl };
+      return { response, sourceUrl: candidateUrl, sourceType };
     }
 
     if (isHtmlResponse(response)) {
       const html = await response.text();
       const htmlImageUrl = resolveHtmlImageUrl(html, response.url || candidateUrl);
       if (htmlImageUrl && !tried.has(htmlImageUrl)) {
-        return tryUrl(htmlImageUrl);
+        return tryUrl(htmlImageUrl, 'html');
       }
     }
 
     return {
       response,
       sourceUrl: candidateUrl,
+      sourceType,
     };
   };
 
-  const first = await tryUrl(sourceUrl);
+  const catalogPosters = [
+    await findOmdbPoster(video),
+    await findTmdbPoster(video, false),
+    await findTmdbPoster(video, true),
+    await findWikipediaPoster(video),
+  ].filter(Boolean);
+
+  for (const catalogPoster of catalogPosters) {
+    const catalog = await tryUrl(catalogPoster.posterUrl, catalogPoster.source || 'catalog');
+    if (catalog && isImageResponse(catalog.response)) return catalog;
+  }
+
+  if (sourceUrl && !isArchiveGeneratedThumbnailUrl(sourceUrl)) {
+    const first = await tryUrl(sourceUrl, 'previous');
+    if (first && isImageResponse(first.response)) return first;
+  }
+
+  if (!allowArchiveFrameFallback) {
+    throw new Error(lastFetchError
+      ? `No catalog poster fetched; archive frame fallback disabled (${lastFetchError.message})`
+      : 'No catalog poster found; archive frame fallback disabled');
+  }
+
+  const first = await tryUrl(sourceUrl, 'archive');
   if (first && isImageResponse(first.response)) return first;
 
   const archiveFilePosterUrl = await resolveArchiveFilePosterUrl(video);
-  const archiveFilePoster = await tryUrl(archiveFilePosterUrl);
+  const archiveFilePoster = await tryUrl(archiveFilePosterUrl, 'archive_file');
   if (archiveFilePoster && isImageResponse(archiveFilePoster.response)) return archiveFilePoster;
 
   const archiveParts = parseArchiveIdentifier(video.archiveIdentifier);
   const archiveBase = archiveIdentifierBase(video.archiveIdentifier);
   if (archiveBase && !archiveParts?.isBundleItem) {
-    const archiveImage = await tryUrl(`https://archive.org/services/img/${encodeURIComponent(archiveBase)}`);
+    const archiveImage = await tryUrl(`https://archive.org/services/img/${encodeURIComponent(archiveBase)}`, 'archive_collection');
     if (archiveImage && isImageResponse(archiveImage.response)) return archiveImage;
   }
 
@@ -295,7 +584,7 @@ const resolvePosterResponse = async (video, sourceUrl) => {
   if (unsafeCollectionImage) {
     throw new Error(`Refusing collection-level archive poster for bundle item: ${unsafeCollectionImage.sourceUrl}`);
   }
-  throw new Error('No poster candidate URL found');
+  throw new Error(lastFetchError?.message || 'No poster candidate URL found');
 };
 
 const writePoster = async (video, sourceUrl, response) => {
@@ -337,7 +626,14 @@ const localizePosterFromSource = async (video, sourceUrl, action = 'video.thumbn
   }
 
   if (dryRun) {
-    return { status: 'dry-run', previousThumbnailUrl: video.thumbnailUrl, sourceUrl };
+    const poster = await resolvePosterResponse(video, sourceUrl);
+    return {
+      status: 'dry-run',
+      previousThumbnailUrl: video.thumbnailUrl,
+      sourceUrl,
+      resolvedSourceUrl: poster.sourceUrl,
+      resolvedSourceType: poster.sourceType || null,
+    };
   }
 
   const previousThumbnailUrl = video.thumbnailUrl;
@@ -368,13 +664,20 @@ const localizePosterFromSource = async (video, sourceUrl, action = 'video.thumbn
         requestedSourceUrl: sourceUrl,
         nextThumbnailUrl,
         resolvedSourceUrl: poster.sourceUrl,
+        resolvedSourceType: poster.sourceType || null,
         sourceProvider: video.sourceProvider || null,
         archiveIdentifier: video.archiveIdentifier || null,
       },
     },
   });
 
-  return { status: 'localized', previousThumbnailUrl, nextThumbnailUrl };
+  return {
+    status: 'localized',
+    previousThumbnailUrl,
+    nextThumbnailUrl,
+    resolvedSourceUrl: poster.sourceUrl,
+    resolvedSourceType: poster.sourceType || null,
+  };
 };
 
 const localizePoster = async (video) => {
@@ -414,6 +717,8 @@ const fetchRepairCandidates = async () => {
           thumbnailLocked: true,
           sourceProvider: true,
           archiveIdentifier: true,
+          type: true,
+          releaseYear: true,
         },
       },
     },
@@ -429,7 +734,7 @@ const fetchRepairCandidates = async () => {
     const nextThumbnailUrl = getStringMetadataValue(log.metadata, 'nextThumbnailUrl');
     const previousThumbnailUrl = getStringMetadataValue(log.metadata, 'previousThumbnailUrl');
     if (!resolvedSourceUrl || !previousThumbnailUrl) continue;
-    if (!isArchiveCollectionPosterUrl(log.video, resolvedSourceUrl)) continue;
+    if (!isArchiveCollectionPosterUrl(log.video, resolvedSourceUrl) && !isArchiveGeneratedThumbnailUrl(resolvedSourceUrl)) continue;
     if (nextThumbnailUrl && log.video.thumbnailUrl !== nextThumbnailUrl) continue;
 
     candidates.push({
@@ -475,6 +780,8 @@ const main = async () => {
         thumbnailLocked: true,
         sourceProvider: true,
         archiveIdentifier: true,
+        type: true,
+        releaseYear: true,
       },
       orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
       take: limit,
@@ -503,7 +810,8 @@ const main = async () => {
         )
         : await localizePoster(video);
       summary[result.status === 'dry-run' ? 'dryRun' : result.status === 'localized' ? 'localized' : 'skipped'] += 1;
-      console.log(`${result.status}: ${video.title} (${video.id})${result.reason ? ` - ${result.reason}` : ''}`);
+      const sourceDetail = result.resolvedSourceType ? ` - ${result.resolvedSourceType}: ${result.resolvedSourceUrl}` : '';
+      console.log(`${result.status}: ${video.title} (${video.id})${result.reason ? ` - ${result.reason}` : sourceDetail}`);
     } catch (error) {
       summary.failed += 1;
       console.error(`failed: ${video.title} (${video.id}) - ${error.message}`);
