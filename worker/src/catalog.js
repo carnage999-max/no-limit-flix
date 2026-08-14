@@ -313,7 +313,7 @@ async function findWikipediaPoster({ title, year, type }) {
 }
 
 async function findBestPoster({ title, year, type }) {
-    const yearHint = year ?? parseYear(title);
+    const yearHint = type === 'series' ? null : (year ?? parseYear(title));
 
     let poster = await findOmdbPoster({ title, year: yearHint, type });
     if (!poster) {
@@ -333,6 +333,16 @@ async function findBestPoster({ title, year, type }) {
             minScore: 2,
             ignoreYear: true,
         });
+    }
+    if (!poster && type === 'series' && year) {
+        poster = await findOmdbPoster({ title, year, type })
+            || await findCatalogPoster({
+                title,
+                year,
+                type,
+                minScore: 2,
+                ignoreYear: false,
+            });
     }
     if (!poster) {
         poster = await findWikipediaPoster({ title, year: yearHint, type });

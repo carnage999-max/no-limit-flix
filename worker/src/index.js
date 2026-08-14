@@ -339,19 +339,21 @@ const fetchVideosNeedingPoster = async (limit, offset = 0) => {
                 "archiveIdentifier", "s3KeyPlayback", "sourceMetadata"
          FROM "Video"
          WHERE "status" = 'completed'
-           AND "type" = 'movie'
+           AND "type" IN ('movie', 'series')
            AND COALESCE("thumbnailLocked", false) = false
            AND (
                 "sourceProvider" = 'internet_archive'
                 OR "sourceType" = 'external_legal'
                 OR "archiveIdentifier" IS NOT NULL
                 OR "s3KeyPlayback" LIKE 'ia:%'
+                OR "s3KeyPlayback" LIKE 'ia/%'
                 OR "s3Url" LIKE 'https://archive.org/%'
            )
            AND (
                 "thumbnailUrl" IS NULL
                 OR "thumbnailUrl" = ''
                 OR "thumbnailUrl" NOT LIKE '/media/thumbnails/%'
+                OR "type" = 'series'
            )
          ORDER BY "updatedAt" ASC, "createdAt" ASC
          LIMIT $1 OFFSET $2`,
@@ -365,6 +367,16 @@ const stringifyMetadata = (value) => {
     if (Array.isArray(value)) return value.join(', ');
     return String(value);
 };
+
+const resolveArchiveSourceRights = (metadata) =>
+    stringifyMetadata(metadata?.rights)
+    || stringifyMetadata(metadata?.license)
+    || 'Internet Archive source page';
+
+const resolveArchiveSourceLicenseUrl = (metadata, sourcePageUrl) =>
+    stringifyMetadata(metadata?.licenseurl)
+    || stringifyMetadata(metadata?.license)
+    || sourcePageUrl;
 
 const pickFirstString = (value) => {
     if (!value) return null;
@@ -666,8 +678,8 @@ app.post('/reconcile', async (req, res) => {
                         sourceProvider: 'internet_archive',
                         sourcePageUrl: `https://archive.org/details/${bundleIdentifier}`,
                         archiveIdentifier,
-                        sourceRights: stringifyMetadata(metadata?.rights),
-                        sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                        sourceRights: resolveArchiveSourceRights(metadata),
+                        sourceLicenseUrl: resolveArchiveSourceLicenseUrl(metadata, `https://archive.org/details/${bundleIdentifier}`),
                         sourceMetadata: JSON.stringify(metadata)
                     });
 
@@ -1054,7 +1066,9 @@ app.post('/import', async (req, res) => {
                 const tmdbId = posterMatch?.tmdbId || null;
                 let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier, contentType);
                 const posterSourceUrl = posterMatch?.posterUrl || (
-                    isBundleItem
+                    contentType === 'series'
+                        ? DEFAULT_POSTER_URL
+                        : isBundleItem
                         ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                         : `https://archive.org/services/img/${identifier}`
                 );
@@ -1095,8 +1109,8 @@ app.post('/import', async (req, res) => {
                     sourceProvider: 'internet_archive',
                     sourcePageUrl,
                     archiveIdentifier,
-                    sourceRights: stringifyMetadata(metadata?.rights),
-                    sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                    sourceRights: resolveArchiveSourceRights(metadata),
+                    sourceLicenseUrl: resolveArchiveSourceLicenseUrl(metadata, sourcePageUrl),
                     sourceMetadata: JSON.stringify(metadata)
                 });
 
@@ -1464,8 +1478,8 @@ app.post('/reels/import', async (req, res) => {
                         sourceIdentifier: identifier,
                         sourcePageUrl,
                         archiveIdentifier,
-                        sourceRights: stringifyMetadata(metadata?.rights),
-                        sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                        sourceRights: resolveArchiveSourceRights(metadata),
+                        sourceLicenseUrl: resolveArchiveSourceLicenseUrl(metadata, sourcePageUrl),
                         sourceMetadata: JSON.stringify(metadata),
                         tags: stringifyMetadata(metadata?.subject || metadata?.keywords || metadata?.tags),
                         language: stringifyMetadata(metadata?.language)

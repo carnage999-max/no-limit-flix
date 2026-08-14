@@ -115,6 +115,16 @@ const stringifyMetadata = (value: any) => {
     return String(value);
 };
 
+const resolveArchiveSourceRights = (metadata: any) =>
+    stringifyMetadata(metadata?.rights)
+    || stringifyMetadata(metadata?.license)
+    || 'Internet Archive source page';
+
+const resolveArchiveSourceLicenseUrl = (metadata: any, sourcePageUrl: string) =>
+    stringifyMetadata(metadata?.licenseurl)
+    || stringifyMetadata(metadata?.license)
+    || sourcePageUrl;
+
 const pickFirstString = (value: any) => {
     if (!value) return null;
     if (Array.isArray(value)) {
@@ -1083,7 +1093,7 @@ const findWikipediaPoster = async (title: string | null, year: number | null, ty
 };
 
 const findBestPoster = async (title: string | null, year: number | null, type: 'movie' | 'series'): Promise<PosterMatch | null> => {
-    const yearHint = year ?? parseYear(title || undefined);
+    const yearHint = type === 'series' ? null : (year ?? parseYear(title || undefined));
 
     let poster: PosterMatch | null = await findOmdbPoster(title, yearHint, type);
     if (!poster) {
@@ -1097,6 +1107,10 @@ const findBestPoster = async (title: string | null, year: number | null, type: '
             minScore: 2,
             ignoreYear: true,
         });
+    }
+    if (!poster && type === 'series' && year) {
+        poster = await findOmdbPoster(title, year, type)
+            || await findCatalogPoster(title, year, type, { minScore: 2, ignoreYear: false });
     }
     if (!poster) {
         poster = await findWikipediaPoster(title, yearHint, type);
@@ -1398,7 +1412,9 @@ export async function POST(request: NextRequest) {
                 const tmdbId = posterMatch?.tmdbId || null;
                 const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier, contentType);
                 const posterSourceUrl = posterMatch?.posterUrl || (
-                    isBundleItem
+                    contentType === 'series'
+                        ? DEFAULT_POSTER_URL
+                        : isBundleItem
                         ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                         : `https://archive.org/services/img/${identifier}`
                 );
@@ -1453,8 +1469,8 @@ export async function POST(request: NextRequest) {
                             sourceProvider: 'internet_archive',
                             sourcePageUrl,
                             archiveIdentifier,
-                            sourceRights: stringifyMetadata(metadata?.rights),
-                            sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                            sourceRights: resolveArchiveSourceRights(metadata),
+                            sourceLicenseUrl: resolveArchiveSourceLicenseUrl(metadata, sourcePageUrl),
                             sourceMetadata: metadata,
                         },
                         update: {
@@ -1489,8 +1505,8 @@ export async function POST(request: NextRequest) {
                             sourceProvider: 'internet_archive',
                             sourcePageUrl,
                             archiveIdentifier,
-                            sourceRights: stringifyMetadata(metadata?.rights),
-                            sourceLicenseUrl: stringifyMetadata(metadata?.licenseurl || metadata?.license),
+                            sourceRights: resolveArchiveSourceRights(metadata),
+                            sourceLicenseUrl: resolveArchiveSourceLicenseUrl(metadata, sourcePageUrl),
                             sourceMetadata: metadata,
                         }
                     });
