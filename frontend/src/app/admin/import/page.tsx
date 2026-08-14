@@ -56,7 +56,6 @@ export default function AdminImportPage() {
     const [limit, setLimit] = useState(6);
     const [allowMkv, setAllowMkv] = useState(false);
     const [importType, setImportType] = useState<'movie' | 'series'>('movie');
-    const [archiveSource, setArchiveSource] = useState('');
     const [page, setPage] = useState(1);
     const [shuffleSeed, setShuffleSeed] = useState<string | null>(null);
     const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
@@ -109,7 +108,6 @@ export default function AdminImportPage() {
                     limit,
                     allowMkv,
                     importType,
-                    archiveSource: importType === 'series' ? archiveSource : undefined,
                     page: targetPage,
                     shuffleSeed,
                     dryRun: true
@@ -165,7 +163,6 @@ export default function AdminImportPage() {
                     allowMkv,
                     importType,
                     seriesTitle: importType === 'series' ? selected[0]?.seriesTitle : undefined,
-                    archiveSource: importType === 'series' ? archiveSource : undefined,
                     items: selected.map((item) => ({
                         identifier: item.identifier,
                         fileName: item.fileName || null,
@@ -293,7 +290,7 @@ export default function AdminImportPage() {
         setPage(1);
         setShuffleSeed(null);
         setTotalAvailable(null);
-    }, [preset, importType, archiveSource, limit]);
+    }, [preset, importType, limit]);
 
     const toggleSelectAll = () => {
         if (readyIdentifiers.length === 0) return;
@@ -388,26 +385,17 @@ export default function AdminImportPage() {
                 </div>
 
                 {importType === 'series' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Archive Source</label>
-                        <input
-                            type="text"
-                            value={archiveSource}
-                            onChange={(e) => setArchiveSource(e.target.value)}
-                            placeholder="archive.org/details/... or identifier"
-                            style={{
-                                width: '100%',
-                                padding: '0.75rem 1rem',
-                                borderRadius: '0.75rem',
-                                background: 'rgba(11, 11, 13, 0.7)',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                color: '#F3F4F6',
-                                fontSize: '0.95rem'
-                            }}
-                        />
-                        <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
-                            Paste the series item URL; title and episodes are detected on Analyze.
-                        </span>
+                    <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.5rem',
+                        justifyContent: 'center',
+                        minHeight: '86px',
+                        color: '#A7ABB4',
+                        fontSize: '0.85rem',
+                    }}>
+                        <span style={{ color: '#F3F4F6', fontWeight: 600 }}>Automatic series discovery</span>
+                        <span>The importer searches Archive, detects a series item, and builds the episode list.</span>
                     </div>
                 )}
                 {importType === 'movie' && (
@@ -456,7 +444,9 @@ export default function AdminImportPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Page</label>
+                    <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                        {importType === 'series' ? 'Discovery Page' : 'Page'}
+                    </label>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
                             type="button"
@@ -513,7 +503,7 @@ export default function AdminImportPage() {
                         )}
                     </div>
                     <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
-                        Use Preview to load this page.
+                        {importType === 'series' ? 'Use Next if you want a different detected series.' : 'Use Preview to load this page.'}
                     </span>
                 </div>
 
@@ -534,7 +524,7 @@ export default function AdminImportPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.75rem' }}>
                     <ButtonPrimary
                         onClick={() => handlePreview()}
-                        disabled={loading || (importType === 'series' && !archiveSource.trim())}
+                        disabled={loading}
                         fullWidth
                     >
                         {loading ? (

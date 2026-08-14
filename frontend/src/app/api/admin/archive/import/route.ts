@@ -59,6 +59,11 @@ const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
 const MIN_SERIES_DURATION_SECONDS = 5 * 60;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const SERIES_DISCOVERY_QUERY = [
+    'mediatype:(movies)',
+    '(collection:(classic_tv) OR collection:(classic_television) OR subject:("classic tv") OR subject:("television series") OR title:(episode))',
+    '-title:(trailer OR preview OR teaser OR promo OR commercial OR clip OR newsreel OR sample)'
+].join(' AND ');
 const EXCLUDED_TITLE_KEYWORDS = [
     'trailer',
     'preview',
@@ -487,6 +492,50 @@ const buildSeriesManifest = async ({
     };
 };
 
+const discoverSeriesManifest = async ({
+    allowMkv,
+    limit,
+    page,
+}: {
+    allowMkv: boolean;
+    limit: number;
+    page: number;
+}) => {
+    const discoveryPageSize = 24;
+    const searchPage = Math.max(page, 1);
+    const identifiers = await searchArchiveIdentifiers(SERIES_DISCOVERY_QUERY, discoveryPageSize, searchPage);
+    const failures: string[] = [];
+
+    for (const identifier of identifiers) {
+        try {
+            const manifest = await buildSeriesManifest({
+                sourceIdentifier: identifier,
+                fallbackIdentifier: null,
+                allowMkv,
+                limit,
+                page: 1,
+            });
+
+            if (manifest.totalAvailable < 2) {
+                failures.push(`${identifier}: only ${manifest.totalAvailable} playable item`);
+                continue;
+            }
+
+            return {
+                ...manifest,
+                searchQuery: SERIES_DISCOVERY_QUERY,
+                discoveryPage: searchPage,
+            };
+        } catch (error: any) {
+            failures.push(`${identifier}: ${error?.message || 'not usable'}`);
+        }
+    }
+
+    throw new Error(failures.length > 0
+        ? `No usable series found on discovery page ${searchPage}. ${failures.slice(0, 3).join('; ')}`
+        : 'No series candidates found from Internet Archive discovery.');
+};
+
 const stripYearFromTitle = (value?: string) => {
     if (!value) return '';
     return value.replace(/\((19|20)\d{2}\)/g, '').replace(/\b(19|20)\d{2}\b/g, '');
@@ -888,13 +937,19 @@ export async function POST(request: NextRequest) {
 
         const metadataCache = new Map<string, { metadata: any; files: any[] }>();
         const seriesManifest = contentType === 'series' && providedItems.length === 0 && providedIdentifiers.length === 0
-            ? await buildSeriesManifest({
-                sourceIdentifier: archiveSourceInput ? String(archiveSourceInput) : null,
-                fallbackIdentifier: null,
-                allowMkv,
-                limit,
-                page,
-            })
+            ? (archiveSourceInput
+                ? await buildSeriesManifest({
+                    sourceIdentifier: String(archiveSourceInput),
+                    fallbackIdentifier: null,
+                    allowMkv,
+                    limit,
+                    page,
+                })
+                : await discoverSeriesManifest({
+                    allowMkv,
+                    limit,
+                    page,
+                }))
             : null;
 
         if (contentType === 'series' && seriesManifest) {
@@ -905,7 +960,7 @@ export async function POST(request: NextRequest) {
                     summary: {
                         requested: seriesManifest.results.length,
                         ready: seriesManifest.results.length,
-                        searchQuery: seriesManifest.identifier,
+                        searchQuery: 'searchQuery' in seriesManifest ? seriesManifest.searchQuery : seriesManifest.identifier,
                         seriesTitle: seriesManifest.seriesTitle,
                         totalAvailable: seriesManifest.totalAvailable,
                         page,
