@@ -56,6 +56,7 @@ export default function AdminImportPage() {
     const [limit, setLimit] = useState(6);
     const [allowMkv, setAllowMkv] = useState(false);
     const [importType, setImportType] = useState<'movie' | 'series'>('movie');
+    const [seriesListUrl, setSeriesListUrl] = useState('');
     const [page, setPage] = useState(1);
     const [shuffleSeed, setShuffleSeed] = useState<string | null>(null);
     const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
@@ -108,6 +109,7 @@ export default function AdminImportPage() {
                     limit,
                     allowMkv,
                     importType,
+                    archiveSource: importType === 'series' ? seriesListUrl : undefined,
                     page: targetPage,
                     shuffleSeed,
                     dryRun: true
@@ -163,6 +165,7 @@ export default function AdminImportPage() {
                     allowMkv,
                     importType,
                     seriesTitle: importType === 'series' ? selected[0]?.seriesTitle : undefined,
+                    archiveSource: importType === 'series' ? seriesListUrl : undefined,
                     items: selected.map((item) => ({
                         identifier: item.identifier,
                         fileName: item.fileName || null,
@@ -290,7 +293,7 @@ export default function AdminImportPage() {
         setPage(1);
         setShuffleSeed(null);
         setTotalAvailable(null);
-    }, [preset, importType, limit]);
+    }, [preset, importType, seriesListUrl, limit]);
 
     const toggleSelectAll = () => {
         if (readyIdentifiers.length === 0) return;
@@ -380,22 +383,31 @@ export default function AdminImportPage() {
                         ))}
                     </div>
                     <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
-                        Series imports analyze an Archive source and build the episode list automatically.
+                        Series imports can use an Archive search page or a details page that contains all episodes.
                     </span>
                 </div>
 
                 {importType === 'series' && (
-                    <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '0.5rem',
-                        justifyContent: 'center',
-                        minHeight: '86px',
-                        color: '#A7ABB4',
-                        fontSize: '0.85rem',
-                    }}>
-                        <span style={{ color: '#F3F4F6', fontWeight: 600 }}>Automatic series discovery</span>
-                        <span>The importer searches Archive, detects a series item, and builds the episode list.</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Series URL</label>
+                        <input
+                            type="text"
+                            value={seriesListUrl}
+                            onChange={(e) => setSeriesListUrl(e.target.value)}
+                            placeholder="https://archive.org/details/... or https://archive.org/search?query=..."
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '0.75rem',
+                                background: 'rgba(11, 11, 13, 0.7)',
+                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                color: '#F3F4F6',
+                                fontSize: '0.95rem'
+                            }}
+                        />
+                        <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
+                            Paste a details page with episode files, or a search page where each result is an episode.
+                        </span>
                     </div>
                 )}
                 {importType === 'movie' && (
@@ -524,7 +536,7 @@ export default function AdminImportPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.75rem' }}>
                     <ButtonPrimary
                         onClick={() => handlePreview()}
-                        disabled={loading}
+                        disabled={loading || (importType === 'series' && !seriesListUrl.trim())}
                         fullWidth
                     >
                         {loading ? (

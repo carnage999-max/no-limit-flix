@@ -59,6 +59,7 @@ const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
 const MIN_SERIES_DURATION_SECONDS = 5 * 60;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const SERIES_SEARCH_SCAN_LIMIT = 100;
 const SERIES_DISCOVERY_QUERY = [
     'mediatype:(movies)',
     '(collection:(classic_tv) OR collection:(classic_television) OR subject:("classic tv") OR subject:("television series") OR title:(episode))',
@@ -310,6 +311,10 @@ const parseSeasonEpisode = (value?: string) => {
     if (match) {
         return { season: Number(match[1]), episode: Number(match[2]) };
     }
+    match = text.match(/\s-\s*(\d{1,3})(?:\D|$)/);
+    if (match) {
+        return { season: null, episode: Number(match[1]) };
+    }
     match = text.match(/\bep(?:isode)?[\s._-]*(\d{1,3})\b/);
     if (match) {
         return { season: null, episode: Number(match[1]) };
@@ -336,21 +341,96 @@ const parseArchiveSourceIdentifier = (value?: string | null) => {
     return raw.replace(/^https?:\/\/archive\.org\/details\//i, '').split(/[/?#]/)[0] || null;
 };
 
+const parseArchiveSeriesSource = (value?: string | null): { identifier?: string; query?: string; sort?: string | null } | null => {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    try {
+        const url = new URL(raw);
+        const detailsMatch = url.pathname.match(/\/details\/([^/]+)/);
+        if (detailsMatch?.[1]) return { identifier: decodeURIComponent(detailsMatch[1]) };
+        const downloadMatch = url.pathname.match(/\/download\/([^/]+)/);
+        if (downloadMatch?.[1]) return { identifier: decodeURIComponent(downloadMatch[1]) };
+        if (url.pathname === '/search' || url.pathname === '/advancedsearch.php') {
+            const query = url.searchParams.get('query') || url.searchParams.get('q');
+            if (query?.trim()) {
+                return {
+                    query: query.trim(),
+                    sort: url.searchParams.get('sort') || url.searchParams.get('sort[]'),
+                };
+            }
+        }
+    } catch {
+        // Treat plain input as an Archive query when it looks like one, else an identifier.
+    }
+    if (/[():"]/i.test(raw) || raw.includes('creator:') || raw.includes('collection:') || raw.includes('subject:')) {
+        return { query: raw };
+    }
+    return { identifier: raw.replace(/^https?:\/\/archive\.org\/details\//i, '').split(/[/?#]/)[0] };
+};
+
 const naturalCompare = (a: string, b: string) =>
     a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
 const cleanSeriesTitle = (value?: string | null) => {
     const cleaned = String(value || '')
         .replace(/\.[a-z0-9]+$/i, '')
+        .replace(/\[[^\]]*]/g, ' ')
+        .replace(/\([^)]*(480|720|1080|2160)p[^)]*\)/gi, ' ')
         .replace(/\bseason\s*\d{1,2}\b/gi, '')
         .replace(/\bs\d{1,2}\b/gi, '')
+        .replace(/\b(480|720|1080|2160)p\b/gi, ' ')
+        .replace(/\s-\s*\d{1,3}\b/g, ' ')
         .replace(/[_-]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
     return cleaned || null;
 };
 
+const stripEpisodeMarkers = (value?: string | null) =>
+    String(value || '')
+        .replace(/\.[a-z0-9]+$/i, ' ')
+        .replace(/\[[^\]]*]/g, ' ')
+        .replace(/\([^)]*(480|720|1080|2160)p[^)]*\)/gi, ' ')
+        .replace(/\bs\d{1,2}\s*e\d{1,3}\b/gi, ' ')
+        .replace(/\b\d{1,2}x\d{1,3}\b/gi, ' ')
+        .replace(/\bseason\s*\d{1,2}\s*episode\s*\d{1,3}\b/gi, ' ')
+        .replace(/\bep(?:isode)?[\s._-]*\d{1,3}\b/gi, ' ')
+        .replace(/\bpart\s*\d{1,3}\b/gi, ' ')
+        .replace(/\s-\s*\d{1,3}\b/g, ' ')
+        .replace(/\b(480|720|1080|2160)p\b/gi, ' ')
+        .replace(/\b(19|20)\d{2}\b/g, ' ')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const inferSeriesTitleFromTitles = (titles: string[], fallback: string) => {
+    const cleanedTitles = titles
+        .map((title) => stripEpisodeMarkers(title))
+        .filter(Boolean);
+    if (cleanedTitles.length === 0) return cleanSeriesTitle(fallback) || fallback;
+
+    const tokenized = cleanedTitles.map((title) => title.split(/\s+/));
+    const shortest = tokenized.reduce((shortestTokens, tokens) => tokens.length < shortestTokens.length ? tokens : shortestTokens, tokenized[0]);
+    const common: string[] = [];
+    for (let index = 0; index < shortest.length; index += 1) {
+        const token = shortest[index].toLowerCase();
+        if (tokenized.every((tokens) => tokens[index]?.toLowerCase() === token)) {
+            common.push(shortest[index]);
+            continue;
+        }
+        break;
+    }
+
+    if (common.length >= 2) return cleanSeriesTitle(common.join(' ')) || fallback;
+    return cleanSeriesTitle(cleanedTitles[0]) || cleanSeriesTitle(fallback) || fallback;
+};
+
 const inferSeriesTitle = (metadata: any, identifier: string, files: any[]) => {
+    if (files.length > 1) {
+        const inferredFromFiles = inferSeriesTitleFromTitles(files.map((file) => file?.name).filter(Boolean), identifier);
+        if (inferredFromFiles) return inferredFromFiles;
+    }
+
     const metadataTitle = cleanSeriesTitle(stringifyMetadata(metadata?.title));
     if (metadataTitle && !isGenericBundleTitle(metadataTitle)) return metadataTitle;
 
@@ -373,10 +453,12 @@ const deriveEpisodeTitle = (fileName: string, seriesTitle: string, episodeNumber
     const escapedSeries = seriesTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     title = title.replace(new RegExp(escapedSeries, 'ig'), ' ');
     title = title
+        .replace(/\[[^\]]*]/g, ' ')
         .replace(/\bs\d{1,2}\s*e\d{1,3}\b/gi, ' ')
         .replace(/\b\d{1,2}x\d{1,3}\b/gi, ' ')
         .replace(/\bseason\s*\d{1,2}\s*episode\s*\d{1,3}\b/gi, ' ')
         .replace(/\bep(?:isode)?\s*\d{1,3}\b/gi, ' ')
+        .replace(/\s-\s*\d{1,3}\b/g, ' ')
         .replace(/\b(480|720|1080|2160)p\b/gi, ' ')
         .replace(/\b(x264|x265|h264|h265|hevc|hdrip|webrip|web|dvdrip|bluray|brrip|hd|sd|uhd)\b/gi, ' ')
         .replace(/[_-]+/g, ' ')
@@ -406,6 +488,17 @@ const buildSeriesManifest = async ({
     limit: number;
     page: number;
 }) => {
+    const source = parseArchiveSeriesSource(sourceIdentifier);
+    if (source?.query) {
+        return buildSeriesSearchManifest({
+            query: source.query,
+            sort: source.sort,
+            allowMkv,
+            limit,
+            page,
+        });
+    }
+
     const identifier = parseArchiveSourceIdentifier(sourceIdentifier) || parseArchiveSourceIdentifier(fallbackIdentifier);
     if (!identifier) {
         throw new Error('Enter an Internet Archive URL or identifier to analyze this series.');
@@ -488,6 +581,122 @@ const buildSeriesManifest = async ({
         identifier,
         seriesTitle,
         totalAvailable: manifestFiles.length,
+        results,
+    };
+};
+
+const buildSeriesSearchManifest = async ({
+    query,
+    sort,
+    allowMkv,
+    limit,
+    page,
+}: {
+    query: string;
+    sort?: string | null;
+    allowMkv: boolean;
+    limit: number;
+    page: number;
+}) => {
+    const identifiers = await searchArchiveIdentifiers(query, SERIES_SEARCH_SCAN_LIMIT, 1, sort);
+    if (identifiers.length === 0) {
+        throw new Error('No Archive results found for that series list.');
+    }
+
+    const candidates: Array<{
+        identifier: string;
+        title: string;
+        file: any;
+        metadata: any;
+        duration: number | null;
+    }> = [];
+    const failures: string[] = [];
+
+    for (const identifier of identifiers) {
+        try {
+            const { metadata, files } = await fetchArchiveMetadata(identifier);
+            if (metadata?.mediatype && String(metadata.mediatype).toLowerCase() !== 'movies') {
+                failures.push(`${identifier}: mediatype ${metadata.mediatype}`);
+                continue;
+            }
+
+            const file = rankPlayableFiles(files, allowMkv)
+                .filter((candidateFile) => !isExcludedTitle(candidateFile.name))[0] || null;
+            if (!file) {
+                failures.push(`${identifier}: no playable file`);
+                continue;
+            }
+
+            const title = stringifyMetadata(metadata?.title) || deriveTitleFromFileName(file.name) || identifier;
+            if (isExcludedTitle(title)) {
+                failures.push(`${identifier}: excluded title`);
+                continue;
+            }
+
+            const duration = parseDurationSeconds(file.length) || parseDurationSeconds(stringifyMetadata(metadata?.length) || undefined);
+            if (duration && duration < MIN_SERIES_DURATION_SECONDS) {
+                failures.push(`${identifier}: duration below minimum`);
+                continue;
+            }
+
+            candidates.push({ identifier, title, file, metadata, duration });
+        } catch (error: any) {
+            failures.push(`${identifier}: ${error?.message || 'metadata failed'}`);
+        }
+    }
+
+    if (candidates.length === 0) {
+        throw new Error(failures.length > 0
+            ? `No playable episodes found from that series list. ${failures.slice(0, 3).join('; ')}`
+            : 'No playable episodes found from that series list.');
+    }
+
+    const seriesTitle = inferSeriesTitleFromTitles(
+        candidates.map((candidate) => candidate.title),
+        query,
+    );
+
+    const orderedCandidates = [...candidates].sort((a, b) => {
+        const aParts = parseSeasonEpisode(`${a.title} ${a.file.name}`);
+        const bParts = parseSeasonEpisode(`${b.title} ${b.file.name}`);
+        const aSeason = aParts.season ?? 1;
+        const bSeason = bParts.season ?? 1;
+        const aEpisode = aParts.episode ?? Number.POSITIVE_INFINITY;
+        const bEpisode = bParts.episode ?? Number.POSITIVE_INFINITY;
+        if (aSeason !== bSeason) return aSeason - bSeason;
+        if (aEpisode !== bEpisode) return aEpisode - bEpisode;
+        return naturalCompare(a.title, b.title);
+    });
+
+    const start = (Math.max(page, 1) - 1) * limit;
+    const pageCandidates = orderedCandidates.slice(start, start + limit);
+    const results: ImportResult[] = pageCandidates.map((candidate, index) => {
+        const parsed = parseSeasonEpisode(`${candidate.title} ${candidate.file.name}`);
+        const seasonNumber = parsed.season ?? 1;
+        const episodeNumber = parsed.episode ?? start + index + 1;
+        const episodeTitle = deriveEpisodeTitle(candidate.title || candidate.file.name, seriesTitle, episodeNumber);
+
+        return {
+            identifier: candidate.identifier,
+            title: episodeTitle,
+            fileName: candidate.file.name,
+            seriesTitle,
+            seasonNumber,
+            episodeNumber,
+            playbackUrl: buildArchiveDownloadUrl(candidate.identifier, candidate.file.name),
+            fileSize: candidate.file.size ? String(candidate.file.size) : null,
+            duration: candidate.duration,
+            sourcePageUrl: `https://archive.org/details/${candidate.identifier}`,
+            status: 'ready',
+            reason: parsed.episode === null ? 'Episode number inferred from search order' : undefined,
+        };
+    });
+
+    return {
+        identifier: query,
+        searchQuery: query,
+        seriesTitle,
+        totalAvailable: orderedCandidates.length,
         results,
     };
 };

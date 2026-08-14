@@ -46,7 +46,7 @@ export interface ArchiveFile {
 }
 
 export interface ArchiveMetadataResponse {
-    metadata: Record<string, any>;
+    metadata: Record<string, unknown>;
     files: ArchiveFile[];
 }
 
@@ -132,7 +132,7 @@ export const buildArchiveDownloadUrl = (identifier: string, fileName: string) =>
     return `${IA_BASE}/download/${identifier}/${encodedName}`;
 };
 
-export async function searchArchiveIdentifiers(query: string, limit: number, page = 1) {
+export async function searchArchiveIdentifiers(query: string, limit: number, page = 1, sort?: string | null) {
     const rows = Math.min(Math.max(limit, 1), 100);
     const url = new URL(`${IA_BASE}/advancedsearch.php`);
     url.searchParams.set('q', query);
@@ -140,6 +140,9 @@ export async function searchArchiveIdentifiers(query: string, limit: number, pag
     url.searchParams.set('rows', rows.toString());
     url.searchParams.set('page', Math.max(1, page).toString());
     url.searchParams.set('output', 'json');
+    if (sort) {
+        url.searchParams.append('sort[]', sort === 'title' ? 'titleSorter asc' : sort);
+    }
 
     const response = await fetch(url.toString(), {
         headers: { 'Accept': 'application/json' }
@@ -151,7 +154,7 @@ export async function searchArchiveIdentifiers(query: string, limit: number, pag
 
     const data = await response.json();
     const docs = data?.response?.docs || [];
-    return docs.map((doc: any) => doc.identifier).filter(Boolean);
+    return docs.map((doc: { identifier?: string }) => doc.identifier).filter(Boolean);
 }
 
 export async function fetchArchiveMetadata(identifier: string): Promise<ArchiveMetadataResponse> {
