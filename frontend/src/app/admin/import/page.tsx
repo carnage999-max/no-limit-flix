@@ -10,6 +10,9 @@ interface ImportResult {
     identifier: string;
     title: string;
     fileName?: string;
+    seriesTitle?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     playbackUrl?: string;
     fileSize?: string | null;
     duration?: number | null;
@@ -27,6 +30,7 @@ interface ImportSummary {
     failed?: number;
     ready?: number;
     searchQuery?: string | null;
+    seriesTitle?: string | null;
     shuffleSeed?: string | null;
     totalAvailable?: number | null;
 }
@@ -52,9 +56,7 @@ export default function AdminImportPage() {
     const [limit, setLimit] = useState(6);
     const [allowMkv, setAllowMkv] = useState(false);
     const [importType, setImportType] = useState<'movie' | 'series'>('movie');
-    const [seriesTitle, setSeriesTitle] = useState('');
-    const [seasonNumber, setSeasonNumber] = useState(1);
-    const [startEpisodeNumber, setStartEpisodeNumber] = useState(1);
+    const [archiveSource, setArchiveSource] = useState('');
     const [page, setPage] = useState(1);
     const [shuffleSeed, setShuffleSeed] = useState<string | null>(null);
     const [totalAvailable, setTotalAvailable] = useState<number | null>(null);
@@ -107,9 +109,7 @@ export default function AdminImportPage() {
                     limit,
                     allowMkv,
                     importType,
-                    seriesTitle: importType === 'series' ? seriesTitle : undefined,
-                    seasonNumber: importType === 'series' ? seasonNumber : undefined,
-                    startEpisodeNumber: importType === 'series' ? startEpisodeNumber : undefined,
+                    archiveSource: importType === 'series' ? archiveSource : undefined,
                     page: targetPage,
                     shuffleSeed,
                     dryRun: true
@@ -123,6 +123,15 @@ export default function AdminImportPage() {
 
             setSummary(data.summary);
             setResults(data.results || []);
+            if (importType === 'series') {
+                const selected: Record<string, boolean> = {};
+                (data.results || [])
+                    .filter((item: ImportResult) => item.status === 'ready')
+                    .forEach((item: ImportResult) => {
+                        selected[getRowKey(item)] = true;
+                    });
+                setSelectedIdentifiers(selected);
+            }
             setJobId(null);
             setJobStatus(null);
             setShuffleSeed(data.summary?.shuffleSeed || shuffleSeed);
@@ -155,12 +164,15 @@ export default function AdminImportPage() {
                     limit: selected.length,
                     allowMkv,
                     importType,
-                    seriesTitle: importType === 'series' ? seriesTitle : undefined,
-                    seasonNumber: importType === 'series' ? seasonNumber : undefined,
-                    startEpisodeNumber: importType === 'series' ? startEpisodeNumber : undefined,
+                    seriesTitle: importType === 'series' ? selected[0]?.seriesTitle : undefined,
+                    archiveSource: importType === 'series' ? archiveSource : undefined,
                     items: selected.map((item) => ({
                         identifier: item.identifier,
-                        fileName: item.fileName || null
+                        fileName: item.fileName || null,
+                        title: item.title,
+                        seriesTitle: item.seriesTitle || null,
+                        seasonNumber: item.seasonNumber ?? null,
+                        episodeNumber: item.episodeNumber ?? null
                     })),
                 })
             });
@@ -281,7 +293,7 @@ export default function AdminImportPage() {
         setPage(1);
         setShuffleSeed(null);
         setTotalAvailable(null);
-    }, [preset, importType, seriesTitle, limit]);
+    }, [preset, importType, archiveSource, limit]);
 
     const toggleSelectAll = () => {
         if (readyIdentifiers.length === 0) return;
@@ -371,18 +383,18 @@ export default function AdminImportPage() {
                         ))}
                     </div>
                     <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
-                        Series imports filter by title and attempt to parse season/episode.
+                        Series imports analyze an Archive source and build the episode list automatically.
                     </span>
                 </div>
 
                 {importType === 'series' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Series Title</label>
+                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Archive Source</label>
                         <input
                             type="text"
-                            value={seriesTitle}
-                            onChange={(e) => setSeriesTitle(e.target.value)}
-                            placeholder="Enter series title"
+                            value={archiveSource}
+                            onChange={(e) => setArchiveSource(e.target.value)}
+                            placeholder="archive.org/details/... or identifier"
                             style={{
                                 width: '100%',
                                 padding: '0.75rem 1rem',
@@ -393,30 +405,35 @@ export default function AdminImportPage() {
                                 fontSize: '0.95rem'
                             }}
                         />
+                        <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
+                            Paste the series item URL; title and episodes are detected on Analyze.
+                        </span>
                     </div>
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Preset</label>
-                    <select
-                        value={preset}
-                        onChange={(e) => setPreset(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '0.75rem 1rem',
-                            borderRadius: '0.75rem',
-                            background: 'rgba(11, 11, 13, 0.7)',
-                            border: '1px solid rgba(167, 171, 180, 0.2)',
-                            color: '#F3F4F6',
-                            fontSize: '0.95rem'
-                        }}
-                    >
-                        {presetOptions.map((option) => (
-                            <option key={option.id} value={option.id}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                {importType === 'movie' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Preset</label>
+                        <select
+                            value={preset}
+                            onChange={(e) => setPreset(e.target.value)}
+                            style={{
+                                width: '100%',
+                                padding: '0.75rem 1rem',
+                                borderRadius: '0.75rem',
+                                background: 'rgba(11, 11, 13, 0.7)',
+                                border: '1px solid rgba(167, 171, 180, 0.2)',
+                                color: '#F3F4F6',
+                                fontSize: '0.95rem'
+                            }}
+                        >
+                            {presetOptions.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Number To Import</label>
@@ -500,48 +517,6 @@ export default function AdminImportPage() {
                     </span>
                 </div>
 
-                {importType === 'series' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Season #</label>
-                        <input
-                            type="number"
-                            min={1}
-                            value={seasonNumber}
-                            onChange={(e) => setSeasonNumber(Number(e.target.value))}
-                            style={{
-                                width: '100%',
-                                padding: '0.75rem 1rem',
-                                borderRadius: '0.75rem',
-                                background: 'rgba(11, 11, 13, 0.7)',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                color: '#F3F4F6',
-                                fontSize: '0.95rem'
-                            }}
-                        />
-                    </div>
-                )}
-
-                {importType === 'series' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                        <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Start Episode #</label>
-                        <input
-                            type="number"
-                            min={1}
-                            value={startEpisodeNumber}
-                            onChange={(e) => setStartEpisodeNumber(Number(e.target.value))}
-                            style={{
-                                width: '100%',
-                                padding: '0.75rem 1rem',
-                                borderRadius: '0.75rem',
-                                background: 'rgba(11, 11, 13, 0.7)',
-                                border: '1px solid rgba(167, 171, 180, 0.2)',
-                                color: '#F3F4F6',
-                                fontSize: '0.95rem'
-                            }}
-                        />
-                    </div>
-                )}
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>File Preference</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -559,7 +534,7 @@ export default function AdminImportPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.75rem' }}>
                     <ButtonPrimary
                         onClick={() => handlePreview()}
-                        disabled={loading || (importType === 'series' && !seriesTitle.trim())}
+                        disabled={loading || (importType === 'series' && !archiveSource.trim())}
                         fullWidth
                     >
                         {loading ? (
@@ -717,7 +692,7 @@ export default function AdminImportPage() {
                     border: '1px solid rgba(167, 171, 180, 0.1)',
                     background: 'rgba(11, 11, 13, 0.6)'
                 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '860px' }}>
                         <thead>
                             <tr style={{ textAlign: 'left', color: '#A7ABB4', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                                 <th style={{ padding: '1rem', width: '64px' }}>
@@ -731,6 +706,7 @@ export default function AdminImportPage() {
                                     />
                                 </th>
                                 <th style={{ padding: '1rem' }}>Title</th>
+                                <th style={{ padding: '1rem' }}>Episode</th>
                                 <th style={{ padding: '1rem' }}>Selected File</th>
                                 <th style={{ padding: '1rem' }}>Duration</th>
                                 <th style={{ padding: '1rem' }}>Size</th>
@@ -741,7 +717,7 @@ export default function AdminImportPage() {
                         <tbody>
                             {results.length === 0 ? (
                                 <tr>
-                                    <td colSpan={7} style={{ padding: '1.5rem', color: '#A7ABB4' }}>
+                                    <td colSpan={8} style={{ padding: '1.5rem', color: '#A7ABB4' }}>
                                         No results yet.
                                     </td>
                                 </tr>
@@ -763,7 +739,19 @@ export default function AdminImportPage() {
                                             />
                                         ) : '—'}
                                     </td>
-                                    <td style={{ padding: '1rem', color: '#F3F4F6', fontWeight: 600 }}>{result.title}</td>
+                                    <td style={{ padding: '1rem', color: '#F3F4F6', fontWeight: 600 }}>
+                                        {result.title}
+                                        {result.seriesTitle && (
+                                            <div style={{ marginTop: '0.35rem', color: '#A7ABB4', fontSize: '0.75rem', fontWeight: 500 }}>
+                                                {result.seriesTitle}
+                                            </div>
+                                        )}
+                                    </td>
+                                    <td style={{ padding: '1rem', color: '#A7ABB4', whiteSpace: 'nowrap' }}>
+                                        {result.seasonNumber && result.episodeNumber
+                                            ? `S${String(result.seasonNumber).padStart(2, '0')}E${String(result.episodeNumber).padStart(2, '0')}`
+                                            : '—'}
+                                    </td>
                                     <td style={{ padding: '1rem', color: '#A7ABB4' }}>{result.fileName || '—'}</td>
                                     <td style={{ padding: '1rem', color: '#A7ABB4' }}>{formatDuration(result.duration)}</td>
                                     <td style={{ padding: '1rem', color: '#A7ABB4' }}>{formatSize(result.fileSize)}</td>

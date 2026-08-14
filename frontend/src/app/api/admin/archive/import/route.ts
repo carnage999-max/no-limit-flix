@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import {
@@ -25,6 +26,9 @@ interface ImportResult {
     identifier: string;
     title: string;
     fileName?: string;
+    seriesTitle?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     playbackUrl?: string;
     fileSize?: string | null;
     duration?: number | null;
@@ -301,11 +305,186 @@ const parseSeasonEpisode = (value?: string) => {
     if (match) {
         return { season: Number(match[1]), episode: Number(match[2]) };
     }
+    match = text.match(/\bep(?:isode)?[\s._-]*(\d{1,3})\b/);
+    if (match) {
+        return { season: null, episode: Number(match[1]) };
+    }
     match = text.match(/episode\s*(\d{1,3})/);
     if (match) {
         return { season: null, episode: Number(match[1]) };
     }
     return { season: null, episode: null };
+};
+
+const parseArchiveSourceIdentifier = (value?: string | null) => {
+    const raw = String(value || '').trim();
+    if (!raw) return null;
+    try {
+        const url = new URL(raw);
+        const detailsMatch = url.pathname.match(/\/details\/([^/]+)/);
+        if (detailsMatch?.[1]) return decodeURIComponent(detailsMatch[1]);
+        const downloadMatch = url.pathname.match(/\/download\/([^/]+)/);
+        if (downloadMatch?.[1]) return decodeURIComponent(downloadMatch[1]);
+    } catch {
+        // Treat plain text as the identifier.
+    }
+    return raw.replace(/^https?:\/\/archive\.org\/details\//i, '').split(/[/?#]/)[0] || null;
+};
+
+const naturalCompare = (a: string, b: string) =>
+    a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
+const cleanSeriesTitle = (value?: string | null) => {
+    const cleaned = String(value || '')
+        .replace(/\.[a-z0-9]+$/i, '')
+        .replace(/\bseason\s*\d{1,2}\b/gi, '')
+        .replace(/\bs\d{1,2}\b/gi, '')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    return cleaned || null;
+};
+
+const inferSeriesTitle = (metadata: any, identifier: string, files: any[]) => {
+    const metadataTitle = cleanSeriesTitle(stringifyMetadata(metadata?.title));
+    if (metadataTitle && !isGenericBundleTitle(metadataTitle)) return metadataTitle;
+
+    const firstFile = files.find((file) => file?.name);
+    if (firstFile?.name) {
+        const base = deriveTitleFromFileName(firstFile.name)
+            .replace(/\bs\d{1,2}\s*e\d{1,3}\b/gi, '')
+            .replace(/\b\d{1,2}x\d{1,3}\b/gi, '')
+            .replace(/\bepisode\s*\d{1,3}\b/gi, '')
+            .replace(/\bep\s*\d{1,3}\b/gi, '');
+        const cleaned = cleanSeriesTitle(base);
+        if (cleaned) return cleaned;
+    }
+
+    return cleanSeriesTitle(identifier) || identifier;
+};
+
+const deriveEpisodeTitle = (fileName: string, seriesTitle: string, episodeNumber: number | null) => {
+    let title = deriveTitleFromFileName(fileName);
+    const escapedSeries = seriesTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    title = title.replace(new RegExp(escapedSeries, 'ig'), ' ');
+    title = title
+        .replace(/\bs\d{1,2}\s*e\d{1,3}\b/gi, ' ')
+        .replace(/\b\d{1,2}x\d{1,3}\b/gi, ' ')
+        .replace(/\bseason\s*\d{1,2}\s*episode\s*\d{1,3}\b/gi, ' ')
+        .replace(/\bep(?:isode)?\s*\d{1,3}\b/gi, ' ')
+        .replace(/\b(480|720|1080|2160)p\b/gi, ' ')
+        .replace(/\b(x264|x265|h264|h265|hevc|hdrip|webrip|web|dvdrip|bluray|brrip|hd|sd|uhd)\b/gi, ' ')
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (title) return title;
+    return episodeNumber ? `Episode ${episodeNumber}` : deriveTitleFromFileName(fileName);
+};
+
+const isPlayableWithPreference = (file: any, allowMkv: boolean) =>
+    rankPlayableFiles([file], allowMkv).length > 0;
+
+const pickPreferredSeriesFile = (current: any, next: any, allowMkv: boolean) =>
+    rankPlayableFiles([current, next], allowMkv)[0] || current;
+
+const buildSeriesManifest = async ({
+    sourceIdentifier,
+    fallbackIdentifier,
+    allowMkv,
+    limit,
+    page,
+}: {
+    sourceIdentifier: string | null;
+    fallbackIdentifier?: string | null;
+    allowMkv: boolean;
+    limit: number;
+    page: number;
+}) => {
+    const identifier = parseArchiveSourceIdentifier(sourceIdentifier) || parseArchiveSourceIdentifier(fallbackIdentifier);
+    if (!identifier) {
+        throw new Error('Enter an Internet Archive URL or identifier to analyze this series.');
+    }
+
+    const { metadata, files } = await fetchArchiveMetadata(identifier);
+    const playableFiles = files
+        .filter((file) => file?.name && isPlayableWithPreference(file, allowMkv))
+        .filter((file) => !isExcludedTitle(file.name));
+
+    if (playableFiles.length === 0) {
+        throw new Error('No playable episode files found for this Archive source.');
+    }
+
+    const seriesTitle = inferSeriesTitle(metadata, identifier, playableFiles);
+    const sortedFiles = [...playableFiles].sort((a, b) => {
+        const aParts = parseSeasonEpisode(a.name);
+        const bParts = parseSeasonEpisode(b.name);
+        if (aParts.season !== null && bParts.season !== null && aParts.season !== bParts.season) {
+            return aParts.season - bParts.season;
+        }
+        if (aParts.episode !== null && bParts.episode !== null && aParts.episode !== bParts.episode) {
+            return aParts.episode - bParts.episode;
+        }
+        return naturalCompare(a.name, b.name);
+    });
+
+    const byEpisode = new Map<string, any>();
+    sortedFiles.forEach((file, index) => {
+        const parsed = parseSeasonEpisode(file.name);
+        const seasonNumber = parsed.season ?? 1;
+        const episodeNumber = parsed.episode ?? index + 1;
+        const key = `${seasonNumber}:${episodeNumber}`;
+        const existing = byEpisode.get(key);
+        byEpisode.set(key, existing ? pickPreferredSeriesFile(existing, file, allowMkv) : file);
+    });
+
+    const manifestFiles = Array.from(byEpisode.values()).sort((a, b) => {
+        const aParts = parseSeasonEpisode(a.name);
+        const bParts = parseSeasonEpisode(b.name);
+        const aSeason = aParts.season ?? 1;
+        const bSeason = bParts.season ?? 1;
+        const aEpisode = aParts.episode ?? sortedFiles.indexOf(a) + 1;
+        const bEpisode = bParts.episode ?? sortedFiles.indexOf(b) + 1;
+        if (aSeason !== bSeason) return aSeason - bSeason;
+        if (aEpisode !== bEpisode) return aEpisode - bEpisode;
+        return naturalCompare(a.name, b.name);
+    });
+
+    const start = (Math.max(page, 1) - 1) * limit;
+    const pageFiles = manifestFiles.slice(start, start + limit);
+
+    const results: ImportResult[] = pageFiles.map((file, index) => {
+        const parsed = parseSeasonEpisode(file.name);
+        const absoluteIndex = start + index;
+        const seasonNumber = parsed.season ?? 1;
+        const episodeNumber = parsed.episode ?? absoluteIndex + 1;
+        const duration = parseDurationSeconds(file.length) || parseDurationSeconds(stringifyMetadata(metadata?.length) || undefined);
+        const playbackUrl = buildArchiveDownloadUrl(identifier, file.name);
+        const episodeTitle = deriveEpisodeTitle(file.name, seriesTitle, episodeNumber);
+        const reason = parsed.episode === null ? 'Episode number inferred from file order' : undefined;
+
+        return {
+            identifier,
+            title: episodeTitle,
+            fileName: file.name,
+            seriesTitle,
+            seasonNumber,
+            episodeNumber,
+            playbackUrl,
+            fileSize: file.size ? String(file.size) : null,
+            duration,
+            sourcePageUrl: `https://archive.org/details/${identifier}`,
+            status: 'ready',
+            reason,
+        };
+    });
+
+    return {
+        identifier,
+        seriesTitle,
+        totalAvailable: manifestFiles.length,
+        results,
+    };
 };
 
 const stripYearFromTitle = (value?: string) => {
@@ -435,7 +614,7 @@ const fetchJson = async (url: string) => {
         });
         if (!response.ok) return null;
         return await response.json();
-    } catch (error) {
+    } catch {
         return null;
     }
 };
@@ -488,7 +667,7 @@ const findCatalogPoster = async (
             tmdbId: String(best.item.id),
             releaseYear: getCandidateYear(best.item)
         };
-    } catch (error) {
+    } catch {
         return null;
     }
 };
@@ -680,16 +859,11 @@ export async function POST(request: NextRequest) {
         const allowMkv = Boolean(body?.allowMkv);
         const requestedType = body?.contentType || body?.importType;
         const contentType = requestedType === 'series' ? 'series' : 'movie';
-        const seriesTitleInput = contentType === 'series' ? String(body?.seriesTitle || '').trim() : '';
+        const archiveSourceInput = body?.archiveSource || body?.sourceIdentifier || body?.sourceUrl || null;
+        let seriesTitleInput = contentType === 'series' ? String(body?.seriesTitle || '').trim() : '';
         const seasonNumberInput = contentType === 'series' ? Number(body?.seasonNumber) || 1 : null;
         const startEpisodeInput = contentType === 'series' ? Number(body?.startEpisodeNumber) || 1 : null;
-
-        if (contentType === 'series' && !seriesTitleInput) {
-            return NextResponse.json(
-                { error: 'Series title is required for series imports' },
-                { status: 400 }
-            );
-        }
+        const dryRun = Boolean(body?.dryRun);
 
         const preset = ARCHIVE_PRESETS.find((p) => p.id === presetId) || ARCHIVE_PRESETS[0];
         const seriesQuery = preset.query;
@@ -700,13 +874,45 @@ export async function POST(request: NextRequest) {
                 .map((item: any) => ({
                     identifier: String(item?.identifier || '').trim(),
                     fileName: item?.fileName ? String(item.fileName) : null,
+                    title: item?.title ? String(item.title).trim() : null,
+                    seriesTitle: item?.seriesTitle ? String(item.seriesTitle).trim() : null,
                     seasonNumber: Number.isFinite(Number(item?.seasonNumber)) ? Number(item.seasonNumber) : null,
                     episodeNumber: Number.isFinite(Number(item?.episodeNumber)) ? Number(item.episodeNumber) : null
                 }))
                 .filter((item: any) => item.identifier)
             : [];
 
+        if (contentType === 'series' && !seriesTitleInput && providedItems[0]?.seriesTitle) {
+            seriesTitleInput = providedItems[0].seriesTitle;
+        }
+
         const metadataCache = new Map<string, { metadata: any; files: any[] }>();
+        const seriesManifest = contentType === 'series' && providedItems.length === 0 && providedIdentifiers.length === 0
+            ? await buildSeriesManifest({
+                sourceIdentifier: archiveSourceInput ? String(archiveSourceInput) : null,
+                fallbackIdentifier: null,
+                allowMkv,
+                limit,
+                page,
+            })
+            : null;
+
+        if (contentType === 'series' && seriesManifest) {
+            seriesTitleInput = seriesManifest.seriesTitle;
+            if (dryRun) {
+                return NextResponse.json({
+                    results: seriesManifest.results,
+                    summary: {
+                        requested: seriesManifest.results.length,
+                        ready: seriesManifest.results.length,
+                        searchQuery: seriesManifest.identifier,
+                        seriesTitle: seriesManifest.seriesTitle,
+                        totalAvailable: seriesManifest.totalAvailable,
+                        page,
+                    },
+                });
+            }
+        }
 
         const hydrateBundleItems = async () => {
             if (!preset.bundleIdentifier) return null;
@@ -747,7 +953,7 @@ export async function POST(request: NextRequest) {
             };
         };
 
-        const bundleResult = providedItems.length === 0 && preset.bundleIdentifier
+        const bundleResult = contentType !== 'series' && providedItems.length === 0 && preset.bundleIdentifier
             ? await hydrateBundleItems()
             : null;
 
@@ -755,22 +961,23 @@ export async function POST(request: NextRequest) {
         const shuffleSeed = bundleResult?.seed || shuffleSeedInput || null;
         const totalAvailable = bundleResult?.total || null;
 
-        if (contentType === 'series' && (!bundleItems || bundleItems.length === 0) && providedItems.length === 0) {
-            return NextResponse.json(
-                { error: 'No matching series items found in the bundle for that title.' },
-                { status: 404 }
-            );
-        }
-
         const itemsToProcess = providedItems.length > 0
             ? providedItems
-            : (bundleItems && bundleItems.length > 0
+            : (seriesManifest
+                ? seriesManifest.results.map((item) => ({
+                    identifier: item.identifier,
+                    fileName: item.fileName || null,
+                    title: item.title,
+                    seriesTitle: item.seriesTitle || seriesManifest.seriesTitle,
+                    seasonNumber: item.seasonNumber ?? null,
+                    episodeNumber: item.episodeNumber ?? null,
+                }))
+                : (bundleItems && bundleItems.length > 0
                 ? bundleItems
                 : (providedIdentifiers.length > 0
                     ? providedIdentifiers.map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))
                     : (await searchArchiveIdentifiers(seriesQuery, limit, page))
-                        .map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))));
-        const dryRun = Boolean(body?.dryRun);
+                        .map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null })))));
 
         const workerUrl = process.env.INGEST_WORKER_URL;
         if (workerUrl && !dryRun) {
@@ -800,6 +1007,8 @@ export async function POST(request: NextRequest) {
                     items: itemsToProcess.map((item: any) => ({
                         identifier: item.identifier,
                         fileName: item.fileName || null,
+                        title: item.title || null,
+                        seriesTitle: item.seriesTitle || seriesTitleInput || null,
                         seasonNumber: item.seasonNumber ?? null,
                         episodeNumber: item.episodeNumber ?? null
                     }))
@@ -863,7 +1072,9 @@ export async function POST(request: NextRequest) {
                 const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
-                let title = stringifyMetadata(metadata?.title) || identifier;
+                let title = contentType === 'series' && item.title
+                    ? item.title
+                    : stringifyMetadata(metadata?.title) || identifier;
                 const isBundleItem = Boolean(preset.bundleIdentifier && identifier === preset.bundleIdentifier);
                 const isBundleGeneric = isBundleItem && isGenericBundleTitle(title);
                 if (isBundleGeneric && bestFile?.name) {
@@ -911,7 +1122,7 @@ export async function POST(request: NextRequest) {
                     ? (item.episodeNumber ?? parsed.episode ?? (startEpisodeInput !== null ? startEpisodeInput + index : null))
                     : null;
                 const seriesTitle = contentType === 'series'
-                    ? seriesTitleInput
+                    ? (item.seriesTitle || seriesTitleInput)
                     : null;
                 const seasonNumber = contentType === 'series'
                     ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
@@ -1022,6 +1233,9 @@ export async function POST(request: NextRequest) {
 
                     result.title = upserted.title;
                     result.fileName = bestFile.name;
+                    result.seriesTitle = seriesTitle;
+                    result.seasonNumber = seasonNumber;
+                    result.episodeNumber = episodeNumber;
                     result.playbackUrl = playbackUrl;
                     result.fileSize = fileSize ? fileSize.toString() : null;
                     result.duration = duration;
@@ -1045,6 +1259,9 @@ export async function POST(request: NextRequest) {
                 } else {
                     result.title = title;
                     result.fileName = bestFile.name;
+                    result.seriesTitle = seriesTitle;
+                    result.seasonNumber = seasonNumber;
+                    result.episodeNumber = episodeNumber;
                     result.playbackUrl = playbackUrl;
                     result.fileSize = fileSize ? fileSize.toString() : null;
                     result.duration = duration;
@@ -1077,6 +1294,9 @@ export async function POST(request: NextRequest) {
             identifier: result.identifier,
             title: result.title,
             fileName: result.fileName ?? null,
+            seriesTitle: result.seriesTitle ?? null,
+            seasonNumber: result.seasonNumber ?? null,
+            episodeNumber: result.episodeNumber ?? null,
             playbackUrl: result.playbackUrl ?? null,
             fileSize: result.fileSize ?? null,
             duration: result.duration ?? null,

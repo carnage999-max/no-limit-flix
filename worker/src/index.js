@@ -899,26 +899,32 @@ app.post('/import', async (req, res) => {
         const limit = Math.min(Math.max(Number(req.body?.limit) || 1, 1), 50);
         const requestedType = req.body?.contentType || req.body?.importType;
         const contentType = requestedType === 'series' ? 'series' : 'movie';
-        const seriesTitleInput = contentType === 'series' ? String(req.body?.seriesTitle || '').trim() : '';
+        let seriesTitleInput = contentType === 'series' ? String(req.body?.seriesTitle || '').trim() : '';
         const seasonNumberInput = contentType === 'series' ? Number(req.body?.seasonNumber) || 1 : null;
         const startEpisodeInput = contentType === 'series' ? Number(req.body?.startEpisodeNumber) || 1 : null;
         const bundleIdentifier = req.body?.bundleIdentifier ? String(req.body.bundleIdentifier) : null;
         const playbackMode = String(req.body?.playbackMode || 'mp4').toLowerCase() === 'hls' ? 'hls' : 'mp4';
-
-        if (contentType === 'series' && !seriesTitleInput) {
-            return res.status(400).json({ error: 'Series title is required for series imports' });
-        }
 
         const requestedItems = Array.isArray(req.body?.items)
             ? req.body.items
                 .map((item) => ({
                     identifier: String(item?.identifier || '').trim(),
                     fileName: item?.fileName ? String(item.fileName) : null,
+                    title: item?.title ? String(item.title).trim() : null,
+                    seriesTitle: item?.seriesTitle ? String(item.seriesTitle).trim() : null,
                     seasonNumber: Number.isFinite(Number(item?.seasonNumber)) ? Number(item.seasonNumber) : null,
                     episodeNumber: Number.isFinite(Number(item?.episodeNumber)) ? Number(item.episodeNumber) : null
                 }))
                 .filter((item) => item.identifier)
             : [];
+
+        if (contentType === 'series' && !seriesTitleInput && requestedItems[0]?.seriesTitle) {
+            seriesTitleInput = requestedItems[0].seriesTitle;
+        }
+
+        if (contentType === 'series' && !seriesTitleInput) {
+            return res.status(400).json({ error: 'Series title is required in the analyzed import manifest' });
+        }
 
         const providedIdentifiers = Array.isArray(req.body?.identifiers)
             ? req.body.identifiers.filter(Boolean)
@@ -970,7 +976,7 @@ app.post('/import', async (req, res) => {
                     continue;
                 }
 
-                if (contentType === 'series' && !matchesSeriesTitle(bestFile.name, seriesTitleInput)) {
+                if (contentType === 'series' && !item.title && !matchesSeriesTitle(bestFile.name, seriesTitleInput)) {
                     result.status = 'skipped';
                     result.reason = 'Series title mismatch';
                     results.push(result);
@@ -986,7 +992,9 @@ app.post('/import', async (req, res) => {
                 } = await storeMoviePlayback(playbackUrl, identifier, bestFile, { playbackType: playbackMode });
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
-                let title = stringifyMetadata(metadata?.title) || identifier;
+                let title = contentType === 'series' && item.title
+                    ? item.title
+                    : stringifyMetadata(metadata?.title) || identifier;
                 const isBundleItem = identifier === 'publicmovies212';
                 const isBundleGeneric = isBundleItem && isGenericBundleTitle(title);
                 if (isBundleGeneric && bestFile?.name) {
@@ -1032,7 +1040,7 @@ app.post('/import', async (req, res) => {
                 const episodeNumber = contentType === 'series'
                     ? (item.episodeNumber ?? parsed.episode ?? (startEpisodeInput !== null ? startEpisodeInput + index : null))
                     : null;
-                const seriesTitle = contentType === 'series' ? seriesTitleInput : null;
+                const seriesTitle = contentType === 'series' ? (item.seriesTitle || seriesTitleInput) : null;
                 const seasonNumber = contentType === 'series'
                     ? (item.seasonNumber ?? parsed.season ?? seasonNumberInput)
                     : null;
@@ -1092,6 +1100,9 @@ app.post('/import', async (req, res) => {
 
                 result.title = dbRow.title;
                 result.fileName = bestFile.name;
+                result.seriesTitle = seriesTitle;
+                result.seasonNumber = seasonNumber;
+                result.episodeNumber = episodeNumber;
                 result.playbackUrl = s3Url;
                 result.fileSize = fileSize;
                 result.duration = duration;
@@ -1165,8 +1176,11 @@ app.post('/import', async (req, res) => {
                 },
                 results: itemsToProcess.map((item) => ({
                     identifier: item.identifier,
-                    title: item.identifier,
+                    title: item.title || item.identifier,
                     fileName: item.fileName || null,
+                    seriesTitle: item.seriesTitle || seriesTitleInput || null,
+                    seasonNumber: item.seasonNumber ?? null,
+                    episodeNumber: item.episodeNumber ?? null,
                     status: 'queued'
                 }))
             });
