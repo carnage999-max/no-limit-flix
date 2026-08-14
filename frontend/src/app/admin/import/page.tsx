@@ -30,6 +30,9 @@ interface ImportSummary {
     failed?: number;
     ready?: number;
     queued?: number;
+    all?: boolean;
+    sourceRows?: number;
+    affectedRows?: number;
     force?: boolean;
     searchQuery?: string | null;
     seriesTitle?: string | null;
@@ -50,6 +53,9 @@ interface WorkerJobStatus {
     updated?: number;
     skipped?: number;
     failed?: number;
+    affectedRows?: number;
+    sourceRows?: number;
+    all?: boolean;
     force?: boolean;
     summary?: ImportSummary;
 }
@@ -244,6 +250,7 @@ export default function AdminImportPage() {
                 body: JSON.stringify({
                     limit: 500,
                     offset: 0,
+                    all: true,
                     force: true
                 })
             });
@@ -631,6 +638,7 @@ export default function AdminImportPage() {
                         { label: 'Imported', value: summary.imported, color: '#22C55E' },
                         { label: 'Updated', value: summary.updated, color: '#38BDF8' },
                         { label: 'Refreshed', value: summary.refreshed, color: '#38BDF8' },
+                        { label: 'Rows Updated', value: summary.affectedRows, color: '#22C55E' },
                         { label: 'Skipped', value: summary.skipped, color: '#FACC15' },
                         { label: 'Failed', value: summary.failed, color: '#F87171' },
                         ].filter((item) => item.value !== undefined).map((item) => (
@@ -689,6 +697,8 @@ export default function AdminImportPage() {
                                 <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? summary?.requested ?? 0}</span>
                                 {jobStatus?.reconciled !== undefined && <span>Reconciled: {jobStatus.reconciled}</span>}
                                 {jobStatus?.refreshed !== undefined && <span>Refreshed: {jobStatus.refreshed}</span>}
+                                {jobStatus?.affectedRows !== undefined && <span>Rows updated: {jobStatus.affectedRows}</span>}
+                                {jobStatus?.sourceRows !== undefined && <span>Rows scanned: {jobStatus.sourceRows}</span>}
                                 {jobStatus?.existing !== undefined && <span>Existing: {jobStatus.existing}</span>}
                                 <span>Imported: {jobStatus?.imported ?? 0}</span>
                                 <span>Updated: {jobStatus?.updated ?? 0}</span>

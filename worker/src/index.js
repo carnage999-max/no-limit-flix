@@ -18,7 +18,8 @@ const {
     findReelByS3KeyPlayback,
     pool,
     updateVideoPoster,
-    updateVideoMetadata
+    updateVideoMetadata,
+    updateSeriesMetadata
 } = require('./db');
 const {
     buildS3Key,
@@ -364,6 +365,24 @@ const fetchVideosNeedingPoster = async (limit, offset = 0, force = false) => {
         [limit, offset, force]
     );
     return result.rows || [];
+};
+
+const groupPosterRefreshCandidates = (rows) => {
+    const seenSeries = new Set();
+    const candidates = [];
+
+    for (const row of rows) {
+        if (row.type === 'series') {
+            const key = (row.seriesTitle || row.title || '').trim().toLowerCase();
+            if (key) {
+                if (seenSeries.has(key)) continue;
+                seenSeries.add(key);
+            }
+        }
+        candidates.push(row);
+    }
+
+    return candidates;
 };
 
 const stringifyMetadata = (value) => {
@@ -774,20 +793,25 @@ app.post('/refresh-posters', async (req, res) => {
             return res.status(401).json({ error: 'Unauthorized' });
         }
 
-        const limit = Math.min(Math.max(Number(req.body?.limit) || 100, 1), 500);
+        const refreshAll = req.body?.all === true;
+        const limit = refreshAll
+            ? Math.min(Math.max(Number(req.body?.max) || 10000, 1), 10000)
+            : Math.min(Math.max(Number(req.body?.limit) || 100, 1), 500);
         const offset = Math.max(Number(req.body?.offset) || 0, 0);
         const asyncMode = req.body?.async !== false;
         const force = req.body?.force === true;
 
         const runRefresh = async (job) => {
-            const rows = await fetchVideosNeedingPoster(limit, offset, force);
+            const rows = await fetchVideosNeedingPoster(limit, refreshAll ? 0 : offset, force);
+            const candidates = groupPosterRefreshCandidates(rows);
             if (job) {
-                job.total = rows.length;
+                job.total = candidates.length;
+                job.sourceRows = rows.length;
             }
 
             const results = [];
 
-            for (const row of rows) {
+            for (const row of candidates) {
                 const result = { id: row.id, title: row.title, status: 'failed' };
                 try {
                     let title = row.type === 'series'
@@ -834,12 +858,16 @@ app.post('/refresh-posters', async (req, res) => {
                         continue;
                     }
 
-                    await updateVideoMetadata(row.id, payload);
+                    const affectedRows = row.type === 'series' && row.seriesTitle
+                        ? await updateSeriesMetadata(row.seriesTitle, payload)
+                        : await updateVideoMetadata(row.id, payload);
                     result.status = 'refreshed';
+                    result.affectedRows = affectedRows;
                     results.push(result);
                     if (job) {
                         job.processed += 1;
                         job.refreshed += 1;
+                        job.affectedRows += affectedRows;
                         job.lastUpdatedAt = Date.now();
                     }
                 } catch (error) {
@@ -855,10 +883,13 @@ app.post('/refresh-posters', async (req, res) => {
             }
 
             const summary = {
-                requested: rows.length,
+                requested: candidates.length,
+                sourceRows: rows.length,
                 refreshed: results.filter((r) => r.status === 'refreshed').length,
                 skipped: results.filter((r) => r.status === 'skipped').length,
                 failed: results.filter((r) => r.status === 'failed').length,
+                affectedRows: results.reduce((total, result) => total + (result.affectedRows || 0), 0),
+                all: refreshAll,
                 force
             };
 
@@ -876,6 +907,9 @@ app.post('/refresh-posters', async (req, res) => {
                 refreshed: 0,
                 skipped: 0,
                 failed: 0,
+                affectedRows: 0,
+                sourceRows: 0,
+                all: refreshAll,
                 force,
                 startedAt: Date.now(),
                 lastUpdatedAt: Date.now(),
@@ -901,6 +935,7 @@ app.post('/refresh-posters', async (req, res) => {
                 summary: {
                     requested: limit,
                     queued: limit,
+                    all: refreshAll,
                     force
                 }
             });

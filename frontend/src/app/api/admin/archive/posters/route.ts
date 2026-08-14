@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
                 limit: body?.limit,
                 offset: body?.offset,
+                all: body?.all === true,
                 force: body?.force === true,
                 async: true
             })
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
                     jobId: data.jobId || null,
                     limit: body?.limit || null,
                     offset: body?.offset || null,
+                    all: body?.all === true,
                     force: body?.force === true,
                 },
             });

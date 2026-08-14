@@ -318,6 +318,45 @@ module.exports = {
         );
         return result.rowCount || 0;
     },
+    updateSeriesMetadata: async (seriesTitle, payload) => {
+        const result = await pool.query(
+            `UPDATE "Video"
+             SET "thumbnailUrl" = CASE
+                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUrl"
+                     ELSE $1::text
+                 END,
+                 "thumbnailSource" = CASE
+                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailSource"
+                     ELSE 'refresh'
+                 END,
+                 "thumbnailUpdatedAt" = CASE
+                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUpdatedAt"
+                     ELSE NOW()
+                 END,
+                 "tmdbId" = COALESCE($2::text, "tmdbId"),
+                 "description" = COALESCE($3::text, "description"),
+                 "releaseYear" = COALESCE($4::integer, "releaseYear"),
+                 "genre" = COALESCE($5::text, "genre"),
+                 "rating" = COALESCE($6::text, "rating"),
+                 "averageRating" = COALESCE($7::double precision, "averageRating"),
+                 "ratingCount" = COALESCE($8::integer, "ratingCount"),
+                 "updatedAt" = NOW()
+             WHERE "type" = 'series'
+               AND "seriesTitle" = $9::text`,
+            [
+                payload.thumbnailUrl || null,
+                payload.tmdbId || null,
+                payload.description || null,
+                payload.releaseYear || null,
+                payload.genre || null,
+                payload.rating || null,
+                payload.averageRating ?? null,
+                payload.ratingCount ?? null,
+                seriesTitle
+            ]
+        );
+        return result.rowCount || 0;
+    },
     findVideoByS3KeyPlayback: async (s3KeyPlayback) => {
         const result = await pool.query(
             'SELECT id, "archiveIdentifier" FROM "Video" WHERE "s3KeyPlayback" = $1 LIMIT 1',
