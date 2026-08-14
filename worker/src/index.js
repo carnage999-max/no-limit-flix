@@ -325,6 +325,9 @@ const parseArchiveMetadataYear = (sourceMetadata) => {
 };
 
 const resolveRefreshYearHint = (row, title) => {
+    if (row.type === 'series') {
+        return parseYear(row.seriesTitle) || parseYear(title);
+    }
     return resolveYearHint(
         title,
         row.s3KeyPlayback,
@@ -353,7 +356,7 @@ const fetchVideosNeedingPoster = async (limit, offset = 0) => {
                 "thumbnailUrl" IS NULL
                 OR "thumbnailUrl" = ''
                 OR "thumbnailUrl" NOT LIKE '/media/thumbnails/%'
-                OR "type" = 'series'
+                OR ("type" = 'series' AND COALESCE("thumbnailSource", '') <> 'refresh')
            )
          ORDER BY "updatedAt" ASC, "createdAt" ASC
          LIMIT $1 OFFSET $2`,
@@ -1019,12 +1022,14 @@ app.post('/import', async (req, res) => {
                     continue;
                 }
                 const omdbQueryTitle = contentType === 'series' ? (seriesTitleInput || title) : title;
-                const yearHint = resolveYearHint(
-                    omdbQueryTitle,
-                    stringifyMetadata(metadata?.year),
-                    stringifyMetadata(metadata?.date),
-                    bestFile.name
-                );
+                const yearHint = contentType === 'series'
+                    ? parseYear(omdbQueryTitle)
+                    : resolveYearHint(
+                        omdbQueryTitle,
+                        stringifyMetadata(metadata?.year),
+                        stringifyMetadata(metadata?.date),
+                        bestFile.name
+                    );
                 const omdbDetails = await resolveOmdbDetails({ title: omdbQueryTitle, type: contentType, year: yearHint });
                 const description = omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null;
                 const omdbYear = parseYear(omdbDetails?.year);

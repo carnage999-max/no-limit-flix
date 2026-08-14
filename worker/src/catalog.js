@@ -1,5 +1,6 @@
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const IMDB_SUGGESTION_BASE = 'https://v3.sg.media-imdb.com/suggestion';
 
 const getApiKey = () => {
     return process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY || '';
@@ -169,6 +170,53 @@ const fetchOmdbJson = async (params) => {
     return fetchJson(`https://www.omdbapi.com/?${params.toString()}`);
 };
 
+async function resolveImdbSuggestionMatch({ title, type, year = null }) {
+    const safeTitle = sanitizeSearchTitle(title) || title;
+    if (!safeTitle) return null;
+
+    try {
+        const first = safeTitle.toLowerCase().match(/[a-z0-9]/)?.[0] || 'x';
+        const data = await fetchJson(`${IMDB_SUGGESTION_BASE}/${first}/${encodeURIComponent(safeTitle)}.json`);
+        const results = data?.d || [];
+        if (!results.length) return null;
+
+        const target = normalizeTitle(safeTitle);
+        const scored = results
+            .filter((item) => /^tt\d+$/i.test(String(item?.id || '')))
+            .map((item) => {
+                const candidateTitle = item?.l || '';
+                const candidateYear = parseYear(String(item?.y || item?.yr || ''));
+                const isSeriesCandidate = /tv|series/i.test(String(item?.q || ''));
+                let score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
+                if (type === 'series') score += isSeriesCandidate ? 3 : -3;
+                if (type === 'movie') score += isSeriesCandidate ? -3 : 1;
+                return { item, score };
+            })
+            .sort((a, b) => compareCandidates(a, b, year, type === 'movie' && !year));
+
+        const best = scored.find((entry) => {
+            const candidateYear = parseYear(String(entry.item?.y || entry.item?.yr || ''));
+            if (entry.score < 2) return false;
+            if (year && candidateYear && !yearsMatch(candidateYear, year)) return false;
+            return true;
+        });
+
+        if (!best?.item?.id) return null;
+        return {
+            imdbId: best.item.id,
+            posterUrl: best.item?.i?.imageUrl || null,
+            releaseYear: parseYear(String(best.item?.y || best.item?.yr || '')),
+        };
+    } catch {
+        return null;
+    }
+}
+
+async function resolveImdbSuggestionId({ title, type, year = null }) {
+    const match = await resolveImdbSuggestionMatch({ title, type, year });
+    return match?.imdbId || null;
+}
+
 const resolveOmdbDetails = async ({ title, type, year = null }) => {
     const apiKey = process.env.OMDB_API_KEY || process.env.OMDB_APIKEY || '';
     if (!apiKey || !title) return null;
@@ -202,22 +250,22 @@ const resolveOmdbDetails = async ({ title, type, year = null }) => {
 
         const searchData = await fetchOmdbJson(searchParams);
         const results = searchData?.Search || [];
-        if (!results.length) return null;
-
         const target = normalizeTitle(safeTitle);
-        const scored = results.map((item) => {
-            const candidateTitle = item?.Title || '';
-            const candidateYear = parseYear(item?.Year);
-            const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
-            return { item, score };
-        });
-        scored.sort((a, b) => compareCandidates(a, b, year, type === 'movie' && !year));
+        const scored = results
+            .map((item) => {
+                const candidateTitle = item?.Title || '';
+                const candidateYear = parseYear(item?.Year);
+                const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
+                return { item, score };
+            })
+            .sort((a, b) => compareCandidates(a, b, year, type === 'movie' && !year));
         const best = pickBestOmdbSearchCandidate(scored, { year, minScore: 2 });
-        if (!best?.item?.imdbID) return null;
+        const suggestedImdbId = best?.item?.imdbID || await resolveImdbSuggestionId({ title: safeTitle, type, year });
+        if (!suggestedImdbId) return null;
 
         const detailParams = new URLSearchParams({
             apikey: apiKey,
-            i: best.item.imdbID,
+            i: suggestedImdbId,
             plot: 'short',
         });
         data = await fetchOmdbJson(detailParams);
@@ -312,6 +360,17 @@ async function findWikipediaPoster({ title, year, type }) {
     return null;
 }
 
+async function findImdbSuggestionPoster({ title, year, type }) {
+    const match = await resolveImdbSuggestionMatch({ title, type, year });
+    if (!match?.posterUrl) return null;
+    return {
+        posterUrl: match.posterUrl,
+        tmdbId: null,
+        releaseYear: match.releaseYear,
+        source: 'imdb',
+    };
+}
+
 async function findBestPoster({ title, year, type }) {
     const yearHint = type === 'series' ? null : (year ?? parseYear(title));
 
@@ -343,6 +402,9 @@ async function findBestPoster({ title, year, type }) {
                 minScore: 2,
                 ignoreYear: false,
             });
+    }
+    if (!poster) {
+        poster = await findImdbSuggestionPoster({ title, year: yearHint, type });
     }
     if (!poster) {
         poster = await findWikipediaPoster({ title, year: yearHint, type });

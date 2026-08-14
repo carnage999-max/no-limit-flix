@@ -20,6 +20,7 @@ type PosterMatch = {
     posterUrl: string;
     tmdbId: string | null;
     releaseYear?: number | null;
+    source?: string;
 };
 
 interface ImportResult {
@@ -59,6 +60,7 @@ const MIN_FEATURE_DURATION_SECONDS = 45 * 60;
 const MIN_SERIES_DURATION_SECONDS = 5 * 60;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w500';
+const IMDB_SUGGESTION_BASE = 'https://v3.sg.media-imdb.com/suggestion';
 const SERIES_SEARCH_SCAN_LIMIT = 100;
 const SERIES_DISCOVERY_QUERY = [
     'mediatype:(movies)',
@@ -944,6 +946,61 @@ const fetchOmdbJson = async (params: URLSearchParams) => {
     return fetchJson(`https://www.omdbapi.com/?${params.toString()}`);
 };
 
+const resolveImdbSuggestionMatch = async (
+    title: string | null,
+    type: 'movie' | 'series',
+    year: number | null = null
+) => {
+    const safeTitle = sanitizeSearchTitle(title) || title;
+    if (!safeTitle) return null;
+
+    try {
+        const first = safeTitle.toLowerCase().match(/[a-z0-9]/)?.[0] || 'x';
+        const data = await fetchJson(`${IMDB_SUGGESTION_BASE}/${first}/${encodeURIComponent(safeTitle)}.json`);
+        const results = data?.d || [];
+        if (!results.length) return null;
+
+        const target = normalizeTitle(safeTitle);
+        const scored = results
+            .filter((item: any) => /^tt\d+$/i.test(String(item?.id || '')))
+            .map((item: any) => {
+                const candidateTitle = item?.l || '';
+                const candidateYear = parseYear(String(item?.y || item?.yr || ''));
+                const isSeriesCandidate = /tv|series/i.test(String(item?.q || ''));
+                let score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
+                if (type === 'series') score += isSeriesCandidate ? 3 : -3;
+                if (type === 'movie') score += isSeriesCandidate ? -3 : 1;
+                return { item, score };
+            })
+            .sort((a: any, b: any) => compareCandidates(a, b, year, type === 'movie' && !year));
+
+        const best = scored.find((entry: any) => {
+            const candidateYear = parseYear(String(entry.item?.y || entry.item?.yr || ''));
+            if (entry.score < 2) return false;
+            if (year && candidateYear && !yearsMatch(candidateYear, year)) return false;
+            return true;
+        });
+
+        if (!best?.item?.id) return null;
+        return {
+            imdbId: best.item.id,
+            posterUrl: best.item?.i?.imageUrl || null,
+            releaseYear: parseYear(String(best.item?.y || best.item?.yr || '')),
+        };
+    } catch {
+        return null;
+    }
+};
+
+const resolveImdbSuggestionId = async (
+    title: string | null,
+    type: 'movie' | 'series',
+    year: number | null = null
+) => {
+    const match = await resolveImdbSuggestionMatch(title, type, year);
+    return match?.imdbId || null;
+};
+
 const resolveOmdbDetails = async (
     title: string | null,
     type: 'movie' | 'series',
@@ -980,22 +1037,22 @@ const resolveOmdbDetails = async (
 
         const searchData = await fetchOmdbJson(searchParams);
         const results = searchData?.Search || [];
-        if (!results.length) return null;
-
         const target = normalizeTitle(safeTitle);
-        const scored = results.map((item: any) => {
-            const candidateTitle = item?.Title || '';
-            const candidateYear = parseYear(item?.Year);
-            const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
-            return { item, score };
-        });
-        scored.sort((a: any, b: any) => compareCandidates(a, b, year, type === 'movie' && !year));
+        const scored = results
+            .map((item: any) => {
+                const candidateTitle = item?.Title || '';
+                const candidateYear = parseYear(item?.Year);
+                const score = scoreCandidate(normalizeTitle(candidateTitle), target, candidateYear, year);
+                return { item, score };
+            })
+            .sort((a: any, b: any) => compareCandidates(a, b, year, type === 'movie' && !year));
         const best = pickBestOmdbSearchCandidate(scored, { year, minScore: 2 });
-        if (!best?.item?.imdbID) return null;
+        const suggestedImdbId = best?.item?.imdbID || await resolveImdbSuggestionId(safeTitle, type, year);
+        if (!suggestedImdbId) return null;
 
         const detailParams = new URLSearchParams({
             apikey: apiKey,
-            i: best.item.imdbID,
+            i: suggestedImdbId,
             plot: 'short'
         });
         data = await fetchOmdbJson(detailParams);
@@ -1092,6 +1149,17 @@ const findWikipediaPoster = async (title: string | null, year: number | null, ty
     return null;
 };
 
+const findImdbSuggestionPoster = async (title: string | null, year: number | null, type: 'movie' | 'series') => {
+    const match = await resolveImdbSuggestionMatch(title, type, year);
+    if (!match?.posterUrl) return null;
+    return {
+        posterUrl: match.posterUrl,
+        tmdbId: null,
+        releaseYear: match.releaseYear,
+        source: 'imdb'
+    };
+};
+
 const findBestPoster = async (title: string | null, year: number | null, type: 'movie' | 'series'): Promise<PosterMatch | null> => {
     const yearHint = type === 'series' ? null : (year ?? parseYear(title || undefined));
 
@@ -1111,6 +1179,9 @@ const findBestPoster = async (title: string | null, year: number | null, type: '
     if (!poster && type === 'series' && year) {
         poster = await findOmdbPoster(title, year, type)
             || await findCatalogPoster(title, year, type, { minScore: 2, ignoreYear: false });
+    }
+    if (!poster) {
+        poster = await findImdbSuggestionPoster(title, yearHint, type);
     }
     if (!poster) {
         poster = await findWikipediaPoster(title, yearHint, type);
@@ -1365,12 +1436,14 @@ export async function POST(request: NextRequest) {
                     continue;
                 }
                 const omdbQueryTitle = contentType === 'series' ? (seriesTitleInput || title) : title;
-                const yearHint = resolveYearHint(
-                    omdbQueryTitle,
-                    stringifyMetadata(metadata?.year),
-                    stringifyMetadata(metadata?.date),
-                    bestFile.name
-                );
+                const yearHint = contentType === 'series'
+                    ? parseYear(omdbQueryTitle)
+                    : resolveYearHint(
+                        omdbQueryTitle,
+                        stringifyMetadata(metadata?.year),
+                        stringifyMetadata(metadata?.date),
+                        bestFile.name
+                    );
                 const omdbDetails = await resolveOmdbDetails(omdbQueryTitle, contentType, yearHint);
                 const description = omdbDetails?.plot && omdbDetails.plot !== 'N/A' ? omdbDetails.plot : null;
                 const omdbYear = parseYear(omdbDetails?.year || undefined);
