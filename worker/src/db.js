@@ -268,13 +268,13 @@ module.exports = {
     updateVideoPoster: async (id, thumbnailUrl, tmdbId) => {
         const result = await pool.query(
             `UPDATE "Video"
-             SET "thumbnailUrl" = $1,
+             SET "thumbnailUrl" = $1::text,
                  "thumbnailSource" = 'refresh',
                  "thumbnailLocked" = false,
                  "thumbnailUpdatedAt" = NOW(),
-                 "tmdbId" = COALESCE($2, "tmdbId"),
+                 "tmdbId" = COALESCE($2::text, "tmdbId"),
                  "updatedAt" = NOW()
-             WHERE "id" = $3
+             WHERE "id" = $3::text
                AND COALESCE("thumbnailLocked", false) = false`,
             [thumbnailUrl, tmdbId, id]
         );
@@ -284,26 +284,26 @@ module.exports = {
         const result = await pool.query(
             `UPDATE "Video"
              SET "thumbnailUrl" = CASE
-                     WHEN $1 IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUrl"
-                     ELSE $1
+                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUrl"
+                     ELSE $1::text
                  END,
                  "thumbnailSource" = CASE
-                     WHEN $1 IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailSource"
+                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailSource"
                      ELSE 'refresh'
                  END,
                  "thumbnailUpdatedAt" = CASE
-                     WHEN $1 IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUpdatedAt"
+                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUpdatedAt"
                      ELSE NOW()
                  END,
-                 "tmdbId" = COALESCE($2, "tmdbId"),
-                 "description" = COALESCE($3, "description"),
-                 "releaseYear" = COALESCE($4, "releaseYear"),
-                 "genre" = COALESCE($5, "genre"),
-                 "rating" = COALESCE($6, "rating"),
-                 "averageRating" = COALESCE($7, "averageRating"),
-                 "ratingCount" = COALESCE($8, "ratingCount"),
+                 "tmdbId" = COALESCE($2::text, "tmdbId"),
+                 "description" = COALESCE($3::text, "description"),
+                 "releaseYear" = COALESCE($4::integer, "releaseYear"),
+                 "genre" = COALESCE($5::text, "genre"),
+                 "rating" = COALESCE($6::text, "rating"),
+                 "averageRating" = COALESCE($7::double precision, "averageRating"),
+                 "ratingCount" = COALESCE($8::integer, "ratingCount"),
                  "updatedAt" = NOW()
-             WHERE "id" = $9`,
+             WHERE "id" = $9::text`,
             [
                 payload.thumbnailUrl || null,
                 payload.tmdbId || null,

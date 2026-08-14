@@ -336,7 +336,7 @@ const resolveRefreshYearHint = (row, title) => {
     ) ?? row.releaseYear ?? parseYear(title);
 };
 
-const fetchVideosNeedingPoster = async (limit, offset = 0) => {
+const fetchVideosNeedingPoster = async (limit, offset = 0, force = false) => {
     const result = await pool.query(
         `SELECT "id", "title", "seriesTitle", "releaseYear", "type", "thumbnailUrl",
                 "archiveIdentifier", "s3KeyPlayback", "sourceMetadata"
@@ -357,10 +357,11 @@ const fetchVideosNeedingPoster = async (limit, offset = 0) => {
                 OR "thumbnailUrl" = ''
                 OR "thumbnailUrl" NOT LIKE '/media/thumbnails/%'
                 OR ("type" = 'series' AND COALESCE("thumbnailSource", '') <> 'refresh')
+                OR $3::boolean = true
            )
          ORDER BY "updatedAt" ASC, "createdAt" ASC
          LIMIT $1 OFFSET $2`,
-        [limit, offset]
+        [limit, offset, force]
     );
     return result.rows || [];
 };
@@ -776,9 +777,10 @@ app.post('/refresh-posters', async (req, res) => {
         const limit = Math.min(Math.max(Number(req.body?.limit) || 100, 1), 500);
         const offset = Math.max(Number(req.body?.offset) || 0, 0);
         const asyncMode = req.body?.async !== false;
+        const force = req.body?.force === true;
 
         const runRefresh = async (job) => {
-            const rows = await fetchVideosNeedingPoster(limit, offset);
+            const rows = await fetchVideosNeedingPoster(limit, offset, force);
             if (job) {
                 job.total = rows.length;
             }
@@ -856,7 +858,8 @@ app.post('/refresh-posters', async (req, res) => {
                 requested: rows.length,
                 refreshed: results.filter((r) => r.status === 'refreshed').length,
                 skipped: results.filter((r) => r.status === 'skipped').length,
-                failed: results.filter((r) => r.status === 'failed').length
+                failed: results.filter((r) => r.status === 'failed').length,
+                force
             };
 
             return { summary, results };
@@ -873,6 +876,7 @@ app.post('/refresh-posters', async (req, res) => {
                 refreshed: 0,
                 skipped: 0,
                 failed: 0,
+                force,
                 startedAt: Date.now(),
                 lastUpdatedAt: Date.now(),
                 finishedAt: null
@@ -891,7 +895,15 @@ app.post('/refresh-posters', async (req, res) => {
                     job.error = error.message;
                 });
 
-            return res.json({ success: true, jobId, summary: job.summary || null });
+            return res.json({
+                success: true,
+                jobId,
+                summary: {
+                    requested: limit,
+                    queued: limit,
+                    force
+                }
+            });
         }
 
         const result = await runRefresh(null);

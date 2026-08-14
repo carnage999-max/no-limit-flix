@@ -29,6 +29,8 @@ interface ImportSummary {
     skipped?: number;
     failed?: number;
     ready?: number;
+    queued?: number;
+    force?: boolean;
     searchQuery?: string | null;
     seriesTitle?: string | null;
     shuffleSeed?: string | null;
@@ -36,6 +38,8 @@ interface ImportSummary {
 }
 
 interface WorkerJobStatus {
+    id?: string;
+    type?: string;
     status?: string;
     total?: number;
     processed?: number;
@@ -46,6 +50,8 @@ interface WorkerJobStatus {
     updated?: number;
     skipped?: number;
     failed?: number;
+    force?: boolean;
+    summary?: ImportSummary;
 }
 
 const getErrorMessage = (error: unknown, fallback: string) =>
@@ -237,7 +243,8 @@ export default function AdminImportPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     limit: 500,
-                    offset: 0
+                    offset: 0,
+                    force: true
                 })
             });
 
@@ -249,6 +256,9 @@ export default function AdminImportPage() {
             setJobId(data.jobId || null);
             setJobStatus(null);
             setSummary(data.summary || null);
+            if (data.job) {
+                setJobStatus(data.job);
+            }
         } catch (err: unknown) {
             setError(getErrorMessage(err, 'Poster refresh failed'));
         } finally {
@@ -268,6 +278,9 @@ export default function AdminImportPage() {
         }
         if (data?.job) {
             setJobStatus(data.job);
+            if (data.job.summary) {
+                setSummary(data.job.summary);
+            }
         }
     };
 
@@ -609,11 +622,12 @@ export default function AdminImportPage() {
                 </div>
             </div>
 
-            {summary && (
+            {(summary || jobId) && (
                 <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                    {summary && <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
                         {[
                         { label: 'Ready', value: summary.ready, color: '#D4AF37' },
+                        { label: 'Queued', value: summary.queued, color: '#D4AF37' },
                         { label: 'Imported', value: summary.imported, color: '#22C55E' },
                         { label: 'Updated', value: summary.updated, color: '#38BDF8' },
                         { label: 'Refreshed', value: summary.refreshed, color: '#38BDF8' },
@@ -635,8 +649,8 @@ export default function AdminImportPage() {
                             {item.label}: {item.value}
                         </div>
                         ))}
-                    </div>
-                        {summary.searchQuery && (
+                    </div>}
+                        {summary?.searchQuery && (
                             <div style={{ color: '#A7ABB4', fontSize: '0.75rem', wordBreak: 'break-word' }}>
                                 Query: {summary.searchQuery}
                             </div>
@@ -650,7 +664,7 @@ export default function AdminImportPage() {
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                                 <span style={{ color: '#F3F4F6', fontSize: '0.9rem', fontWeight: 600 }}>
-                                    Import Job {jobId}
+                                    {jobStatus?.type === 'poster_refresh' ? 'Poster Refresh Job' : 'Import Job'} {jobId}
                                 </span>
                                 <span style={{ color: '#A7ABB4', fontSize: '0.8rem' }}>
                                     {jobStatus?.status || 'queued'}
@@ -672,7 +686,7 @@ export default function AdminImportPage() {
                                 }} />
                             </div>
                             <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', color: '#A7ABB4', fontSize: '0.75rem' }}>
-                                <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? summary.requested}</span>
+                                <span>Processed: {jobStatus?.processed ?? 0}/{jobStatus?.total ?? summary?.requested ?? 0}</span>
                                 {jobStatus?.reconciled !== undefined && <span>Reconciled: {jobStatus.reconciled}</span>}
                                 {jobStatus?.refreshed !== undefined && <span>Refreshed: {jobStatus.refreshed}</span>}
                                 {jobStatus?.existing !== undefined && <span>Existing: {jobStatus.existing}</span>}
