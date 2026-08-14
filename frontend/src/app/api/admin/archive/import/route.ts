@@ -269,8 +269,8 @@ const findThumbnailForFile = (files: any[], identifier: string, fileName: string
     return buildArchiveDownloadUrl(identifier, best.name);
 };
 
-const buildArchiveIdentifier = (identifier: string, fileName: string | null, bundleIdentifier?: string) => {
-    if (bundleIdentifier && identifier === bundleIdentifier && fileName) {
+const buildArchiveIdentifier = (identifier: string, fileName: string | null, bundleIdentifier?: string, contentType?: 'movie' | 'series') => {
+    if (fileName && (contentType === 'series' || (bundleIdentifier && identifier === bundleIdentifier))) {
         return `${identifier}:${fileName}`;
     }
     return identifier;
@@ -1396,7 +1396,7 @@ export async function POST(request: NextRequest) {
                 const posterMatch = await findBestPoster(posterTitle, releaseYear ?? yearHint, contentType);
                 const resolvedReleaseYear = releaseYear ?? posterMatch?.releaseYear ?? omdbYear ?? null;
                 const tmdbId = posterMatch?.tmdbId || null;
-                const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier);
+                const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier, contentType);
                 const posterSourceUrl = posterMatch?.posterUrl || (
                     isBundleItem
                         ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)

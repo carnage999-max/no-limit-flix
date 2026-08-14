@@ -474,8 +474,8 @@ const findThumbnailForFile = (files, identifier, fileName) => {
     return buildArchiveDownloadUrl(identifier, best.name);
 };
 
-const buildArchiveIdentifier = (identifier, fileName, bundleIdentifier) => {
-    if (bundleIdentifier && identifier === bundleIdentifier && fileName) {
+const buildArchiveIdentifier = (identifier, fileName, bundleIdentifier, contentType) => {
+    if (fileName && (contentType === 'series' || (bundleIdentifier && identifier === bundleIdentifier))) {
         return `${identifier}:${fileName}`;
     }
     return identifier;
@@ -1052,14 +1052,16 @@ app.post('/import', async (req, res) => {
                     type: contentType
                 });
                 const tmdbId = posterMatch?.tmdbId || null;
-                let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier);
+                let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier, contentType);
                 const posterSourceUrl = posterMatch?.posterUrl || (
                     isBundleItem
                         ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
                         : `https://archive.org/services/img/${identifier}`
                 );
                 const existingByKey = await findVideoByS3KeyPlayback(s3KeyPlayback);
-                if (existingByKey?.archiveIdentifier && existingByKey.archiveIdentifier !== archiveIdentifier) {
+                if (existingByKey?.archiveIdentifier
+                    && existingByKey.archiveIdentifier !== archiveIdentifier
+                    && !(contentType === 'series' && existingByKey.archiveIdentifier === identifier)) {
                     archiveIdentifier = existingByKey.archiveIdentifier;
                 }
                 const thumbnailUrl = await storePosterImage(posterSourceUrl, archiveIdentifier, bestFile.name);

@@ -2,12 +2,14 @@ type ReviewSafetyVideoLike = {
   sourceProvider?: string | null;
   sourceType?: string | null;
   sourceLicenseUrl?: string | null;
+  sourceRights?: string | null;
 };
 
 export function isReviewSafeVideo(video: ReviewSafetyVideoLike) {
   const sourceProvider = video.sourceProvider || null;
   const sourceType = video.sourceType || null;
   const sourceLicenseUrl = video.sourceLicenseUrl || null;
+  const sourceRights = video.sourceRights || null;
 
   // Explicitly-marked internal uploads remain available by default.
   if (sourceType === 'internal') {
@@ -25,5 +27,9 @@ export function isReviewSafeVideo(video: ReviewSafetyVideoLike) {
     return false;
   }
 
-  return Boolean(sourceLicenseUrl);
+  if (sourceLicenseUrl) {
+    return true;
+  }
+
+  return /\b(public domain|creative commons|cc0|cc-by|cc by)\b/i.test(sourceRights || '');
 }
