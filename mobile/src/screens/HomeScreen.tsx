@@ -42,6 +42,18 @@ const CONTINUE_CARD_WIDTH = 180;
 const CONTINUE_CARD_GAP = 14;
 const PREF_GENRES_KEY = 'nolimitflix_pref_genres';
 const PREF_MOODS_KEY = 'nolimitflix_pref_moods';
+const HOME_CACHE_TTL_MS = 30 * 60 * 1000;
+
+type HomeWatchCache = {
+  scopeKey: string;
+  hostedMovies: any[];
+  hostedSeries: any[];
+  continueWatching: any[];
+  watchProgressMap: Record<string, number>;
+  cachedAt: number;
+};
+
+let homeWatchCache: HomeWatchCache | null = null;
 
 export const HomeScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -80,6 +92,17 @@ export const HomeScreen = () => {
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const insets = useSafeAreaInsets();
+  const preferredGenresKey = preferredGenres.join('|');
+  const homeScopeKey = `${user?.id || 'guest'}:${preferredGenresKey}`;
+
+  const applyHomeWatchCache = (cache: HomeWatchCache) => {
+    setHostedMovies(cache.hostedMovies);
+    setHostedSeries(cache.hostedSeries);
+    setContinueWatching(cache.continueWatching);
+    setWatchProgressMap(cache.watchProgressMap);
+    setWatchLoadError(null);
+    setIsWatchLoading(false);
+  };
 
   useEffect(() => {
     Animated.parallel([
@@ -133,23 +156,38 @@ export const HomeScreen = () => {
   }, []);
 
   useEffect(() => {
-    if (isFocused) {
-      fetchHostedContent();
-    }
-  }, [isFocused]);
+    if (!isFocused || sessionLoading) return;
 
-  const pickRandomItems = (items: any[], count: number) => {
-    const copy = [...items];
-    for (let i = copy.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [copy[i], copy[j]] = [copy[j], copy[i]];
-    }
-    return copy.slice(0, count);
-  };
+    const cacheIsFresh = homeWatchCache
+      && homeWatchCache.scopeKey === homeScopeKey
+      && Date.now() - homeWatchCache.cachedAt < HOME_CACHE_TTL_MS;
 
-  const fetchHostedContent = async () => {
+    if (cacheIsFresh && homeWatchCache) {
+      applyHomeWatchCache(homeWatchCache);
+      return;
+    }
+
+    fetchHostedContent();
+  }, [isFocused, sessionLoading, homeScopeKey]);
+
+  const pickFeaturedItems = (items: any[], count: number) => items.slice(0, count);
+
+  const fetchHostedContent = async (force = false) => {
+    if (!force) {
+      const cacheIsFresh = homeWatchCache
+        && homeWatchCache.scopeKey === homeScopeKey
+        && Date.now() - homeWatchCache.cachedAt < HOME_CACHE_TTL_MS;
+
+      if (cacheIsFresh && homeWatchCache) {
+        applyHomeWatchCache(homeWatchCache);
+        return;
+      }
+    }
+
     try {
-      setIsWatchLoading(true);
+      if (!hostedMovies.length && !hostedSeries.length && !continueWatching.length) {
+        setIsWatchLoading(true);
+      }
       setWatchLoadError(null);
       const [moviesData, tvData, historyData] = await Promise.all([
         apiClient.getInternalMovies(),
@@ -164,8 +202,8 @@ export const HomeScreen = () => {
           })
         : allMovies;
       const curatedMovies = preferredFiltered.length ? preferredFiltered : allMovies;
-      setHostedMovies(pickRandomItems(curatedMovies, 4));
-      setHostedSeries(pickRandomItems(tvData.series || [], 4));
+      const nextHostedMovies = pickFeaturedItems(curatedMovies, 4);
+      const nextHostedSeries = pickFeaturedItems(tvData.series || [], 4);
       const historyItems = (historyData.watchHistory || []).map((entry: any) => {
         const video = entry.video || {};
         const rawGenre = video.genre || '';
@@ -186,8 +224,21 @@ export const HomeScreen = () => {
           progress: Math.round(entry.completionPercent || 0),
         };
       });
-      setWatchProgressMap(buildWatchProgressMap(historyData.watchHistory || []));
-      setContinueWatching(historyItems.slice(0, 5));
+      const nextWatchProgressMap = buildWatchProgressMap(historyData.watchHistory || []);
+      const nextContinueWatching = historyItems.slice(0, 5);
+
+      setHostedMovies(nextHostedMovies);
+      setHostedSeries(nextHostedSeries);
+      setWatchProgressMap(nextWatchProgressMap);
+      setContinueWatching(nextContinueWatching);
+      homeWatchCache = {
+        scopeKey: homeScopeKey,
+        hostedMovies: nextHostedMovies,
+        hostedSeries: nextHostedSeries,
+        continueWatching: nextContinueWatching,
+        watchProgressMap: nextWatchProgressMap,
+        cachedAt: Date.now(),
+      };
     } catch (error) {
       console.error('Failed to pre-fetch hosted content', error);
       setWatchLoadError('Could not load your watch library right now.');
@@ -198,7 +249,7 @@ export const HomeScreen = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchHostedContent();
+    await fetchHostedContent(true);
     setRefreshing(false);
   };
 
@@ -365,7 +416,7 @@ export const HomeScreen = () => {
         ) : watchLoadError ? (
           <View style={styles.inlineStatusCard}>
             <Text style={styles.inlineStatusText}>{watchLoadError}</Text>
-            <TouchableOpacity onPress={fetchHostedContent} style={styles.inlineStatusAction}>
+            <TouchableOpacity onPress={() => fetchHostedContent(true)} style={styles.inlineStatusAction}>
               <Text style={styles.inlineStatusActionText}>Retry</Text>
             </TouchableOpacity>
           </View>

@@ -73,7 +73,14 @@ export const InternalTvScreen = () => {
 
     const renderSeriesItem = ({ item }: { item: any }) => {
         const posterUrl = transformToCloudFront(item.thumbnailUrl) || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400';
-        const progress = progressMap[item.id] ?? (item.tmdbId ? progressMap[String(item.tmdbId)] : undefined);
+        const progress = progressMap[item.id]
+            ?? progressMap[item.seriesTitle]
+            ?? (item.tmdbId ? progressMap[String(item.tmdbId)] : undefined);
+        const episodeCount = Number(item.episodeCount || item.episodes?.length || 0);
+        const metaLabel = [
+            episodeCount > 0 ? `${episodeCount} ${episodeCount === 1 ? 'episode' : 'episodes'}` : '',
+            item.releaseYear ? `${item.releaseYear}` : '',
+        ].filter(Boolean).join(' • ');
         return (
             <View style={styles.itemContainer}>
                 <TitleTile
@@ -81,11 +88,12 @@ export const InternalTvScreen = () => {
                         id: item.seriesTitle || item.id,
                         title: item.seriesTitle || 'Series',
                         poster: posterUrl,
-                        year: item.releaseYear || 0,
+                        year: 0,
                         runtime: 0,
                         genres: item.genre ? [item.genre] : ['Series'],
                         playable: false,
                         progress,
+                        metaLabel,
                     } as any}
                     width={getTileWidth()}
                     onPress={() => setSelectedSeries(item)}
@@ -163,6 +171,9 @@ export const InternalTvScreen = () => {
     };
 
     if (selectedSeries) {
+        const selectedPosterUrl = transformToCloudFront(selectedSeries.thumbnailUrl)
+            || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400';
+
         return (
             <View style={styles.container}>
                 <View style={styles.header}>
@@ -180,7 +191,7 @@ export const InternalTvScreen = () => {
                     contentContainerStyle={styles.episodeList}
                     ListHeaderComponent={() => (
                         <View style={styles.seriesHeader}>
-                            <Image source={{ uri: selectedSeries.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400' }} style={styles.headerPoster} />
+                            <Image source={{ uri: selectedPosterUrl }} style={styles.headerPoster} />
                             <Text style={styles.headerDescription}>Available Episodes</Text>
                         </View>
                     )}

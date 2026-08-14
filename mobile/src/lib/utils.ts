@@ -1,76 +1,123 @@
-import { Platform } from 'react-native';
+import { BASE_URL } from './api';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+const KNOWN_MEDIA_PREFIXES = ['videos/', 'thumbnails/', 'avatars/', 'issues/', 'ia/'];
+const HOSTLESS_HOSTED_MEDIA_PATTERN = /^([^/]+\.(?:cloudfront\.net|s3(?:[.-][^.]+)?\.amazonaws\.com))(\/.+)$/i;
+const MEDIA_PATH_PATTERN = /(?:^|\/)[^/]+\.(?:m3u8|mp4|mkv|mov|avi|webm|jpg|jpeg|png|webp|gif|svg|vtt|srt|mp3|aac|wav)$/i;
+const S3_HOST_PATTERN = /^[^.]+\.s3([.-][^.]+)?\.amazonaws\.com$/i;
+const LEGACY_S3_HOST_PATTERN = /^[^.]+\.s3\.amazonaws\.com$/i;
+const CLOUDFRONT_HOST_PATTERN = /\.cloudfront\.net$/i;
 
 const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
 const buildAbsoluteApiUrl = (path: string) => {
     const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-    return `${normalizeBaseUrl(API_BASE_URL)}${normalizedPath}`;
+    return `${normalizeBaseUrl(BASE_URL)}${normalizedPath}`;
 };
 
-/**
- * Standardizes S3/CloudFront URLs for the mobile app.
- * Handles regional S3 patterns, ensures HTTPS protocol, and encodes for iOS stability.
- */
-export const transformToCloudFront = (url: string | null) => {
-    if (!url) return '';
+const collapsePath = (value: string) =>
+    value
+        .replace(/\\/g, '/')
+        .replace(/\/{2,}/g, '/')
+        .replace(/^\/+/, '')
+        .replace(/^\.\//, '')
+        .trim();
 
-    // 1. Ensure the input URL has a protocol if it's already a CloudFront link
-    let finalizedUrl = url.trim();
-    if (!finalizedUrl) return '';
+const normalizeMediaPath = (value: string) => {
+    const normalized = collapsePath(value);
+    if (!normalized) return '';
 
-    if (finalizedUrl.startsWith('/media/')) {
-        finalizedUrl = buildAbsoluteApiUrl(finalizedUrl);
-    } else if (/^(media|avatars|thumbnails|videos|issues|ia)\//i.test(finalizedUrl)) {
-        finalizedUrl = buildAbsoluteApiUrl(`/media/${finalizedUrl.replace(/^media\//i, '')}`);
-    }
-
-    if (finalizedUrl.includes('cloudfront.net') && !finalizedUrl.startsWith('http')) {
-        finalizedUrl = `https://${finalizedUrl}`;
-    }
-
-    // Use the environment variable for CloudFront base URL
-    // In Expo, process.env is usually used for variables defined in .env or eas.json
-    const cfUrl = process.env.EXPO_PUBLIC_CLOUDFRONT_URL;
-    if (!cfUrl) return finalizedUrl;
-
-    let cfPrefix = cfUrl;
-    if (!cfPrefix.startsWith('http')) {
-        cfPrefix = `https://${cfPrefix}`;
-    }
-
-    const cfBase = cfPrefix.endsWith('/') ? cfPrefix : `${cfPrefix}/`;
-
-    // Broader regex to catch regional S3 URLs and both http/https
-    const s3Pattern = /https?:\/\/[^.]+\.s3[.-][^.]+\.amazonaws.com\//i;
-    const s3PatternLegacy = /https?:\/\/[^.]+\.s3\.amazonaws\.com\//i;
-
-    if (s3Pattern.test(finalizedUrl)) {
-        finalizedUrl = finalizedUrl.replace(s3Pattern, cfBase);
-    } else if (s3PatternLegacy.test(finalizedUrl)) {
-        finalizedUrl = finalizedUrl.replace(s3PatternLegacy, cfBase);
-    }
-
-    // 2. Final sanitization: ensure no double slashes in the path, while preserving protocol
-    if (finalizedUrl.includes('://')) {
-        const [protocol, rest] = finalizedUrl.split('://');
-        finalizedUrl = `${protocol}://${rest.replace(/\/\/+/g, '/')}`;
-    } else {
-        finalizedUrl = finalizedUrl.replace(/\/\/+/g, '/');
-    }
-
-    // 3. URL Encoding for iOS stability (handles spaces and special characters)
-    if (Platform.OS === 'ios') {
-        try {
-            // Only encode if not already encoded (prevent double encoding)
-            if (finalizedUrl === decodeURI(finalizedUrl)) {
-                return encodeURI(finalizedUrl);
+    const resolved: string[] = [];
+    normalized
+        .split('/')
+        .filter(Boolean)
+        .filter((segment) => segment !== '.')
+        .forEach((segment) => {
+            if (segment === '..') {
+                resolved.pop();
+                return;
             }
-        } catch (e) {
-            // ignore encoding errors
+            resolved.push(segment);
+        });
+
+    return resolved.join('/');
+};
+
+const matchesKnownMediaPrefix = (value: string) =>
+    KNOWN_MEDIA_PREFIXES.some((prefix) => value === prefix.slice(0, -1) || value.startsWith(prefix));
+
+const looksLikeMediaPath = (value: string) =>
+    matchesKnownMediaPrefix(value)
+    || value.startsWith('download/')
+    || value.startsWith('media/')
+    || MEDIA_PATH_PATTERN.test(value);
+
+const isKnownHostedMediaHost = (host: string) =>
+    S3_HOST_PATTERN.test(host)
+    || LEGACY_S3_HOST_PATTERN.test(host)
+    || CLOUDFRONT_HOST_PATTERN.test(host);
+
+const extractHostedMediaPath = (value: string | null | undefined) => {
+    if (!value) return null;
+
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const hostlessHostedMatch = trimmed.match(HOSTLESS_HOSTED_MEDIA_PATTERN);
+    if (hostlessHostedMatch?.[2]) {
+        return normalizeMediaPath(hostlessHostedMatch[2]);
+    }
+
+    if (/^https?:\/\//i.test(trimmed)) {
+        try {
+            const url = new URL(trimmed);
+            const apiBase = new URL(BASE_URL);
+            const mediaPrefix = '/media/';
+
+            if (url.host === apiBase.host && url.pathname.startsWith(mediaPrefix)) {
+                return normalizeMediaPath(url.pathname.slice(mediaPrefix.length));
+            }
+
+            if (isKnownHostedMediaHost(url.host)) {
+                return normalizeMediaPath(url.pathname);
+            }
+
+            return null;
+        } catch {
+            return null;
         }
     }
 
-    return finalizedUrl;
+    if (trimmed.startsWith('/media/')) {
+        const mediaPath = normalizeMediaPath(trimmed.slice('/media/'.length));
+        return looksLikeMediaPath(mediaPath) ? mediaPath : null;
+    }
+
+    if (trimmed.startsWith('/')) {
+        const mediaPath = normalizeMediaPath(trimmed);
+        return looksLikeMediaPath(mediaPath) ? mediaPath : null;
+    }
+
+    const mediaPath = normalizeMediaPath(trimmed);
+    return looksLikeMediaPath(mediaPath) ? mediaPath.replace(/^media\//i, '') : null;
 };
+
+const encodeForNative = (url: string) => {
+    try {
+        if (url === decodeURI(url)) {
+            return encodeURI(url);
+        }
+    } catch {
+        return url;
+    }
+    return url;
+};
+
+export const resolveMobileMediaUrl = (url: string | null | undefined) => {
+    if (!url) return '';
+
+    const hostedPath = extractHostedMediaPath(url);
+    const resolvedUrl = hostedPath ? buildAbsoluteApiUrl(`/media/${hostedPath}`) : url.trim();
+    return encodeForNative(resolvedUrl);
+};
+
+export const transformToCloudFront = resolveMobileMediaUrl;

@@ -1,6 +1,6 @@
 import { AIPickRequest, AIPickResponse, RepickResponse } from '../types';
 
-export const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+export const BASE_URL = (process.env.EXPO_PUBLIC_API_BASE_URL || 'https://www.nolimitflix.com').replace(/\/+$/, '');
 
 let authToken: string | null = null;
 let deviceId: string | null = null;
@@ -361,6 +361,15 @@ export const apiClient = {
     const data = await parseJson(response);
     if (!response.ok) {
       throw new Error(data?.error || 'Failed to fetch playback');
+    }
+    return data;
+  },
+
+  getWatchVideo: async (assetId: string) => {
+    const response = await authFetch(`${BASE_URL}/api/watch/video/${encodeURIComponent(assetId)}`);
+    const data = await parseJson(response);
+    if (!response.ok) {
+      throw new Error(data?.error || 'Failed to fetch watch details');
     }
     return data;
   },

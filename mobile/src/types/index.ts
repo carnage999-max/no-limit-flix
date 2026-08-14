@@ -26,6 +26,7 @@ export interface MoviePick extends Movie {
     playable?: boolean;
     assetId?: string;
     cloudfrontUrl?: string;
+    metaLabel?: string;
 }
 
 export interface WatchProvider {

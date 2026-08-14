@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
     StatusBar,
     Platform,
+    ScrollView,
     useWindowDimensions,
     Alert,
     Pressable,
@@ -513,6 +514,112 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.12)',
         zIndex: 11,
     },
+    episodesOverlayButton: {
+        position: 'absolute',
+        top: 16,
+        right: 60,
+        height: 36,
+        borderRadius: 18,
+        paddingHorizontal: 12,
+        backgroundColor: 'rgba(17, 24, 39, 0.7)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        zIndex: 11,
+    },
+    episodePanelBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        zIndex: 230,
+        justifyContent: 'center',
+        alignItems: 'flex-end',
+    },
+    episodePanel: {
+        width: 360,
+        maxWidth: '42%',
+        height: '100%',
+        backgroundColor: 'rgba(16, 17, 21, 0.98)',
+        borderLeftWidth: 1,
+        borderLeftColor: 'rgba(255,255,255,0.1)',
+        paddingTop: 24,
+        paddingHorizontal: 18,
+    },
+    episodePanelHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 12,
+        marginBottom: 14,
+    },
+    episodePanelTitle: {
+        color: '#fff',
+        fontSize: 18,
+        fontWeight: '800',
+    },
+    episodePanelSubtitle: {
+        color: 'rgba(255,255,255,0.6)',
+        fontSize: 12,
+        marginTop: 4,
+    },
+    episodeCloseButton: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    episodeList: {
+        paddingBottom: 24,
+    },
+    episodeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.07)',
+    },
+    episodeRowActive: {
+        backgroundColor: 'rgba(212, 175, 55, 0.12)',
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        borderBottomColor: 'transparent',
+    },
+    episodeNumberPill: {
+        minWidth: 42,
+        height: 34,
+        borderRadius: 10,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+    },
+    episodeNumberPillActive: {
+        backgroundColor: COLORS.gold.mid,
+    },
+    episodeNumberText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '800',
+    },
+    episodeNumberTextActive: {
+        color: COLORS.background,
+    },
+    episodeRowText: {
+        flex: 1,
+    },
+    episodeRowTitle: {
+        color: '#fff',
+        fontSize: 13,
+        fontWeight: '700',
+    },
+    episodeRowMeta: {
+        color: 'rgba(255,255,255,0.58)',
+        fontSize: 11,
+        marginTop: 3,
+    },
 });
 
 class VlcRenderBoundary extends React.Component<
@@ -546,6 +653,8 @@ const NativePlayerUI = ({
     resumeTime,
     onTimeUpdate,
     onBack,
+    onOpenEpisodes,
+    hasEpisodes,
 }: {
     url: string;
     onSwitchToVlc: () => void;
@@ -553,6 +662,8 @@ const NativePlayerUI = ({
     resumeTime?: number;
     onTimeUpdate?: (time: number, duration: number) => void;
     onBack: () => void;
+    onOpenEpisodes?: () => void;
+    hasEpisodes?: boolean;
 }) => {
     const player = useVideoPlayer(url, (p) => {
         p.play();
@@ -672,6 +783,11 @@ const NativePlayerUI = ({
                         <Ionicons name="chevron-back" size={22} color="#fff" />
                     </TouchableOpacity>
                     <View style={styles.nativeTopRight}>
+                        {hasEpisodes ? (
+                            <TouchableOpacity onPress={onOpenEpisodes} style={styles.nativePillButton}>
+                                <Text style={styles.nativePillText}>Episodes</Text>
+                            </TouchableOpacity>
+                        ) : null}
                         {canUseVlc ? (
                             <TouchableOpacity onPress={onSwitchToVlc} style={styles.nativePillButton}>
                                 <Text style={styles.nativePillText}>Try beta player</Text>
@@ -729,7 +845,11 @@ export const WatchScreen = () => {
     const { user } = useSession();
     const params = route.params || {};
     const title = params.title;
-    const assetId = params.assetId; // Changed from videoUrl - now using assetId
+    const initialAssetId = params.assetId;
+    const [currentAssetId, setCurrentAssetId] = useState<string>(initialAssetId || '');
+    const [currentTitle, setCurrentTitle] = useState<string>(title || '');
+    const [watchDetails, setWatchDetails] = useState<any | null>(null);
+    const [seriesPanelOpen, setSeriesPanelOpen] = useState(false);
 
     const [isBuffering, setIsBuffering] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -779,7 +899,7 @@ export const WatchScreen = () => {
     }, []);
 
     const reportProgress = useCallback((time: number, total: number, force = false) => {
-        if (!assetId || !user) return;
+        if (!currentAssetId || !user) return;
         const safeTotal = Number.isFinite(total) ? total : 0;
         const safeTime = Number.isFinite(time) ? time : 0;
         if (safeTotal <= 0 || safeTime <= 0) return;
@@ -789,13 +909,13 @@ export const WatchScreen = () => {
         lastReportRef.current = now;
 
         apiClient.recordWatchHistory({
-            videoId: assetId,
+            videoId: currentAssetId,
             watchedDuration: Math.floor(safeTime),
             totalDuration: Math.floor(safeTotal),
-            title: title || params.title,
+            title: currentTitle || title || params.title,
             poster: params.poster,
         }).catch(() => null);
-    }, [assetId, params.poster, params.title, title, user]);
+    }, [currentAssetId, currentTitle, params.poster, params.title, title, user]);
 
     useEffect(() => {
         const loadPreference = async () => {
@@ -826,7 +946,7 @@ export const WatchScreen = () => {
 
     // Fetch signed playback URL on mount
     useEffect(() => {
-        if (!assetId) {
+        if (!currentAssetId) {
             setError('No asset ID provided');
             return;
         }
@@ -838,22 +958,31 @@ export const WatchScreen = () => {
         const fetchPlaybackUrl = async () => {
             try {
                 setIsBuffering(true);
-                console.log(`📺 [Watch] Fetching signed playback URL for assetId: ${assetId}`);
+                setError(null);
+                setHasLoaded(false);
+                setVideoUrl('');
+                console.log(`📺 [Watch] Fetching signed playback URL for assetId: ${currentAssetId}`);
 
-                const [data, historyData] = await Promise.all([
-                    apiClient.startWatch(assetId),
+                const [data, historyData, detailsData] = await Promise.all([
+                    apiClient.startWatch(currentAssetId),
                     apiClient.getWatchHistory(1, 50).catch(() => null),
+                    apiClient.getWatchVideo(currentAssetId).catch(() => null),
                 ]);
                 console.log(
                   `✅ [Watch] Playback type: ${data.playbackType}, expires: ${data.expiresAt}`
                 );
 
                 setPlaybackType(data.playbackType);
-                setVideoUrl(data.playbackUrl);
+                setVideoUrl(transformToCloudFront(data.playbackUrl));
+                if (detailsData) {
+                    setWatchDetails(detailsData);
+                    const nextTitle = detailsData?.video?.title || currentTitle;
+                    if (nextTitle) setCurrentTitle(nextTitle);
+                }
 
                 // Resume from last watched time if available
                 const historyEntry = historyData?.watchHistory?.find((entry: any) =>
-                    entry?.videoId === assetId || entry?.video?.id === assetId
+                    entry?.videoId === currentAssetId || entry?.video?.id === currentAssetId
                 );
                 const watchedSeconds = Number(historyEntry?.duration || 0);
                 const totalSeconds = Number(historyEntry?.totalDuration || 0);
@@ -885,7 +1014,7 @@ export const WatchScreen = () => {
 
         resumeAppliedRef.current = false;
         fetchPlaybackUrl();
-    }, [assetId, user]);
+    }, [currentAssetId, user]);
 
     // Track Names and Lists
     const [audioTracks, setAudioTracks] = useState<{ id: number, name: string }[]>([]);
@@ -893,7 +1022,9 @@ export const WatchScreen = () => {
     const [hasLoaded, setHasLoaded] = useState(false);
     const [vlcProgress, setVlcProgress] = useState(0); // 0-1 ratio
 
-    // Determine which player engine to use based on playback type
+    // Keep native playback as the production default. VLC is retained only as
+    // an explicit beta fallback because store builds can fail when the native
+    // VLC module is unavailable or mislinked.
     useEffect(() => {
         if (!isVlcSupported) {
             console.log('🎬 [Watch] VLC unavailable, using native player');
@@ -904,15 +1035,8 @@ export const WatchScreen = () => {
             setActiveEngine('vlc');
             return;
         }
-        if (playbackType === 'hls') {
-            // Use VLC for HLS (better codec support)
-            console.log('🎬 [Watch] Using VLC engine for HLS');
-            setActiveEngine('vlc');
-        } else {
-            // Use native player for MP4
-            console.log('🎬 [Watch] Using native engine for MP4');
-            setActiveEngine('native');
-        }
+        console.log(`🎬 [Watch] Using native engine for ${playbackType}`);
+        setActiveEngine('native');
     }, [playbackType, forceVlc, isVlcSupported]);
 
     useEffect(() => {
@@ -1074,6 +1198,40 @@ export const WatchScreen = () => {
         setIsSettingsOpen(true);
     }, []);
 
+    const series = watchDetails?.series || null;
+    const seriesEpisodes = Array.isArray(series?.episodes) ? series.episodes : [];
+    const hasSeriesEpisodes = seriesEpisodes.length > 1;
+
+    const handleSelectEpisode = useCallback((episode: any) => {
+        if (!episode?.id) return;
+        if (episode.id === currentAssetId) {
+            setSeriesPanelOpen(false);
+            return;
+        }
+
+        reportProgress(
+            activeEngine === 'vlc' ? currentTime : nativeTimeRef.current,
+            activeEngine === 'vlc' ? duration : nativeDurationRef.current,
+            true
+        );
+        setSeriesPanelOpen(false);
+        setCurrentAssetId(episode.id);
+        setCurrentTitle(episode.title || series?.seriesTitle || currentTitle);
+        setIsBuffering(true);
+        setIsPlaying(false);
+        setError(null);
+        setVideoUrl('');
+        setHasLoaded(false);
+        setResumeTime(0);
+        setResumeSuggestion(0);
+        setResumePromptVisible(false);
+        setCurrentTime(0);
+        setDuration(1);
+        setVlcProgress(0);
+        nativeTimeRef.current = 0;
+        nativeDurationRef.current = 0;
+    }, [activeEngine, currentAssetId, currentTime, currentTitle, duration, reportProgress, series?.seriesTitle]);
+
     const handleVlcUnavailable = useCallback(() => {
         setForceVlc(false);
         setActiveEngine('native');
@@ -1120,6 +1278,14 @@ export const WatchScreen = () => {
                 >
                     <Ionicons name="settings-sharp" size={18} color="#fff" />
                 </TouchableOpacity>
+                {hasSeriesEpisodes && (
+                    <TouchableOpacity
+                        style={styles.episodesOverlayButton}
+                        onPress={() => setSeriesPanelOpen(true)}
+                    >
+                        <Ionicons name="albums-outline" size={18} color="#fff" />
+                    </TouchableOpacity>
+                )}
                 {activeEngine === 'native' && videoUrl && (
                     <NativePlayerUI
                         url={videoUrl}
@@ -1134,6 +1300,8 @@ export const WatchScreen = () => {
                         resumeTime={resumeTime}
                         onTimeUpdate={handleNativeTimeUpdate}
                         onBack={() => navigation.goBack()}
+                        hasEpisodes={hasSeriesEpisodes}
+                        onOpenEpisodes={() => setSeriesPanelOpen(true)}
                     />
                 )}
 
@@ -1275,12 +1443,19 @@ export const WatchScreen = () => {
                                             </TouchableOpacity>
 
                                             <Text style={[styles.videoTitle, { flex: 1, textAlign: 'center' }]} numberOfLines={1}>
-                                                {title}
+                                                {currentTitle}
                                             </Text>
 
-                                            <TouchableOpacity onPress={handleOpenSettings} style={styles.backButton}>
-                                                <Ionicons name="settings-sharp" size={22} color="#fff" />
-                                            </TouchableOpacity>
+                                            <View style={{ flexDirection: 'row', gap: 10 }}>
+                                                {hasSeriesEpisodes ? (
+                                                    <TouchableOpacity onPress={() => setSeriesPanelOpen(true)} style={styles.backButton}>
+                                                        <Ionicons name="albums-outline" size={22} color="#fff" />
+                                                    </TouchableOpacity>
+                                                ) : null}
+                                                <TouchableOpacity onPress={handleOpenSettings} style={styles.backButton}>
+                                                    <Ionicons name="settings-sharp" size={22} color="#fff" />
+                                                </TouchableOpacity>
+                                            </View>
                                         </View>
 
                                         {/* Center */}
@@ -1363,6 +1538,61 @@ export const WatchScreen = () => {
                                 <Text style={[styles.errorButtonText, { color: COLORS.background }]}>Sign in</Text>
                             </TouchableOpacity>
                         )}
+                    </View>
+                )}
+
+                {seriesPanelOpen && hasSeriesEpisodes && (
+                    <View style={styles.episodePanelBackdrop}>
+                        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSeriesPanelOpen(false)} />
+                        <View style={styles.episodePanel}>
+                            <View style={styles.episodePanelHeader}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.episodePanelTitle} numberOfLines={1}>
+                                        {series?.seriesTitle || 'Episodes'}
+                                    </Text>
+                                    <Text style={styles.episodePanelSubtitle}>
+                                        {seriesEpisodes.length} episodes
+                                    </Text>
+                                </View>
+                                <TouchableOpacity style={styles.episodeCloseButton} onPress={() => setSeriesPanelOpen(false)}>
+                                    <Ionicons name="close" size={20} color="#fff" />
+                                </TouchableOpacity>
+                            </View>
+                            <ScrollView contentContainerStyle={styles.episodeList}>
+                                {seriesEpisodes.map((episode: any) => {
+                                    const active = episode.id === currentAssetId;
+                                    const episodeNumber = episode.episodeNumber || '';
+                                    const seasonNumber = episode.seasonNumber || 1;
+                                    const durationMins = episode.duration ? Math.floor(episode.duration / 60) : 0;
+                                    return (
+                                        <TouchableOpacity
+                                            key={episode.id}
+                                            style={[styles.episodeRow, active && styles.episodeRowActive]}
+                                            onPress={() => handleSelectEpisode(episode)}
+                                        >
+                                            <View style={[styles.episodeNumberPill, active && styles.episodeNumberPillActive]}>
+                                                <Text style={[styles.episodeNumberText, active && styles.episodeNumberTextActive]}>
+                                                    {episodeNumber ? `E${episodeNumber}` : 'EP'}
+                                                </Text>
+                                            </View>
+                                            <View style={styles.episodeRowText}>
+                                                <Text style={styles.episodeRowTitle} numberOfLines={1}>
+                                                    {episode.title || `Episode ${episodeNumber}`}
+                                                </Text>
+                                                <Text style={styles.episodeRowMeta}>
+                                                    S{seasonNumber}{durationMins ? ` • ${durationMins}m` : ''}
+                                                </Text>
+                                            </View>
+                                            {active ? (
+                                                <Ionicons name="volume-high" size={18} color={COLORS.gold.mid} />
+                                            ) : (
+                                                <Ionicons name="play-circle-outline" size={18} color="rgba(255,255,255,0.6)" />
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </ScrollView>
+                        </View>
                     </View>
                 )}
 

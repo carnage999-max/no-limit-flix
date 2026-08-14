@@ -28,6 +28,13 @@ export const TitleTile = ({ movie, onPress, width: customWidth, showDescription 
   const isFav = isFavorite(movie.id, movie.assetId);
   const progressValue = typeof movie.progress === 'number' ? Math.round(movie.progress) : null;
   const showProgress = progressValue !== null && progressValue > 0 && progressValue < 100;
+  const year = Number(movie.year || 0);
+  const runtime = Number(movie.runtime || 0);
+  const fallbackMeta = [
+    year > 0 ? `${year}` : '',
+    runtime > 0 ? `${runtime}m` : '',
+  ].filter(Boolean).join(' • ');
+  const metaText = movie.metaLabel || fallbackMeta;
 
   const handleFavoritePress = async (e: any) => {
     e.stopPropagation();
@@ -78,7 +85,7 @@ export const TitleTile = ({ movie, onPress, width: customWidth, showDescription 
       </View>
       <View style={styles.info}>
         <Text style={styles.title} numberOfLines={1}>{movie.title}</Text>
-        <Text style={styles.meta}>{movie.year} • {movie.runtime}m</Text>
+        {metaText ? <Text style={styles.meta} numberOfLines={1}>{metaText}</Text> : null}
         {showDescription && (movie.description || movie.explanation) ? (
           <Text style={styles.description} numberOfLines={3}>
             {movie.description || movie.explanation}
