@@ -34,6 +34,14 @@ export async function GET(
             cloudfrontPath: true,
             s3KeyPlayback: true,
             playbackType: true,
+            type: true,
+            seriesTitle: true,
+            seasonNumber: true,
+            episodeNumber: true,
+            genre: true,
+            rating: true,
+            averageRating: true,
+            ratingCount: true,
             resolution: true,
             duration: true,
             tmdbId: true,
@@ -84,6 +92,50 @@ export async function GET(
             s3Url: resolveMediaUrl(video.s3Url || video.cloudfrontPath || video.s3KeyPlayback),
             thumbnailUrl: resolveMediaUrl(video.thumbnailUrl),
         };
+
+        if (video.type === 'series' && video.seriesTitle) {
+            const episodes = await prisma.video.findMany({
+                where: {
+                    type: 'series',
+                    status: 'completed',
+                    seriesTitle: video.seriesTitle,
+                },
+                orderBy: [
+                    { seasonNumber: 'asc' },
+                    { episodeNumber: 'asc' },
+                    { title: 'asc' },
+                ],
+                select,
+            });
+            const safeEpisodes = episodes
+                .filter((episode) => isReviewSafeVideo(episode))
+                .map((episode) => ({
+                    ...episode,
+                    s3Url: resolveMediaUrl(episode.s3Url || episode.cloudfrontPath || episode.s3KeyPlayback),
+                    thumbnailUrl: resolveMediaUrl(episode.thumbnailUrl),
+                }));
+
+            const description = safeEpisodes.find((episode) => episode.description)?.description
+                || transformedVideo.description
+                || null;
+            const thumbnailUrl = safeEpisodes.find((episode) => episode.thumbnailUrl)?.thumbnailUrl
+                || transformedVideo.thumbnailUrl
+                || null;
+
+            return NextResponse.json({
+                video: transformedVideo,
+                series: {
+                    seriesTitle: video.seriesTitle,
+                    description,
+                    thumbnailUrl,
+                    genre: transformedVideo.genre,
+                    rating: transformedVideo.rating,
+                    averageRating: transformedVideo.averageRating,
+                    ratingCount: transformedVideo.ratingCount,
+                    episodes: safeEpisodes,
+                },
+            });
+        }
 
         return NextResponse.json({ video: transformedVideo });
     } catch (error) {

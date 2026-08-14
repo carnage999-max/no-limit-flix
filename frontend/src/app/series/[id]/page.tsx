@@ -6,9 +6,29 @@ import { Skeleton } from '@/components';
 import Link from 'next/link';
 import { buildWatchHref } from '@/lib/watch-asset';
 
+interface SeriesEpisode {
+    id: string;
+    title: string;
+    description?: string | null;
+    thumbnailUrl?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
+    duration?: number | null;
+}
+
+interface SeriesLibraryItem {
+    seriesTitle: string;
+    description?: string | null;
+    thumbnailUrl?: string | null;
+    genre?: string | null;
+    rating?: string | number | null;
+    averageRating?: number | null;
+    episodes?: SeriesEpisode[];
+}
+
 export default function SeriesDetailPage({ params }: { params: { id: string } }) {
-    const [series, setSeries] = useState<any>(null);
-    const [episodes, setEpisodes] = useState<any[]>([]);
+    const [series, setSeries] = useState<SeriesLibraryItem | null>(null);
+    const [episodes, setEpisodes] = useState<SeriesEpisode[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
 
@@ -21,19 +41,16 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                 const response = await fetch('/api/library/tv');
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('Available series:', data.series?.map((s: any) => s.seriesTitle));
-                    console.log('Looking for:', seriesTitle);
                     // Find exact series match (case-insensitive)
-                    const foundSeries = (data.series || []).find((s: any) => 
+                    const foundSeries = ((data.series || []) as SeriesLibraryItem[]).find((s) =>
                         s.seriesTitle.toLowerCase() === seriesTitle.toLowerCase()
                     );
                     
-                    console.log('Found series:', foundSeries?.seriesTitle);
                     if (foundSeries) {
                         setSeries(foundSeries);
                         setEpisodes(foundSeries.episodes || []);
                         // Set initial season filter
-                        const seasons = [...new Set((foundSeries.episodes || []).map((ep: any) => ep.seasonNumber))];
+                        const seasons = [...new Set((foundSeries.episodes || []).map((ep) => ep.seasonNumber ?? 1))];
                         if (seasons.length > 0) {
                             setSelectedSeason(Math.min(...seasons));
                         }
@@ -48,9 +65,9 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
         fetchSeries();
     }, [seriesTitle]);
 
-    const seasons = [...new Set(episodes.map((ep: any) => ep.seasonNumber))].sort((a, b) => a - b);
+    const seasons = [...new Set(episodes.map((ep) => ep.seasonNumber ?? 1))].sort((a, b) => a - b);
     const filteredEpisodes = selectedSeason !== null
-        ? episodes.filter((ep: any) => ep.seasonNumber === selectedSeason)
+        ? episodes.filter((ep) => (ep.seasonNumber ?? 1) === selectedSeason)
         : episodes;
     const averageRating = series?.averageRating
         ?? (typeof series?.rating === 'number' ? series.rating : null);
@@ -205,8 +222,10 @@ export default function SeriesDetailPage({ params }: { params: { id: string } })
                             }}>
                                 <div style={{ fontSize: '0.875rem', color: '#A7ABB4', fontWeight: '600', marginBottom: '0.5rem' }}>SERIES INFO</div>
                                 <div style={{ fontSize: '1rem', color: '#F3F4F6', lineHeight: '1.6' }}>
-                                    {episodes.length} episodes
-                                    {seasons.length > 1 && ` across ${seasons.length} seasons`}
+                                    {series.description || 'No synopsis available yet.'}
+                                </div>
+                                <div style={{ fontSize: '0.875rem', color: '#A7ABB4', marginTop: '0.85rem' }}>
+                                    {episodes.length} episodes{seasons.length > 1 && ` across ${seasons.length} seasons`}
                                 </div>
                             </div>
 

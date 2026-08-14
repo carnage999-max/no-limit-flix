@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { UserRatingPanel, VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
-import { ExternalLink, Loader2, ArrowLeft } from 'lucide-react';
+import { ExternalLink, Loader2, ArrowLeft, ListVideo, Play } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { buildWatchHref, normalizeAssetReference } from '@/lib/watch-asset';
 
@@ -15,6 +15,14 @@ interface Video {
     description?: string;
     thumbnailUrl?: string;
     s3Url?: string;
+    type?: string;
+    seriesTitle?: string;
+    seasonNumber?: number;
+    episodeNumber?: number;
+    genre?: string;
+    rating?: string;
+    averageRating?: number;
+    ratingCount?: number;
     resolution?: string;
     duration?: number;
     tmdbId?: string;
@@ -30,14 +38,29 @@ interface MovieDetails {
     explanation?: string;
 }
 
+interface SeriesContext {
+    seriesTitle: string;
+    description?: string | null;
+    thumbnailUrl?: string | null;
+    genre?: string | null;
+    rating?: string | null;
+    averageRating?: number | null;
+    ratingCount?: number | null;
+    episodes: Video[];
+}
+
 export default function WatchPage() {
     const params = useParams();
     const router = useRouter();
     const assetId = normalizeAssetReference(params.assetId as string);
+    const [selectedAssetId, setSelectedAssetId] = useState(assetId);
     const [video, setVideo] = useState<Video | null>(null);
+    const [series, setSeries] = useState<SeriesContext | null>(null);
     const [movieDetails, setMovieDetails] = useState<MovieDetails | null>(null);
     const [loading, setLoading] = useState(true);
+    const [episodeLoading, setEpisodeLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
     const { user, loading: sessionLoading } = useSession();
 
     // Check authentication on mount
@@ -48,20 +71,35 @@ export default function WatchPage() {
         }
     }, [assetId, router, user, sessionLoading]);
 
-    useEffect(() => {
-        if (!assetId) {
+    const loadVideoData = useCallback(async (targetAssetId: string, options: { initial?: boolean } = {}) => {
+        if (!targetAssetId) {
             setError('No asset ID provided');
             setLoading(false);
             return;
         }
 
-        const fetchVideoData = async () => {
+        if (options.initial) {
+            setLoading(true);
+        } else {
+            setEpisodeLoading(true);
+        }
+        setError(null);
+
             try {
-                const response = await fetch(`/api/watch/video/${encodeURIComponent(assetId)}`);
+                const response = await fetch(`/api/watch/video/${encodeURIComponent(targetAssetId)}`);
                 if (!response.ok) throw new Error('Failed to fetch video');
                 const data = await response.json();
                 setVideo(data.video);
-                
+                setSeries(data.series || null);
+                setSelectedAssetId(data.video?.id || targetAssetId);
+
+                if (data.series?.episodes?.length) {
+                    const currentSeason = data.video?.seasonNumber ?? data.series.episodes[0]?.seasonNumber ?? null;
+                    setSelectedSeason((previousSeason) => previousSeason ?? currentSeason);
+                } else {
+                    setSelectedSeason(null);
+                }
+
                 if (data.video.tmdbId) {
                     try {
                         const tmdbResponse = await fetch(`/api/title/${data.video.tmdbId}`);
@@ -72,16 +110,33 @@ export default function WatchPage() {
                     } catch {
                         console.warn('Failed to fetch TMDb details');
                     }
+                } else {
+                    setMovieDetails(null);
                 }
             } catch (err) {
                 setError((err as Error).message);
             } finally {
                 setLoading(false);
+                setEpisodeLoading(false);
             }
-        };
+    }, []);
 
-        fetchVideoData();
-    }, [assetId]);
+    useEffect(() => {
+        loadVideoData(assetId, { initial: true });
+    }, [assetId, loadVideoData]);
+
+    const seasons = useMemo(() => {
+        const values = (series?.episodes || [])
+            .map((episode) => episode.seasonNumber ?? 1)
+            .filter((season) => Number.isFinite(season));
+        return Array.from(new Set(values)).sort((a, b) => a - b);
+    }, [series]);
+
+    const filteredEpisodes = useMemo(() => {
+        if (!series?.episodes?.length) return [];
+        if (selectedSeason === null) return series.episodes;
+        return series.episodes.filter((episode) => (episode.seasonNumber ?? 1) === selectedSeason);
+    }, [series, selectedSeason]);
 
     if (loading) {
         return (
@@ -109,6 +164,11 @@ export default function WatchPage() {
     }
 
     const streamUrl = video.s3Url || '';
+    const isSeries = Boolean(series && video.type === 'series');
+    const displayTitle = series?.seriesTitle || video.title;
+    const displayDescription = series?.description || video.description || movieDetails?.explanation || '';
+    const currentSeason = video.seasonNumber ?? 1;
+    const currentEpisode = video.episodeNumber ?? null;
 
     return (
         <>
@@ -125,6 +185,9 @@ export default function WatchPage() {
                     .hero-section {
                         height: 40vh !important;
                     }
+                    .series-episode-panel {
+                        position: static !important;
+                    }
                 }
                 @media (max-width: 640px) {
                     .watch-content {
@@ -136,6 +199,9 @@ export default function WatchPage() {
                     }
                     .watch-title {
                         font-size: 1.875rem !important;
+                    }
+                    .episode-button-grid {
+                        grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
                     }
                 }
             `}</style>
@@ -151,8 +217,8 @@ export default function WatchPage() {
                     }}
                 >
                     <img
-                        src={movieDetails?.backdrop || video.thumbnailUrl}
-                        alt={video.title}
+                        src={series?.thumbnailUrl || movieDetails?.backdrop || video.thumbnailUrl}
+                        alt={displayTitle}
                         style={{
                             width: '100%',
                             height: '100%',
@@ -176,6 +242,7 @@ export default function WatchPage() {
                     className="watch-content"
                     style={{
                         maxWidth: '1200px',
+                        ...(isSeries ? { maxWidth: '1600px' } : {}),
                         margin: '-200px auto 0',
                         padding: '0 2rem 4rem',
                         position: 'relative',
@@ -183,7 +250,15 @@ export default function WatchPage() {
                         width: '100%',
                     }}
                 >
-                    <div className="watch-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', alignItems: 'start' }}>
+                    <div
+                        className="watch-grid"
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: isSeries ? 'minmax(0, 1fr) 360px' : '1fr 1fr',
+                            gap: isSeries ? '1.25rem' : '4rem',
+                            alignItems: 'start'
+                        }}
+                    >
                         {/* Player Container */}
                         <div style={{ width: '100%', maxWidth: '100%', margin: '0 auto' }}>
                             <div
@@ -196,15 +271,139 @@ export default function WatchPage() {
                                 }}
                             >
                                 <VideoPlayer
-                                    assetId={assetId}
+                                    key={selectedAssetId}
+                                    assetId={selectedAssetId}
                                     src={streamUrl}
-                                    poster={video.thumbnailUrl || movieDetails?.backdrop}
+                                    poster={video.thumbnailUrl || series?.thumbnailUrl || movieDetails?.backdrop}
                                     title={video.title}
                                 />
                             </div>
+                            {episodeLoading && (
+                                <div style={{ marginTop: '0.75rem', color: '#A7ABB4', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Loading episode
+                                </div>
+                            )}
+                            {isSeries && (
+                                <div style={{ marginTop: '1.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', color: '#A7ABB4', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>
+                                        <span>{displayTitle}</span>
+                                        <span>Season {currentSeason}</span>
+                                        {currentEpisode && <span>Episode {currentEpisode}</span>}
+                                    </div>
+                                    <h1
+                                        className="watch-title"
+                                        style={{
+                                            fontSize: 'clamp(2rem, 4vw, 3.25rem)',
+                                            fontWeight: '700',
+                                            color: '#F3F4F6',
+                                            marginBottom: '0.75rem',
+                                            lineHeight: '1',
+                                            letterSpacing: '0'
+                                        }}
+                                    >
+                                        {video.title}
+                                    </h1>
+                                    {displayDescription && (
+                                        <p style={{ maxWidth: '880px', fontSize: '1rem', color: '#D1D5DB', lineHeight: '1.7', marginBottom: '1.25rem' }}>
+                                            {displayDescription}
+                                        </p>
+                                    )}
+                                    <UserRatingPanel videoId={video.id} />
+                                </div>
+                            )}
                         </div>
 
                         {/* Meta Info */}
+                        {isSeries ? (
+                            <aside
+                                className="series-episode-panel"
+                                style={{
+                                    position: 'sticky',
+                                    top: '1rem',
+                                    minHeight: '520px',
+                                    borderRadius: '0.5rem',
+                                    background: 'rgba(31, 34, 40, 0.94)',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    padding: '1.25rem',
+                                    boxShadow: '0 18px 50px rgba(0,0,0,0.35)'
+                                }}
+                            >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#F3F4F6', fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.75rem' }}>
+                                    <ListVideo className="w-5 h-5" />
+                                    Episodes
+                                </div>
+                                <div style={{ color: '#9CA3AF', fontSize: '0.82rem', marginBottom: '1.25rem', lineHeight: '1.5' }}>
+                                    No Limit Flix · {series?.episodes.length || 0} episodes
+                                </div>
+                                {seasons.length > 1 && (
+                                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
+                                        {seasons.map((season) => (
+                                            <button
+                                                key={season}
+                                                type="button"
+                                                onClick={() => setSelectedSeason(season)}
+                                                style={{
+                                                    minWidth: '58px',
+                                                    height: '34px',
+                                                    borderRadius: '0.3rem',
+                                                    border: '0',
+                                                    background: selectedSeason === season ? '#14532D' : 'rgba(255,255,255,0.1)',
+                                                    color: selectedSeason === season ? '#22C55E' : '#E5E7EB',
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                S{String(season).padStart(2, '0')}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="episode-button-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '0.55rem' }}>
+                                    {filteredEpisodes.map((episode) => {
+                                        const active = episode.id === video.id;
+                                        const label = episode.episodeNumber
+                                            ? String(episode.episodeNumber).padStart(2, '0')
+                                            : String(filteredEpisodes.indexOf(episode) + 1).padStart(2, '0');
+                                        return (
+                                            <button
+                                                key={episode.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedSeason(episode.seasonNumber ?? 1);
+                                                    loadVideoData(episode.id);
+                                                }}
+                                                disabled={episodeLoading || active}
+                                                title={episode.title}
+                                                style={{
+                                                    height: '48px',
+                                                    borderRadius: '0.3rem',
+                                                    border: '1px solid rgba(255,255,255,0.08)',
+                                                    background: active ? '#14532D' : 'rgba(255,255,255,0.12)',
+                                                    color: active ? '#22C55E' : '#E5E7EB',
+                                                    fontWeight: 700,
+                                                    cursor: active || episodeLoading ? 'default' : 'pointer',
+                                                    opacity: episodeLoading && !active ? 0.65 : 1,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center'
+                                                }}
+                                            >
+                                                {active ? <Play className="w-4 h-4" /> : label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {displayDescription && (
+                                    <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                                        <div style={{ color: '#F3F4F6', fontWeight: 700, marginBottom: '0.5rem' }}>Synopsis</div>
+                                        <p style={{ color: '#C7CBD1', fontSize: '0.9rem', lineHeight: '1.6', margin: 0 }}>
+                                            {displayDescription}
+                                        </p>
+                                    </div>
+                                )}
+                            </aside>
+                        ) : (
                         <div>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                                 <span style={{
@@ -309,6 +508,7 @@ export default function WatchPage() {
                                 </a>
                             </div>
                         </div>
+                        )}
                     </div>
                 </div>
 

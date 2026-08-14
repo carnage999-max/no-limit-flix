@@ -951,7 +951,7 @@ const resolveImdbSuggestionMatch = async (
     type: 'movie' | 'series',
     year: number | null = null
 ) => {
-    const safeTitle = sanitizeSearchTitle(title) || title;
+    const safeTitle = sanitizeSearchTitle(title || undefined) || title;
     if (!safeTitle) return null;
 
     try {
