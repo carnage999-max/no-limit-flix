@@ -3,9 +3,17 @@ import prisma from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
 import { recordAdminAction } from '@/lib/admin-actions';
 
+type JsonSerialized =
+    | string
+    | number
+    | boolean
+    | null
+    | JsonSerialized[]
+    | { [key: string]: JsonSerialized };
+
 // Helper to convert BigInt to string for JSON serialization
-function serializeData(data: any): any {
-    if (data === null || data === undefined) return data;
+function serializeData(data: unknown): JsonSerialized {
+    if (data === null || data === undefined) return null;
     
     if (typeof data === 'bigint') {
         return data.toString();
@@ -20,14 +28,18 @@ function serializeData(data: any): any {
     }
     
     if (typeof data === 'object') {
-        const serialized: any = {};
+        const serialized: { [key: string]: JsonSerialized } = {};
         for (const [key, value] of Object.entries(data)) {
             serialized[key] = serializeData(value);
         }
         return serialized;
     }
     
-    return data;
+    if (typeof data === 'string' || typeof data === 'number' || typeof data === 'boolean') {
+        return data;
+    }
+
+    return String(data);
 }
 
 export async function PUT(
@@ -54,6 +66,10 @@ export async function PUT(
         const {
             title,
             description,
+            type,
+            seriesTitle,
+            seasonNumber,
+            episodeNumber,
             releaseYear,
             tmdbId,
             thumbnailUrl,
@@ -86,12 +102,23 @@ export async function PUT(
         const nextThumbnailUrl = typeof thumbnailUrl === 'string' && thumbnailUrl.trim() ? thumbnailUrl.trim() : null;
         const previousThumbnailUrl = video.thumbnailUrl || null;
         const thumbnailChanged = nextThumbnailUrl !== previousThumbnailUrl;
+        const nextType = type === 'series' ? 'series' : 'movie';
+        const nextSeasonNumber = nextType === 'series' && seasonNumber !== null && seasonNumber !== undefined && `${seasonNumber}`.trim() !== ''
+            ? Number(seasonNumber)
+            : null;
+        const nextEpisodeNumber = nextType === 'series' && episodeNumber !== null && episodeNumber !== undefined && `${episodeNumber}`.trim() !== ''
+            ? Number(episodeNumber)
+            : null;
 
         const updated = await prisma.video.update({
             where: { id },
             data: {
                 title,
                 description: typeof description === 'string' ? description : null,
+                type: nextType,
+                seriesTitle: nextType === 'series' && typeof seriesTitle === 'string' && seriesTitle.trim() ? seriesTitle.trim() : null,
+                seasonNumber: Number.isFinite(nextSeasonNumber) ? nextSeasonNumber : null,
+                episodeNumber: Number.isFinite(nextEpisodeNumber) ? nextEpisodeNumber : null,
                 releaseYear: releaseYear ? Number(releaseYear) : null,
                 tmdbId: typeof tmdbId === 'string' && tmdbId.trim() ? tmdbId.trim() : null,
                 thumbnailUrl: nextThumbnailUrl,

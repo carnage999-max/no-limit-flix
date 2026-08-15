@@ -205,6 +205,9 @@ interface Video {
     title: string;
     description?: string;
     type: string;
+    seriesTitle?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     thumbnailUrl?: string;
     releaseYear?: number;
     tmdbId?: string;
@@ -219,6 +222,10 @@ interface Video {
 interface EditFormData {
     title: string;
     description: string;
+    type: string;
+    seriesTitle: string;
+    seasonNumber: string;
+    episodeNumber: string;
     releaseYear: string;
     tmdbId: string;
     genre: string;
@@ -241,6 +248,10 @@ export default function AdminEditPage() {
     const [formData, setFormData] = useState<EditFormData>({
         title: '',
         description: '',
+        type: 'movie',
+        seriesTitle: '',
+        seasonNumber: '',
+        episodeNumber: '',
         releaseYear: '',
         tmdbId: '',
         genre: '',
@@ -276,6 +287,10 @@ export default function AdminEditPage() {
         setFormData({
             title: video.title,
             description: video.description || '',
+            type: video.type === 'series' ? 'series' : 'movie',
+            seriesTitle: video.seriesTitle || '',
+            seasonNumber: video.seasonNumber ? String(video.seasonNumber) : '',
+            episodeNumber: video.episodeNumber ? String(video.episodeNumber) : '',
             releaseYear: video.releaseYear ? String(video.releaseYear) : '',
             tmdbId: video.tmdbId || '',
             genre: video.genre || '',
@@ -303,7 +318,7 @@ export default function AdminEditPage() {
         }
     };
 
-    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -342,6 +357,10 @@ export default function AdminEditPage() {
                 body: JSON.stringify({
                     title: formData.title,
                     description: formData.description,
+                    type: formData.type,
+                    seriesTitle: formData.type === 'series' ? formData.seriesTitle || null : null,
+                    seasonNumber: formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
+                    episodeNumber: formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
                     releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : null,
                     tmdbId: formData.tmdbId || null,
                     thumbnailUrl: newThumbnailUrl,
@@ -366,6 +385,10 @@ export default function AdminEditPage() {
                 ...current,
                 title: formData.title,
                 description: formData.description,
+                type: formData.type,
+                seriesTitle: formData.type === 'series' ? formData.seriesTitle : null,
+                seasonNumber: formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
+                episodeNumber: formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
                 releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : undefined,
                 tmdbId: formData.tmdbId,
                 thumbnailUrl: newThumbnailUrl,
@@ -505,6 +528,61 @@ export default function AdminEditPage() {
                                 max={new Date().getFullYear()}
                             />
                         </div>
+
+                        <div style={styles.formGroup}>
+                            <label style={styles.label}>Content Type</label>
+                            <select
+                                name="type"
+                                value={formData.type}
+                                onChange={handleFormChange}
+                                style={styles.input}
+                            >
+                                <option value="movie">Movie</option>
+                                <option value="series">Series Episode</option>
+                            </select>
+                        </div>
+
+                        {formData.type === 'series' && (
+                            <>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Series Title</label>
+                                    <input
+                                        type="text"
+                                        name="seriesTitle"
+                                        value={formData.seriesTitle}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="Serial Experiments Lain"
+                                    />
+                                </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Season Number</label>
+                                    <input
+                                        type="number"
+                                        name="seasonNumber"
+                                        value={formData.seasonNumber}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="1"
+                                        min="1"
+                                    />
+                                </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Episode Number / Sort Start</label>
+                                    <input
+                                        type="number"
+                                        name="episodeNumber"
+                                        value={formData.episodeNumber}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="1"
+                                        min="1"
+                                    />
+                                </div>
+                            </>
+                        )}
 
                         <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
                             <label style={styles.label}>Description</label>

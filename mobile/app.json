@@ -7,7 +7,7 @@
       "com.googleusercontent.apps.200339607199-vk7n3ldiu504i3nk2unrm19p8a8rjjh2",
       "com.googleusercontent.apps.200339607199-chpctcu36kegq5ll0jjp0od0i8ca3fpr"
     ],
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -19,7 +19,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nolimitflix.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "usesAppleSignIn": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Allow No Limit Flix to access your photos so you can choose a profile picture.",
@@ -34,7 +34,7 @@
     },
     "android": {
       "package": "com.nolimitflix.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
