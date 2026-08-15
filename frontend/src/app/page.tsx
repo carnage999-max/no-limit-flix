@@ -95,6 +95,22 @@ interface HostedLibraryItem {
     fileSize?: string | number;
 }
 
+const canonicalTextKey = (value: string | undefined | null) =>
+    (value || '')
+        .replace(/\s*\((?:19|20)\d{2}\)\s*$/i, '')
+        .replace(/\s+(?:19|20)\d{2}\s*$/i, '')
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+const visibleSeriesGenre = (title: string, genre: string | undefined) => {
+    const cleanGenre = genre?.trim();
+    if (!cleanGenre) return [];
+    if (canonicalTextKey(cleanGenre) === canonicalTextKey(title)) return [];
+    return [cleanGenre];
+};
+
 interface WatchHistoryLibraryEntry {
     videoId: string;
     videoTitle: string;
@@ -436,14 +452,15 @@ export default function HomePage() {
                 setHostedSeriesCount((tvData.series || []).length);
                     const seriesItems = (tvData.series || []) as HostedLibraryItem[];
                     const series = pickRandomItems(seriesItems, 10).map((tv) => ({
-                        id: tv.seriesTitle || tv.id,
+                        id: tv.id || tv.seriesTitle || tv.title || 'Untitled',
                         title: tv.seriesTitle || tv.title || 'Untitled',
                         year: tv.releaseYear || new Date().getFullYear(),
-                        runtime: 45,
+                        runtime: 0,
                         poster: tv.thumbnailUrl || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?auto=format&fit=crop&q=80&w=400',
-                        genres: tv.genre ? [tv.genre] : [],
+                        genres: visibleSeriesGenre(tv.seriesTitle || tv.title || 'Untitled', tv.genre),
                         explanation: `${tv.episodeCount || 0} episodes`,
                         description: tv.description || '',
+                        metaLabel: `${tv.episodeCount || 0} episodes`,
                         rating: tv.rating || null,
                         averageRating: tv.averageRating ?? null,
                         ratingCount: tv.ratingCount ?? null,

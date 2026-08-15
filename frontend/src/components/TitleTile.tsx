@@ -267,7 +267,7 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
                             color: '#A7ABB4',
                         }}
                     >
-                        {movie.year} · {movie.runtime} min
+                        {movie.metaLabel || `${movie.year} · ${movie.runtime} min`}
                     </p>
                     {movie.playable && movie.explanation && (
                         <p

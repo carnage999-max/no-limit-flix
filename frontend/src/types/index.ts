@@ -33,6 +33,7 @@ export interface MoviePick extends Movie {
     archiveIdentifier?: string;
     format?: string;
     fileSize?: string | number;
+    metaLabel?: string;
 }
 
 export interface RatingBreakdown {

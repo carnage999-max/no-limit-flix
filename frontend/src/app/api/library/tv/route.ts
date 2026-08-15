@@ -22,6 +22,60 @@ type SeriesGroup = {
     episodes: unknown[];
 };
 
+const GENERIC_SERIES_TITLES = new Set([
+    'action',
+    'animation',
+    'animated',
+    'anime',
+    'cartoon',
+    'comedy',
+    'documentary',
+    'documentaries',
+    'drama',
+    'family',
+    'fantasy',
+    'horror',
+    'movie',
+    'movies',
+    'series',
+    'tv',
+]);
+
+const cleanTitle = (value: string | null | undefined) => {
+    const title = typeof value === 'string' ? value.trim() : '';
+    return title || null;
+};
+
+const looksLikeEpisodeFragment = (value: string | null | undefined) => {
+    const title = cleanTitle(value);
+    if (!title) return true;
+    const normalized = title.toLowerCase();
+    if (GENERIC_SERIES_TITLES.has(normalized)) return true;
+    if (/^[\d\s,._:;#-]+$/.test(title)) return true;
+    if (/^[,._:;#-]/.test(title)) return true;
+    return false;
+};
+
+const stripYearSuffix = (value: string) =>
+    value
+        .replace(/\s*\((?:19|20)\d{2}\)\s*$/i, '')
+        .replace(/\s+(?:19|20)\d{2}\s*$/i, '')
+        .trim();
+
+const canonicalSeriesKey = (title: string) =>
+    stripYearSuffix(title)
+        .toLowerCase()
+        .replace(/&/g, 'and')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+
+const chooseSeriesTitle = (parentTitle: string | null | undefined, seriesTitle: string | null | undefined, episodeTitle: string | null | undefined, genre: string | null | undefined) => {
+    const candidates = [parentTitle, seriesTitle, genre, episodeTitle]
+        .map(cleanTitle)
+        .filter((title): title is string => Boolean(title));
+    return candidates.find((title) => !looksLikeEpisodeFragment(title)) || candidates[0] || 'Unknown Series';
+};
+
 /**
  * GET /api/library/tv
  * Returns all completed TV/series assets hosted on our infrastructure.
@@ -98,13 +152,14 @@ export async function GET() {
             };
 
             const parent = ep.series;
-            const key = parent?.id || ep.seriesTitle || ep.title || 'Unknown Series';
+            const displayTitle = chooseSeriesTitle(parent?.title, ep.seriesTitle, ep.title, parent?.genre || ep.genre);
+            const key = canonicalSeriesKey(displayTitle) || displayTitle;
             if (!seriesMap[key]) {
                 seriesMap[key] = {
                     id: parent?.id || key,
-                    seriesTitle: parent?.title || ep.seriesTitle || ep.title || 'Unknown Series',
+                    seriesTitle: displayTitle,
                     thumbnailUrl: resolveMediaUrl(parent?.thumbnailUrl) || transformedEp.thumbnailUrl,
-                    genre: parent?.genre || ep.genre,
+                    genre: parent?.genre && canonicalSeriesKey(parent.genre) !== key ? parent.genre : ep.genre,
                     rating: parent?.rating || ep.rating,
                     averageRating: parent?.averageRating || ep.averageRating,
                     ratingCount: parent?.ratingCount || ep.ratingCount,
@@ -119,9 +174,13 @@ export async function GET() {
             }
             seriesMap[key].episodes.push({
                 ...transformedEp,
-                seriesTitle: parent?.title || transformedEp.seriesTitle,
+                seriesTitle: displayTitle,
             });
             seriesMap[key].episodeCount++;
+
+            if (parent?.id && !seriesMap[key].id.startsWith('series_')) {
+                seriesMap[key].id = parent.id;
+            }
 
             if (!seriesMap[key].thumbnailUrl && transformedEp.thumbnailUrl) {
                 seriesMap[key].thumbnailUrl = transformedEp.thumbnailUrl;
@@ -135,9 +194,13 @@ export async function GET() {
             if (!seriesMap[key].releaseYear && ep.releaseYear) {
                 seriesMap[key].releaseYear = ep.releaseYear;
             }
+
+            if (looksLikeEpisodeFragment(seriesMap[key].seriesTitle) && !looksLikeEpisodeFragment(displayTitle)) {
+                seriesMap[key].seriesTitle = displayTitle;
+            }
         }
 
-        const series = Object.values(seriesMap);
+        const series = Object.values(seriesMap).sort((a, b) => a.seriesTitle.localeCompare(b.seriesTitle));
 
         return NextResponse.json({ series });
     } catch (error) {
