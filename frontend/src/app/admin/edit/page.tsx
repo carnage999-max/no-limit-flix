@@ -236,8 +236,28 @@ interface EditFormData {
     sourceLicenseUrl: string;
 }
 
+const formatEpisodeCode = (video: Video) => {
+    const parts = [];
+    if (video.seasonNumber) parts.push(`S${String(video.seasonNumber).padStart(2, '0')}`);
+    if (video.episodeNumber) parts.push(`E${String(video.episodeNumber).padStart(2, '0')}`);
+    return parts.join(' ');
+};
+
+const formatSearchMeta = (video: Video) => {
+    const meta = [
+        video.type === 'series' ? 'Series' : 'Movie',
+        video.seriesTitle && video.seriesTitle !== video.title ? video.seriesTitle : null,
+        formatEpisodeCode(video) || null,
+        video.releaseYear ? String(video.releaseYear) : null,
+        video.sourceProvider || null,
+    ];
+
+    return meta.filter(Boolean).join(' / ');
+};
+
 export default function AdminEditPage() {
     const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+    const [searchResults, setSearchResults] = useState<Video[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
@@ -270,11 +290,22 @@ export default function AdminEditPage() {
 
         setSearchLoading(true);
         setError(null);
+        setSuccess(null);
+        setSearchResults([]);
         try {
             const res = await fetch(`/api/admin/edit/search?q=${encodeURIComponent(searchQuery)}`);
             if (!res.ok) throw new Error('Video not found');
-            const data = await res.json();
-            handleSelectVideo(data.video);
+            const data: { video?: Video; videos?: Video[] } = await res.json();
+            const results = Array.isArray(data.videos)
+                ? data.videos
+                : data.video
+                    ? [data.video]
+                    : [];
+
+            if (results.length === 0) throw new Error('Video not found');
+
+            setSearchResults(results);
+            setSuccess(`${results.length} ${results.length === 1 ? 'match' : 'matches'} found. Select the correct item to edit.`);
         } catch (err) {
             setError((err as Error).message);
         } finally {
@@ -284,6 +315,7 @@ export default function AdminEditPage() {
 
     const handleSelectVideo = (video: Video) => {
         setSelectedVideo(video);
+        setSearchResults([]);
         setFormData({
             title: video.title,
             description: video.description || '',
@@ -435,6 +467,13 @@ export default function AdminEditPage() {
                         </div>
                     )}
 
+                    {success && searchResults.length > 0 && (
+                        <div style={{ ...styles.status, ...styles.statusInfo }}>
+                            <CheckCircle2 size={20} />
+                            <div>{success}</div>
+                        </div>
+                    )}
+
                     <div style={{ ...styles.section, maxWidth: '500px', margin: '0 auto', padding: '0 24px' }}>
                         <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div style={styles.formGroup}>
@@ -467,6 +506,67 @@ export default function AdminEditPage() {
                             </button>
                         </form>
                     </div>
+
+                    {searchResults.length > 0 && (
+                        <div style={{ ...styles.section, maxWidth: '900px', width: '100%', margin: '0 auto', padding: '0 24px', gap: '16px' }}>
+                            <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 800 }}>Select Match</h2>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                {searchResults.map((video, index) => (
+                                    <button
+                                        key={video.id}
+                                        type="button"
+                                        onClick={() => handleSelectVideo(video)}
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: '72px 1fr',
+                                            gap: '16px',
+                                            alignItems: 'center',
+                                            width: '100%',
+                                            padding: '12px',
+                                            textAlign: 'left',
+                                            color: '#F3F4F6',
+                                            background: 'rgba(255, 255, 255, 0.04)',
+                                            border: '1px solid rgba(212, 175, 55, 0.2)',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'relative',
+                                            width: '72px',
+                                            height: '96px',
+                                            overflow: 'hidden',
+                                            borderRadius: '6px',
+                                            background: 'rgba(255, 255, 255, 0.08)',
+                                        }}>
+                                            {video.thumbnailUrl ? (
+                                                <Image
+                                                    src={video.thumbnailUrl}
+                                                    alt=""
+                                                    fill
+                                                    unoptimized
+                                                    sizes="72px"
+                                                    style={{ objectFit: 'cover' }}
+                                                />
+                                            ) : null}
+                                        </div>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 }}>
+                                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <span style={{ color: '#D4AF37', fontSize: '12px', fontWeight: 800 }}>#{index + 1}</span>
+                                                <span style={{ fontSize: '16px', fontWeight: 800 }}>{video.title}</span>
+                                            </div>
+                                            <div style={{ ...styles.videoMeta, lineHeight: 1.5 }}>
+                                                {formatSearchMeta(video) || 'No metadata'}
+                                            </div>
+                                            <div style={{ ...styles.videoMeta, wordBreak: 'break-all' }}>
+                                                {video.sourcePageUrl || video.sourceLicenseUrl || video.id}
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
         );

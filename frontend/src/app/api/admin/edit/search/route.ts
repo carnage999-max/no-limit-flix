@@ -35,6 +35,13 @@ const buildFlexibleRegex = (query: string) => {
     return tokens.map(escapeRegex).join('.*');
 };
 
+const extractSearchTokens = (query: string) =>
+    query
+        .trim()
+        .split(/[^a-zA-Z0-9]+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3);
+
 const parseArchiveIdentifier = (query: string) => {
     const trimmed = query.trim();
     try {
@@ -53,9 +60,11 @@ const parseArchiveIdentifier = (query: string) => {
 };
 
 const buildSearchRegexes = (query: string) => {
-    const values = [query];
+    const values = [query, ...extractSearchTokens(query)];
     const archiveIdentifier = parseArchiveIdentifier(query);
-    if (archiveIdentifier) values.push(archiveIdentifier);
+    if (archiveIdentifier) {
+        values.push(archiveIdentifier, ...extractSearchTokens(archiveIdentifier));
+    }
 
     return Array.from(new Set(values.map(buildFlexibleRegex).filter(Boolean)));
 };
@@ -75,65 +84,109 @@ export async function GET(request: NextRequest) {
         }
 
         // Search by ID first
-        let video = await prisma.video.findUnique({
+        const exactVideo = await prisma.video.findUnique({
             where: { id: q },
             select: videoSelect,
         });
 
+        if (exactVideo) {
+            const normalizedVideo = {
+                ...exactVideo,
+                thumbnailUrl: resolveMediaUrl(exactVideo.thumbnailUrl),
+            };
+            return NextResponse.json({ video: normalizedVideo, videos: [normalizedVideo] });
+        }
+
         // If not found by ID, search title, series title, Archive identifiers, and media/source paths.
-        if (!video) {
-            const regexes = buildSearchRegexes(q);
-            const matches = await prisma.$queryRaw<Array<{ id: string }>>`
-                SELECT id
-                FROM "Video"
-                WHERE
-                    EXISTS (
+        const regexes = buildSearchRegexes(q);
+        const matches = await prisma.$queryRaw<Array<{ id: string }>>`
+            SELECT id
+            FROM "Video"
+            WHERE
+                EXISTS (
+                    SELECT 1
+                    FROM unnest(${regexes}::text[]) AS pattern
+                    WHERE
+                        title ~* pattern
+                        OR COALESCE("seriesTitle", '') ~* pattern
+                        OR COALESCE("archiveIdentifier", '') ~* pattern
+                        OR COALESCE("sourcePageUrl", '') ~* pattern
+                        OR COALESCE("sourceLicenseUrl", '') ~* pattern
+                        OR COALESCE("s3KeyPlayback", '') ~* pattern
+                        OR COALESCE("cloudfrontPath", '') ~* pattern
+                        OR COALESCE("s3Url", '') ~* pattern
+                )
+            ORDER BY
+                (
+                    SELECT COUNT(*)
+                    FROM unnest(${regexes}::text[]) AS pattern
+                    WHERE
+                        title ~* pattern
+                        OR COALESCE("seriesTitle", '') ~* pattern
+                        OR COALESCE("archiveIdentifier", '') ~* pattern
+                        OR COALESCE("sourcePageUrl", '') ~* pattern
+                        OR COALESCE("sourceLicenseUrl", '') ~* pattern
+                        OR COALESCE("s3KeyPlayback", '') ~* pattern
+                        OR COALESCE("cloudfrontPath", '') ~* pattern
+                        OR COALESCE("s3Url", '') ~* pattern
+                ) DESC,
+                CASE
+                    WHEN EXISTS (
                         SELECT 1
                         FROM unnest(${regexes}::text[]) AS pattern
-                        WHERE
-                            title ~* pattern
-                            OR COALESCE("seriesTitle", '') ~* pattern
-                            OR COALESCE("archiveIdentifier", '') ~* pattern
-                            OR COALESCE("sourcePageUrl", '') ~* pattern
-                            OR COALESCE("sourceLicenseUrl", '') ~* pattern
-                            OR COALESCE("s3KeyPlayback", '') ~* pattern
-                            OR COALESCE("cloudfrontPath", '') ~* pattern
-                            OR COALESCE("s3Url", '') ~* pattern
-                    )
-                ORDER BY
-                    CASE
-                        WHEN EXISTS (SELECT 1 FROM unnest(${regexes}::text[]) AS pattern WHERE COALESCE("seriesTitle", '') ~* pattern) THEN 0
-                        WHEN EXISTS (SELECT 1 FROM unnest(${regexes}::text[]) AS pattern WHERE title ~* pattern) THEN 1
-                        WHEN EXISTS (SELECT 1 FROM unnest(${regexes}::text[]) AS pattern WHERE COALESCE("archiveIdentifier", '') ~* pattern) THEN 2
-                        ELSE 3
-                    END ASC,
-                    CASE WHEN type = 'series' THEN 0 ELSE 1 END ASC,
-                    "seriesTitle" ASC NULLS LAST,
-                    "seasonNumber" ASC NULLS LAST,
-                    "episodeNumber" ASC NULLS LAST,
-                    "updatedAt" DESC
-                LIMIT 1
-            `;
+                        WHERE COALESCE("seriesTitle", '') ~* pattern
+                    ) THEN 0
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM unnest(${regexes}::text[]) AS pattern
+                        WHERE title ~* pattern
+                    ) THEN 1
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM unnest(${regexes}::text[]) AS pattern
+                        WHERE COALESCE("archiveIdentifier", '') ~* pattern
+                    ) THEN 2
+                    ELSE 3
+                END ASC,
+                CASE WHEN type = 'series' THEN 0 ELSE 1 END ASC,
+                "seriesTitle" ASC NULLS LAST,
+                "seasonNumber" ASC NULLS LAST,
+                "episodeNumber" ASC NULLS LAST,
+                "updatedAt" DESC
+            LIMIT 25
+        `;
 
-            const matchId = matches[0]?.id;
-            if (!matchId) {
-                return NextResponse.json(
-                    { error: 'Video not found' },
-                    { status: 404 }
-                );
-            }
-
-            video = await prisma.video.findUnique({
-                where: { id: matchId },
-                select: videoSelect,
-            });
+        const matchIds = matches.map((match) => match.id);
+        if (matchIds.length === 0) {
+            return NextResponse.json(
+                { error: 'Video not found' },
+                { status: 404 }
+            );
         }
 
-        if (video) {
-            video.thumbnailUrl = resolveMediaUrl(video.thumbnailUrl);
+        const videos = await prisma.video.findMany({
+            where: { id: { in: matchIds } },
+            select: videoSelect,
+        });
+        const videosById = new Map(videos.map((video) => [
+            video.id,
+            {
+                ...video,
+                thumbnailUrl: resolveMediaUrl(video.thumbnailUrl),
+            },
+        ]));
+        const orderedVideos = matchIds
+            .map((id) => videosById.get(id))
+            .filter((video): video is NonNullable<typeof video> => Boolean(video));
+
+        if (orderedVideos.length === 0) {
+            return NextResponse.json(
+                { error: 'Video not found' },
+                { status: 404 }
+            );
         }
 
-        return NextResponse.json({ video });
+        return NextResponse.json({ video: orderedVideos[0], videos: orderedVideos });
     } catch (error) {
         console.error('Error searching videos:', error);
         return NextResponse.json(
