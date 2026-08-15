@@ -35,6 +35,7 @@ export async function GET(
             s3KeyPlayback: true,
             playbackType: true,
             type: true,
+            seriesId: true,
             seriesTitle: true,
             seasonNumber: true,
             episodeNumber: true,
@@ -51,6 +52,18 @@ export async function GET(
             sourcePageUrl: true,
             sourceRights: true,
             sourceLicenseUrl: true,
+            series: {
+                select: {
+                    id: true,
+                    title: true,
+                    description: true,
+                    thumbnailUrl: true,
+                    genre: true,
+                    rating: true,
+                    averageRating: true,
+                    ratingCount: true,
+                },
+            },
         } as const;
 
         let video = await prisma.video.findUnique({
@@ -93,12 +106,20 @@ export async function GET(
             thumbnailUrl: resolveMediaUrl(video.thumbnailUrl),
         };
 
-        if (video.type === 'series' && video.seriesTitle) {
+        if (video.type === 'series' && (video.seriesId || video.seriesTitle)) {
+            const seriesEpisodeWhere = video.seriesId
+                ? {
+                    OR: [
+                        { seriesId: video.seriesId },
+                        ...(video.seriesTitle ? [{ seriesTitle: video.seriesTitle }] : []),
+                    ],
+                }
+                : { seriesTitle: video.seriesTitle || '' };
             const episodes = await prisma.video.findMany({
                 where: {
                     type: 'series',
                     status: 'completed',
-                    seriesTitle: video.seriesTitle,
+                    ...seriesEpisodeWhere,
                 },
                 orderBy: [
                     { seasonNumber: 'asc' },
@@ -116,22 +137,25 @@ export async function GET(
                 }));
 
             const description = safeEpisodes.find((episode) => episode.description)?.description
+                || video.series?.description
                 || transformedVideo.description
                 || null;
             const thumbnailUrl = safeEpisodes.find((episode) => episode.thumbnailUrl)?.thumbnailUrl
+                || resolveMediaUrl(video.series?.thumbnailUrl)
                 || transformedVideo.thumbnailUrl
                 || null;
 
             return NextResponse.json({
                 video: transformedVideo,
                 series: {
-                    seriesTitle: video.seriesTitle,
+                    id: video.series?.id || video.seriesId || null,
+                    seriesTitle: video.series?.title || video.seriesTitle || video.title,
                     description,
                     thumbnailUrl,
-                    genre: transformedVideo.genre,
-                    rating: transformedVideo.rating,
-                    averageRating: transformedVideo.averageRating,
-                    ratingCount: transformedVideo.ratingCount,
+                    genre: video.series?.genre || transformedVideo.genre,
+                    rating: video.series?.rating || transformedVideo.rating,
+                    averageRating: video.series?.averageRating || transformedVideo.averageRating,
+                    ratingCount: video.series?.ratingCount || transformedVideo.ratingCount,
                     episodes: safeEpisodes,
                 },
             });

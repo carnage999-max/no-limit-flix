@@ -6,6 +6,7 @@ import { attachRatingSummaries } from '@/lib/ratings';
 import type { RatingSummary } from '@/lib/ratings';
 
 type SeriesGroup = {
+    id: string;
     seriesTitle: string;
     thumbnailUrl: string | null;
     genre: string | null;
@@ -16,6 +17,7 @@ type SeriesGroup = {
     hybridRating: number | null;
     tmdbId: string | null;
     description: string | null;
+    releaseYear: number | null;
     episodeCount: number;
     episodes: unknown[];
 };
@@ -41,6 +43,7 @@ export async function GET() {
             select: {
                 id: true,
                 title: true,         // episode title
+                seriesId: true,
                 seriesTitle: true,   // parent series name for grouping
                 description: true,
                 thumbnailUrl: true,
@@ -61,6 +64,24 @@ export async function GET() {
                 sourceRights: true,
                 sourceLicenseUrl: true,
                 createdAt: true,
+                series: {
+                    select: {
+                        id: true,
+                        title: true,
+                        description: true,
+                        thumbnailUrl: true,
+                        releaseYear: true,
+                        genre: true,
+                        rating: true,
+                        averageRating: true,
+                        ratingCount: true,
+                        tmdbId: true,
+                        sourceProvider: true,
+                        sourcePageUrl: true,
+                        sourceRights: true,
+                        sourceLicenseUrl: true,
+                    },
+                },
             },
         });
 
@@ -76,24 +97,30 @@ export async function GET() {
                 thumbnailUrl: resolveMediaUrl(ep.thumbnailUrl)
             };
 
-            const key = ep.seriesTitle || ep.title || 'Unknown Series';
+            const parent = ep.series;
+            const key = parent?.id || ep.seriesTitle || ep.title || 'Unknown Series';
             if (!seriesMap[key]) {
                 seriesMap[key] = {
-                    seriesTitle: key,
-                    thumbnailUrl: transformedEp.thumbnailUrl,
-                    genre: ep.genre,
-                    rating: ep.rating,
-                    averageRating: ep.averageRating,
-                    ratingCount: ep.ratingCount,
+                    id: parent?.id || key,
+                    seriesTitle: parent?.title || ep.seriesTitle || ep.title || 'Unknown Series',
+                    thumbnailUrl: resolveMediaUrl(parent?.thumbnailUrl) || transformedEp.thumbnailUrl,
+                    genre: parent?.genre || ep.genre,
+                    rating: parent?.rating || ep.rating,
+                    averageRating: parent?.averageRating || ep.averageRating,
+                    ratingCount: parent?.ratingCount || ep.ratingCount,
                     ratingSummary: ep.ratingSummary,
                     hybridRating: ep.hybridRating,
-                    tmdbId: ep.tmdbId,
-                    description: transformedEp.description,
+                    tmdbId: parent?.tmdbId || ep.tmdbId,
+                    description: parent?.description || transformedEp.description,
+                    releaseYear: parent?.releaseYear || ep.releaseYear,
                     episodeCount: 0,
                     episodes: [],
                 };
             }
-            seriesMap[key].episodes.push(transformedEp);
+            seriesMap[key].episodes.push({
+                ...transformedEp,
+                seriesTitle: parent?.title || transformedEp.seriesTitle,
+            });
             seriesMap[key].episodeCount++;
 
             if (!seriesMap[key].thumbnailUrl && transformedEp.thumbnailUrl) {
@@ -103,6 +130,10 @@ export async function GET() {
             // Use the first episode's description as the series description if not already set
             if (!seriesMap[key].description && transformedEp.description) {
                 seriesMap[key].description = transformedEp.description;
+            }
+
+            if (!seriesMap[key].releaseYear && ep.releaseYear) {
+                seriesMap[key].releaseYear = ep.releaseYear;
             }
         }
 

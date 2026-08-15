@@ -13,6 +13,7 @@ import {
 import { requireAdmin } from '@/lib/admin-auth';
 import { writeMediaBuffer } from '@/lib/media-storage';
 import { recordAdminAction } from '@/lib/admin-actions';
+import { ensureSeriesMetadata } from '@/lib/series-metadata';
 
 type ImportResultStatus = 'imported' | 'updated' | 'skipped' | 'failed' | 'ready';
 
@@ -1507,6 +1508,24 @@ export async function POST(request: NextRequest) {
                     });
                     const shouldUpdateThumbnail = !existing?.thumbnailLocked;
                     const thumbnailSource = thumbnailUrl?.startsWith('/media/thumbnails/') ? 'import' : 'external';
+                    const series = contentType === 'series'
+                        ? await ensureSeriesMetadata({
+                            title: seriesTitle,
+                            description,
+                            thumbnailUrl,
+                            thumbnailSource,
+                            releaseYear: resolvedReleaseYear,
+                            genre,
+                            rating,
+                            averageRating,
+                            ratingCount,
+                            tmdbId,
+                            sourceProvider: 'internet_archive',
+                            sourcePageUrl,
+                            sourceRights: resolveArchiveSourceRights(metadata),
+                            sourceLicenseUrl: resolveArchiveSourceLicenseUrl(metadata, sourcePageUrl),
+                        })
+                        : null;
 
                     const upserted = await prisma.video.upsert({
                         where: { archiveIdentifier },
@@ -1531,6 +1550,7 @@ export async function POST(request: NextRequest) {
                             rating,
                             averageRating,
                             ratingCount,
+                            seriesId: series?.id || null,
                             seriesTitle,
                             seasonNumber,
                             episodeNumber,
@@ -1567,6 +1587,7 @@ export async function POST(request: NextRequest) {
                             rating,
                             averageRating,
                             ratingCount,
+                            seriesId: series?.id || null,
                             seriesTitle,
                             seasonNumber,
                             episodeNumber,

@@ -16,7 +16,36 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        // Find the first episode of this series to get metadata
+        const series = await prisma.series.findFirst({
+            where: {
+                title: {
+                    equals: seriesTitle.trim(),
+                    mode: 'insensitive',
+                },
+            },
+            select: {
+                tmdbId: true,
+                description: true,
+                releaseYear: true,
+                genre: true,
+                rating: true,
+            },
+        });
+
+        if (series) {
+            return NextResponse.json({
+                message: 'Series metadata found',
+                metadata: {
+                    tmdbId: series.tmdbId,
+                    description: series.description,
+                    releaseYear: series.releaseYear,
+                    genre: series.genre,
+                    rating: series.rating,
+                },
+            });
+        }
+
+        // Fallback for rows imported before the parent Series table existed.
         const video = await prisma.video.findFirst({
             where: {
                 seriesTitle: {

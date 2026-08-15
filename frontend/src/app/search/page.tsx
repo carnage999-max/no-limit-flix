@@ -16,6 +16,7 @@ interface TmdbResult {
 interface LibraryResult {
     id: string;
     title: string;
+    type?: string | null;
     seriesTitle?: string | null;
     thumbnailUrl?: string | null;
     genre?: string | null;
@@ -95,6 +96,10 @@ export default function SearchPage() {
     }, [query, performSearch]);
 
     const buildLibraryLink = (item: LibraryResult) => {
+        if (item.type === 'series') {
+            return `/series/detail?name=${encodeURIComponent(item.seriesTitle || item.title)}`;
+        }
+
         const encodedData = safeBtoa(JSON.stringify({
             id: item.id,
             title: item.title || item.seriesTitle || 'Untitled',

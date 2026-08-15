@@ -59,6 +59,7 @@ model Video {
   
   // Phase 2 — linking to global catalog
   tmdbId          String?  // The TMDb movie/tv ID, nullable for non-catalog items
+  seriesId        String?
   seriesTitle     String?  // For TV episodes: the parent series name for grouping
   
   createdAt       DateTime @default(now())
@@ -75,6 +76,35 @@ model Video {
   actors       ActorOnVideo[]
   userRatings  UserRating[]
   adminActions AdminActionLog[]
+  series       Series? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+}
+
+model Series {
+  id              String   @id @default(cuid())
+  title           String   @unique
+  description     String?
+  thumbnailUrl    String?
+  thumbnailSource String?
+  thumbnailLocked Boolean  @default(false)
+  thumbnailUpdatedByUserId String?
+  thumbnailUpdatedAt DateTime?
+  releaseYear     Int?
+  genre           String?
+  rating          String?
+  averageRating   Float?
+  ratingCount     Int?
+  tmdbId          String?
+  sourceProvider  String?
+  sourcePageUrl   String?
+  sourceRights    String?
+  sourceLicenseUrl String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  episodes        Video[]
+
+  @@index([title])
+  @@index([tmdbId])
 }
 
 model Actor {

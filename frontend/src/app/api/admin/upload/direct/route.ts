@@ -5,6 +5,7 @@ import prisma from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
 import { writeMediaBuffer } from '@/lib/media-storage';
 import { recordAdminAction } from '@/lib/admin-actions';
+import { ensureSeriesMetadata } from '@/lib/series-metadata';
 
 const ALLOWED_THUMBNAIL_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -70,21 +71,44 @@ export async function POST(request: NextRequest) {
         }
 
         const assetType = optionalString(formData.get('type')) === 'series' ? 'series' : 'movie';
+        const description = optionalString(formData.get('description'));
+        const releaseYear = optionalInt(formData.get('releaseYear'));
+        const genre = optionalString(formData.get('genre'));
+        const rating = optionalString(formData.get('rating'));
+        const tmdbId = optionalString(formData.get('tmdbId'));
+        const seriesTitle = assetType === 'series'
+            ? optionalString(formData.get('seriesTitle')) || title
+            : null;
+        const series = assetType === 'series'
+            ? await ensureSeriesMetadata({
+                title: seriesTitle,
+                description,
+                thumbnailUrl,
+                thumbnailSource: thumbnailUrl ? 'upload' : null,
+                thumbnailUpdatedByUserId: auth.user?.id || null,
+                releaseYear,
+                genre,
+                rating,
+                tmdbId,
+                sourceProvider: 'internal',
+            })
+            : null;
         const video = await prisma.video.create({
             data: {
                 id: videoId,
                 title,
-                description: optionalString(formData.get('description')),
+                description,
                 type: assetType,
                 seasonNumber: assetType === 'series' ? optionalInt(formData.get('seasonNumber')) : null,
                 episodeNumber: assetType === 'series' ? optionalInt(formData.get('episodeNumber')) : null,
-                seriesTitle: assetType === 'series' ? optionalString(formData.get('seriesTitle')) : null,
-                tmdbId: optionalString(formData.get('tmdbId')),
-                releaseYear: optionalInt(formData.get('releaseYear')),
+                seriesId: series?.id || null,
+                seriesTitle,
+                tmdbId,
+                releaseYear,
                 duration: optionalNumber(formData.get('duration')),
                 resolution: optionalString(formData.get('resolution')),
-                genre: optionalString(formData.get('genre')),
-                rating: optionalString(formData.get('rating')),
+                genre,
+                rating,
                 thumbnailUrl,
                 thumbnailSource: thumbnailUrl ? 'upload' : null,
                 thumbnailLocked: false,

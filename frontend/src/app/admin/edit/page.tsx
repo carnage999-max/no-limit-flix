@@ -205,6 +205,7 @@ interface Video {
     title: string;
     description?: string;
     type: string;
+    seriesId?: string | null;
     seriesTitle?: string | null;
     seasonNumber?: number | null;
     episodeNumber?: number | null;
@@ -217,6 +218,8 @@ interface Video {
     sourcePageUrl?: string;
     sourceRights?: string;
     sourceLicenseUrl?: string;
+    editScope?: 'series' | 'episode';
+    episodeCount?: number;
 }
 
 interface EditFormData {
@@ -244,8 +247,13 @@ const formatEpisodeCode = (video: Video) => {
 };
 
 const formatSearchMeta = (video: Video) => {
+    const scopeLabel = video.editScope === 'series'
+        ? `Series metadata${video.episodeCount ? ` (${video.episodeCount} episodes)` : ''}`
+        : video.type === 'series'
+            ? 'Episode only'
+            : 'Movie';
     const meta = [
-        video.type === 'series' ? 'Series' : 'Movie',
+        scopeLabel,
         video.seriesTitle && video.seriesTitle !== video.title ? video.seriesTitle : null,
         formatEpisodeCode(video) || null,
         video.releaseYear ? String(video.releaseYear) : null,
@@ -316,13 +324,15 @@ export default function AdminEditPage() {
     const handleSelectVideo = (video: Video) => {
         setSelectedVideo(video);
         setSearchResults([]);
+        const isSeriesMetadataEdit = video.editScope === 'series';
+        const editableTitle = isSeriesMetadataEdit ? (video.seriesTitle || video.title) : video.title;
         setFormData({
-            title: video.title,
+            title: editableTitle,
             description: video.description || '',
             type: video.type === 'series' ? 'series' : 'movie',
-            seriesTitle: video.seriesTitle || '',
-            seasonNumber: video.seasonNumber ? String(video.seasonNumber) : '',
-            episodeNumber: video.episodeNumber ? String(video.episodeNumber) : '',
+            seriesTitle: isSeriesMetadataEdit ? editableTitle : video.seriesTitle || '',
+            seasonNumber: !isSeriesMetadataEdit && video.seasonNumber ? String(video.seasonNumber) : '',
+            episodeNumber: !isSeriesMetadataEdit && video.episodeNumber ? String(video.episodeNumber) : '',
             releaseYear: video.releaseYear ? String(video.releaseYear) : '',
             tmdbId: video.tmdbId || '',
             genre: video.genre || '',
@@ -365,6 +375,12 @@ export default function AdminEditPage() {
 
         try {
             let newThumbnailUrl = selectedVideo.thumbnailUrl;
+            const editScope = selectedVideo.editScope === 'series' ? 'series' : 'episode';
+            const nextSeriesTitle = editScope === 'series'
+                ? formData.title
+                : formData.type === 'series'
+                    ? formData.seriesTitle
+                    : '';
 
             // Upload new thumbnail if provided
             if (thumbnailFile) {
@@ -387,12 +403,15 @@ export default function AdminEditPage() {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    editScope,
+                    seriesId: selectedVideo.seriesId || null,
+                    originalSeriesTitle: selectedVideo.seriesTitle || null,
                     title: formData.title,
                     description: formData.description,
                     type: formData.type,
-                    seriesTitle: formData.type === 'series' ? formData.seriesTitle || null : null,
-                    seasonNumber: formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
-                    episodeNumber: formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
+                    seriesTitle: formData.type === 'series' ? nextSeriesTitle || null : null,
+                    seasonNumber: editScope === 'episode' && formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
+                    episodeNumber: editScope === 'episode' && formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
                     releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : null,
                     tmdbId: formData.tmdbId || null,
                     thumbnailUrl: newThumbnailUrl,
@@ -405,9 +424,12 @@ export default function AdminEditPage() {
                 }),
             });
 
-            if (!updateRes.ok) throw new Error('Failed to update metadata');
+            const updateData: { error?: string; updatedCount?: number } = await updateRes.json();
+            if (!updateRes.ok) throw new Error(updateData.error || 'Failed to update metadata');
 
-            setSuccess('Video metadata updated successfully!');
+            setSuccess(editScope === 'series'
+                ? `Series metadata updated across ${updateData.updatedCount || selectedVideo.episodeCount || 'all'} episodes.`
+                : 'Video metadata updated successfully!');
             setThumbnailFile(null);
             if (thumbnailPreview?.startsWith('blob:')) {
                 URL.revokeObjectURL(thumbnailPreview);
@@ -418,9 +440,9 @@ export default function AdminEditPage() {
                 title: formData.title,
                 description: formData.description,
                 type: formData.type,
-                seriesTitle: formData.type === 'series' ? formData.seriesTitle : null,
-                seasonNumber: formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
-                episodeNumber: formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
+                seriesTitle: formData.type === 'series' ? nextSeriesTitle : null,
+                seasonNumber: editScope === 'episode' && formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
+                episodeNumber: editScope === 'episode' && formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
                 releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : undefined,
                 tmdbId: formData.tmdbId,
                 thumbnailUrl: newThumbnailUrl,
@@ -554,6 +576,11 @@ export default function AdminEditPage() {
                                             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                                 <span style={{ color: '#D4AF37', fontSize: '12px', fontWeight: 800 }}>#{index + 1}</span>
                                                 <span style={{ fontSize: '16px', fontWeight: 800 }}>{video.title}</span>
+                                                {video.editScope === 'series' && (
+                                                    <span style={{ color: '#4ADE80', fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                                                        Series
+                                                    </span>
+                                                )}
                                             </div>
                                             <div style={{ ...styles.videoMeta, lineHeight: 1.5 }}>
                                                 {formatSearchMeta(video) || 'No metadata'}
@@ -572,6 +599,8 @@ export default function AdminEditPage() {
         );
     }
 
+    const isSeriesMetadataEdit = selectedVideo.editScope === 'series';
+
     return (
         <main style={{ background: '#0B0B0D', color: 'white', minHeight: '100vh' }}>
             <div style={styles.container}>
@@ -583,8 +612,12 @@ export default function AdminEditPage() {
                         <ArrowLeft size={16} />
                         Back to Videos
                     </button>
-                    <h1 style={styles.title}>Edit Video</h1>
-                    <p style={styles.subtitle}>{selectedVideo.title}</p>
+                    <h1 style={styles.title}>{isSeriesMetadataEdit ? 'Edit Series' : 'Edit Video'}</h1>
+                    <p style={styles.subtitle}>
+                        {isSeriesMetadataEdit
+                            ? `${selectedVideo.seriesTitle || selectedVideo.title} - shared metadata${selectedVideo.episodeCount ? ` for ${selectedVideo.episodeCount} episodes` : ''}`
+                            : selectedVideo.title}
+                    </p>
                 </div>
 
                 {error && (
@@ -604,7 +637,7 @@ export default function AdminEditPage() {
                 <form onSubmit={handleSubmit} style={{ ...styles.section }}>
                     <div style={styles.form}>
                         <div style={styles.formGroup}>
-                            <label style={styles.label}>Title *</label>
+                            <label style={styles.label}>{isSeriesMetadataEdit ? 'Series Title *' : 'Title *'}</label>
                             <input
                                 type="text"
                                 name="title"
@@ -636,13 +669,14 @@ export default function AdminEditPage() {
                                 value={formData.type}
                                 onChange={handleFormChange}
                                 style={styles.input}
+                                disabled={isSeriesMetadataEdit}
                             >
                                 <option value="movie">Movie</option>
                                 <option value="series">Series Episode</option>
                             </select>
                         </div>
 
-                        {formData.type === 'series' && (
+                        {formData.type === 'series' && !isSeriesMetadataEdit && (
                             <>
                                 <div style={styles.formGroup}>
                                     <label style={styles.label}>Series Title</label>
@@ -682,6 +716,23 @@ export default function AdminEditPage() {
                                     />
                                 </div>
                             </>
+                        )}
+
+                        {isSeriesMetadataEdit && (
+                            <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                                <label style={styles.label}>Edit Scope</label>
+                                <div style={{
+                                    padding: '14px 16px',
+                                    borderRadius: '8px',
+                                    border: '1px solid rgba(74, 222, 128, 0.25)',
+                                    background: 'rgba(74, 222, 128, 0.08)',
+                                    color: '#D1FAE5',
+                                    fontSize: '14px',
+                                    lineHeight: 1.6,
+                                }}>
+                                    Shared series fields on this form update every episode in the series. Episode titles, season numbers, episode numbers, and video files are left unchanged.
+                                </div>
+                            </div>
                         )}
 
                         <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
