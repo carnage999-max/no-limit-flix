@@ -35,6 +35,31 @@ const buildFlexibleRegex = (query: string) => {
     return tokens.map(escapeRegex).join('.*');
 };
 
+const parseArchiveIdentifier = (query: string) => {
+    const trimmed = query.trim();
+    try {
+        const url = new URL(trimmed);
+        if (!url.hostname.includes('archive.org')) return null;
+        const detailsMatch = url.pathname.match(/\/details\/([^/?#]+)/i);
+        if (detailsMatch?.[1]) return decodeURIComponent(detailsMatch[1]);
+        const downloadMatch = url.pathname.match(/\/download\/([^/?#]+)/i);
+        if (downloadMatch?.[1]) return decodeURIComponent(downloadMatch[1]);
+    } catch {
+        // Not a URL; fall through to bare identifier handling.
+    }
+
+    const bare = trimmed.match(/(?:details\/|download\/)?([a-z0-9][a-z0-9._-]{2,})/i)?.[1];
+    return bare || null;
+};
+
+const buildSearchRegexes = (query: string) => {
+    const values = [query];
+    const archiveIdentifier = parseArchiveIdentifier(query);
+    if (archiveIdentifier) values.push(archiveIdentifier);
+
+    return Array.from(new Set(values.map(buildFlexibleRegex).filter(Boolean)));
+};
+
 export async function GET(request: NextRequest) {
     try {
         const auth = await requireAdmin(request);
@@ -57,24 +82,29 @@ export async function GET(request: NextRequest) {
 
         // If not found by ID, search title, series title, Archive identifiers, and media/source paths.
         if (!video) {
-            const regex = buildFlexibleRegex(q);
+            const regexes = buildSearchRegexes(q);
             const matches = await prisma.$queryRaw<Array<{ id: string }>>`
                 SELECT id
                 FROM "Video"
                 WHERE
-                    title ~* ${regex}
-                    OR COALESCE("seriesTitle", '') ~* ${regex}
-                    OR COALESCE("archiveIdentifier", '') ~* ${regex}
-                    OR COALESCE("sourcePageUrl", '') ~* ${regex}
-                    OR COALESCE("sourceLicenseUrl", '') ~* ${regex}
-                    OR COALESCE("s3KeyPlayback", '') ~* ${regex}
-                    OR COALESCE("cloudfrontPath", '') ~* ${regex}
-                    OR COALESCE("s3Url", '') ~* ${regex}
+                    EXISTS (
+                        SELECT 1
+                        FROM unnest(${regexes}::text[]) AS pattern
+                        WHERE
+                            title ~* pattern
+                            OR COALESCE("seriesTitle", '') ~* pattern
+                            OR COALESCE("archiveIdentifier", '') ~* pattern
+                            OR COALESCE("sourcePageUrl", '') ~* pattern
+                            OR COALESCE("sourceLicenseUrl", '') ~* pattern
+                            OR COALESCE("s3KeyPlayback", '') ~* pattern
+                            OR COALESCE("cloudfrontPath", '') ~* pattern
+                            OR COALESCE("s3Url", '') ~* pattern
+                    )
                 ORDER BY
                     CASE
-                        WHEN COALESCE("seriesTitle", '') ~* ${regex} THEN 0
-                        WHEN title ~* ${regex} THEN 1
-                        WHEN COALESCE("archiveIdentifier", '') ~* ${regex} THEN 2
+                        WHEN EXISTS (SELECT 1 FROM unnest(${regexes}::text[]) AS pattern WHERE COALESCE("seriesTitle", '') ~* pattern) THEN 0
+                        WHEN EXISTS (SELECT 1 FROM unnest(${regexes}::text[]) AS pattern WHERE title ~* pattern) THEN 1
+                        WHEN EXISTS (SELECT 1 FROM unnest(${regexes}::text[]) AS pattern WHERE COALESCE("archiveIdentifier", '') ~* pattern) THEN 2
                         ELSE 3
                     END ASC,
                     CASE WHEN type = 'series' THEN 0 ELSE 1 END ASC,
