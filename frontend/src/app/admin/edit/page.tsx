@@ -438,12 +438,12 @@ export default function AdminEditPage() {
                     <div style={{ ...styles.section, maxWidth: '500px', margin: '0 auto', padding: '0 24px' }}>
                         <form onSubmit={handleSearch} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <div style={styles.formGroup}>
-                                <label style={styles.label}>Search by Video ID or Title</label>
+                                <label style={styles.label}>Search by ID, title, series, or Archive URL</label>
                                 <input
                                     type="text"
                                     value={searchQuery}
                                     onChange={e => setSearchQuery(e.target.value)}
-                                    placeholder="Enter video ID or title..."
+                                    placeholder="Serial Experiments Lain, archive identifier, or video ID..."
                                     style={styles.input}
                                 />
                             </div>
