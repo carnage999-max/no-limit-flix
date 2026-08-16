@@ -23,16 +23,26 @@ export async function GET(request: NextRequest) {
             }
         });
 
-        const data = await workerRes.json();
+        const workerText = await workerRes.text();
+        let data: { error?: string; [key: string]: unknown } | null = null;
+        try {
+            data = workerText ? JSON.parse(workerText) : null;
+        } catch {
+            data = null;
+        }
         if (!workerRes.ok) {
-            return NextResponse.json({ error: data?.error || 'Worker job lookup failed' }, { status: 502 });
+            return NextResponse.json({
+                error: data?.error || 'Worker job lookup failed',
+                details: workerText.slice(0, 500),
+            }, { status: 502 });
         }
 
-        return NextResponse.json(data);
-    } catch (error: any) {
+        return NextResponse.json(data || { success: true });
+    } catch (error) {
         console.error('Worker jobs error:', error);
+        const message = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json(
-            { error: 'Failed to fetch worker jobs', details: error.message },
+            { error: 'Failed to fetch worker jobs', details: message },
             { status: 500 }
         );
     }

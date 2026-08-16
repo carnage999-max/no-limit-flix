@@ -14,8 +14,103 @@ const pool = new Pool({
     ssl: sslRequired ? { rejectUnauthorized: false } : undefined
 });
 
+const textOrNull = (value) => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    return trimmed || null;
+};
+
+async function ensureSeriesMetadata(payload) {
+    const title = textOrNull(payload.seriesTitle || payload.title);
+    if (!title) return null;
+
+    const now = new Date();
+    const query = `
+        INSERT INTO "Series" (
+            "id",
+            "title",
+            "description",
+            "thumbnailUrl",
+            "thumbnailSource",
+            "thumbnailLocked",
+            "thumbnailUpdatedAt",
+            "releaseYear",
+            "genre",
+            "rating",
+            "averageRating",
+            "ratingCount",
+            "tmdbId",
+            "sourceProvider",
+            "sourcePageUrl",
+            "sourceRights",
+            "sourceLicenseUrl",
+            "createdAt",
+            "updatedAt"
+        ) VALUES (
+            $1, $2, $3, $4, $5, false, $6, $7, $8, $9,
+            $10, $11, $12, $13, $14, $15, $16, $17, $18
+        )
+        ON CONFLICT ("title") DO UPDATE SET
+            "description" = COALESCE("Series"."description", EXCLUDED."description"),
+            "thumbnailUrl" = CASE
+                WHEN COALESCE("Series"."thumbnailLocked", false) = true THEN "Series"."thumbnailUrl"
+                ELSE COALESCE(EXCLUDED."thumbnailUrl", "Series"."thumbnailUrl")
+            END,
+            "thumbnailSource" = CASE
+                WHEN COALESCE("Series"."thumbnailLocked", false) = true THEN "Series"."thumbnailSource"
+                ELSE COALESCE(EXCLUDED."thumbnailSource", "Series"."thumbnailSource")
+            END,
+            "thumbnailUpdatedAt" = CASE
+                WHEN COALESCE("Series"."thumbnailLocked", false) = true THEN "Series"."thumbnailUpdatedAt"
+                ELSE COALESCE(EXCLUDED."thumbnailUpdatedAt", "Series"."thumbnailUpdatedAt")
+            END,
+            "releaseYear" = COALESCE("Series"."releaseYear", EXCLUDED."releaseYear"),
+            "genre" = COALESCE("Series"."genre", EXCLUDED."genre"),
+            "rating" = COALESCE("Series"."rating", EXCLUDED."rating"),
+            "averageRating" = COALESCE("Series"."averageRating", EXCLUDED."averageRating"),
+            "ratingCount" = COALESCE("Series"."ratingCount", EXCLUDED."ratingCount"),
+            "tmdbId" = COALESCE("Series"."tmdbId", EXCLUDED."tmdbId"),
+            "sourceProvider" = COALESCE("Series"."sourceProvider", EXCLUDED."sourceProvider"),
+            "sourcePageUrl" = COALESCE("Series"."sourcePageUrl", EXCLUDED."sourcePageUrl"),
+            "sourceRights" = COALESCE("Series"."sourceRights", EXCLUDED."sourceRights"),
+            "sourceLicenseUrl" = COALESCE("Series"."sourceLicenseUrl", EXCLUDED."sourceLicenseUrl"),
+            "updatedAt" = EXCLUDED."updatedAt"
+        RETURNING "id", "title";
+    `;
+
+    const thumbnailSource = payload.thumbnailSource || (payload.thumbnailUrl
+        ? (String(payload.thumbnailUrl).startsWith('/media/thumbnails/') ? 'import' : 'external')
+        : null);
+    const values = [
+        cuid(),
+        title,
+        payload.description || null,
+        payload.thumbnailUrl || null,
+        thumbnailSource,
+        payload.thumbnailUrl ? now : null,
+        payload.releaseYear || null,
+        payload.genre || null,
+        payload.rating || null,
+        payload.averageRating ?? null,
+        payload.ratingCount ?? null,
+        payload.tmdbId || null,
+        payload.sourceProvider || null,
+        payload.sourcePageUrl || null,
+        payload.sourceRights || null,
+        payload.sourceLicenseUrl || null,
+        now,
+        now
+    ];
+
+    const result = await pool.query(query, values);
+    return result.rows[0] || null;
+}
+
 async function upsertVideo(payload) {
     const now = new Date();
+    const series = payload.type === 'series'
+        ? await ensureSeriesMetadata(payload)
+        : null;
+    const seriesId = payload.seriesId || series?.id || null;
     const query = `
         INSERT INTO "Video" (
             "id",
@@ -39,6 +134,7 @@ async function upsertVideo(payload) {
             "rating",
             "averageRating",
             "ratingCount",
+            "seriesId",
             "seriesTitle",
             "seasonNumber",
             "episodeNumber",
@@ -59,7 +155,7 @@ async function upsertVideo(payload) {
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
             $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
             $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-            $31, $32, $33, $34, $35::jsonb, $36, $37
+            $31, $32, $33, $34, $35, $36::jsonb, $37, $38
         )
         ON CONFLICT ("archiveIdentifier") DO UPDATE SET
             "title" = EXCLUDED."title",
@@ -94,6 +190,7 @@ async function upsertVideo(payload) {
             "rating" = EXCLUDED."rating",
             "averageRating" = EXCLUDED."averageRating",
             "ratingCount" = EXCLUDED."ratingCount",
+            "seriesId" = EXCLUDED."seriesId",
             "seriesTitle" = EXCLUDED."seriesTitle",
             "seasonNumber" = EXCLUDED."seasonNumber",
             "episodeNumber" = EXCLUDED."episodeNumber",
@@ -135,6 +232,7 @@ async function upsertVideo(payload) {
         payload.rating,
         payload.averageRating,
         payload.ratingCount,
+        seriesId,
         payload.seriesTitle,
         payload.seasonNumber,
         payload.episodeNumber,
@@ -319,30 +417,36 @@ module.exports = {
         return result.rowCount || 0;
     },
     updateSeriesMetadata: async (seriesTitle, payload) => {
+        const series = await ensureSeriesMetadata({
+            ...payload,
+            seriesTitle,
+            thumbnailSource: payload.thumbnailUrl ? 'refresh' : null
+        });
         const result = await pool.query(
             `UPDATE "Video"
-             SET "thumbnailUrl" = CASE
-                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUrl"
-                     ELSE $1::text
-                 END,
-                 "thumbnailSource" = CASE
-                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailSource"
-                     ELSE 'refresh'
-                 END,
-                 "thumbnailUpdatedAt" = CASE
-                     WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUpdatedAt"
-                     ELSE NOW()
-                 END,
-                 "tmdbId" = COALESCE($2::text, "tmdbId"),
-                 "description" = COALESCE($3::text, "description"),
-                 "releaseYear" = COALESCE($4::integer, "releaseYear"),
-                 "genre" = COALESCE($5::text, "genre"),
-                 "rating" = COALESCE($6::text, "rating"),
-                 "averageRating" = COALESCE($7::double precision, "averageRating"),
-                 "ratingCount" = COALESCE($8::integer, "ratingCount"),
-                 "updatedAt" = NOW()
-             WHERE "type" = 'series'
-               AND "seriesTitle" = $9::text`,
+             SET "seriesId" = COALESCE($10::text, "seriesId"),
+                 "thumbnailUrl" = CASE
+                    WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUrl"
+                    ELSE $1::text
+                END,
+                "thumbnailSource" = CASE
+                    WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailSource"
+                    ELSE 'refresh'
+                END,
+                "thumbnailUpdatedAt" = CASE
+                    WHEN $1::text IS NULL OR COALESCE("thumbnailLocked", false) = true THEN "thumbnailUpdatedAt"
+                    ELSE NOW()
+                END,
+                "tmdbId" = COALESCE($2::text, "tmdbId"),
+                "description" = COALESCE($3::text, "description"),
+                "releaseYear" = COALESCE($4::integer, "releaseYear"),
+                "genre" = COALESCE($5::text, "genre"),
+                "rating" = COALESCE($6::text, "rating"),
+                "averageRating" = COALESCE($7::double precision, "averageRating"),
+                "ratingCount" = COALESCE($8::integer, "ratingCount"),
+                "updatedAt" = NOW()
+            WHERE "type" = 'series'
+              AND "seriesTitle" = $9::text`,
             [
                 payload.thumbnailUrl || null,
                 payload.tmdbId || null,
@@ -352,7 +456,8 @@ module.exports = {
                 payload.rating || null,
                 payload.averageRating ?? null,
                 payload.ratingCount ?? null,
-                seriesTitle
+                seriesTitle,
+                series?.id || null
             ]
         );
         return result.rowCount || 0;

@@ -1365,15 +1365,24 @@ export async function POST(request: NextRequest) {
                 })
             });
 
-            const data = await workerRes.json();
+            const workerText = await workerRes.text();
+            let data: any = null;
+            try {
+                data = workerText ? JSON.parse(workerText) : null;
+            } catch {
+                data = null;
+            }
             if (!workerRes.ok) {
                 return NextResponse.json(
-                    { error: data?.error || 'Worker import failed', details: data?.details },
+                    {
+                        error: data?.error || 'Worker import failed',
+                        details: data?.details || workerText.slice(0, 500),
+                    },
                     { status: 502 }
                 );
             }
 
-            return NextResponse.json(data);
+            return NextResponse.json(data || { success: true });
         }
 
         const results: ImportResult[] = [];
