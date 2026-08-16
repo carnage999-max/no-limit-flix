@@ -43,6 +43,26 @@ const app = express();
 app.use(express.json({ limit: '2mb' }));
 
 const jobs = new Map();
+const MAX_JOB_RESULT_SAMPLES = 50;
+const MAX_JOB_FAILURE_SAMPLES = 20;
+
+const rememberJobResult = (job, result) => {
+    if (!job) return;
+    if (!Array.isArray(job.results)) job.results = [];
+    if (job.results.length < MAX_JOB_RESULT_SAMPLES) {
+        job.results.push(result);
+    }
+    if (result.status !== 'failed') return;
+    if (!Array.isArray(job.failures)) job.failures = [];
+    if (job.failures.length < MAX_JOB_FAILURE_SAMPLES) {
+        job.failures.push({
+            identifier: result.identifier,
+            fileName: result.fileName || null,
+            title: result.title || null,
+            reason: result.reason || 'Failed to ingest item'
+        });
+    }
+};
 
 const parseYear = (value) => {
     if (value === null || value === undefined) return null;
@@ -1179,9 +1199,17 @@ app.post('/import', async (req, res) => {
             } catch (error) {
                 result.status = 'failed';
                 result.reason = error?.message || 'Failed to ingest item';
+                result.fileName = result.fileName || item.fileName || null;
+                console.error('Import item failed', {
+                    identifier,
+                    fileName: result.fileName,
+                    title: result.title,
+                    reason: result.reason
+                });
             }
 
                 results.push(result);
+                rememberJobResult(job, result);
                 if (job) {
                     job.processed += 1;
                     if (result.status === 'imported') job.imported += 1;
@@ -1197,7 +1225,16 @@ app.post('/import', async (req, res) => {
                 imported: results.filter((r) => r.status === 'imported').length,
                 updated: results.filter((r) => r.status === 'updated').length,
                 skipped: results.filter((r) => r.status === 'skipped').length,
-                failed: results.filter((r) => r.status === 'failed').length
+                failed: results.filter((r) => r.status === 'failed').length,
+                failures: results
+                    .filter((r) => r.status === 'failed')
+                    .slice(0, MAX_JOB_FAILURE_SAMPLES)
+                    .map((r) => ({
+                        identifier: r.identifier,
+                        fileName: r.fileName || null,
+                        title: r.title || null,
+                        reason: r.reason || 'Failed to ingest item'
+                    }))
             };
 
             return { summary, results };
@@ -1215,6 +1252,8 @@ app.post('/import', async (req, res) => {
                 updated: 0,
                 skipped: 0,
                 failed: 0,
+                results: [],
+                failures: [],
                 startedAt: Date.now(),
                 lastUpdatedAt: Date.now(),
                 finishedAt: null
