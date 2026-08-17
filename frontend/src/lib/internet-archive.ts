@@ -51,6 +51,78 @@ export interface ArchiveMetadataResponse {
 }
 
 const IA_BASE = 'https://archive.org';
+const ARCHIVE_FETCH_RETRIES = 2;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const decodeHtmlEntities = (value: string) =>
+    value
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+
+const parseDetailsFallback = (identifier: string, html: string): ArchiveMetadataResponse => {
+    const files = new Map<string, ArchiveFile>();
+    const linkPattern = /href=["']([^"']+)["']/gi;
+    let match: RegExpExecArray | null;
+
+    while ((match = linkPattern.exec(html))) {
+        const href = decodeHtmlEntities(match[1] || '');
+        const marker = `/download/${identifier}/`;
+        const markerIndex = href.indexOf(marker);
+        if (markerIndex === -1) continue;
+
+        const rawName = href
+            .slice(markerIndex + marker.length)
+            .split(/[?#]/)[0];
+        if (!rawName) continue;
+
+        let name = rawName;
+        try {
+            name = decodeURIComponent(rawName);
+        } catch {
+            name = rawName;
+        }
+
+        if (!/\.(mp4|mkv)$/i.test(name)) continue;
+        files.set(name, {
+            name,
+            format: name.toLowerCase().endsWith('.mkv') ? 'Matroska' : 'H.264',
+            mime: name.toLowerCase().endsWith('.mkv') ? 'video/x-matroska' : 'video/mp4',
+        });
+    }
+
+    const titleMatch = html.match(/<h1[^>]*>\s*([^<]+?)\s*<\/h1>/i)
+        || html.match(/<title[^>]*>\s*([^<]+?)\s*<\/title>/i);
+    const yearMatch = html.match(/Publication date[\s\S]{0,200}?((?:19|20)\d{2})/i)
+        || html.match(/Year[\s\S]{0,200}?((?:19|20)\d{2})/i);
+    const descriptionMatch = html.match(/Plot:\s*<\/?[^>]*>\s*([^<]+?)(?:<|$)/i);
+
+    return {
+        metadata: {
+            identifier,
+            title: titleMatch ? decodeHtmlEntities(titleMatch[1]).replace(/\s*:\s*Internet Archive.*$/i, '').trim() : identifier,
+            year: yearMatch?.[1] || null,
+            description: descriptionMatch ? decodeHtmlEntities(descriptionMatch[1]).trim() : null,
+            mediatype: 'movies',
+        },
+        files: Array.from(files.values()),
+    };
+};
+
+const fetchDetailsFallback = async (identifier: string) => {
+    const response = await fetch(`${IA_BASE}/details/${identifier}`, {
+        headers: { 'Accept': 'text/html' },
+    });
+
+    if (!response.ok) {
+        throw new Error(`Internet Archive details fallback failed (${response.status})`);
+    }
+
+    return parseDetailsFallback(identifier, await response.text());
+};
 
 const normalizeNumber = (value?: string) => {
     if (!value) return null;
@@ -158,19 +230,38 @@ export async function searchArchiveIdentifiers(query: string, limit: number, pag
 }
 
 export async function fetchArchiveMetadata(identifier: string): Promise<ArchiveMetadataResponse> {
-    const response = await fetch(`${IA_BASE}/metadata/${identifier}`, {
-        headers: { 'Accept': 'application/json' }
-    });
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= ARCHIVE_FETCH_RETRIES; attempt += 1) {
+        try {
+            const response = await fetch(`${IA_BASE}/metadata/${identifier}`, {
+                headers: { 'Accept': 'application/json' }
+            });
 
-    if (!response.ok) {
-        throw new Error(`Internet Archive metadata failed (${response.status})`);
+            if (!response.ok) {
+                throw new Error(`Internet Archive metadata failed (${response.status})`);
+            }
+
+            const data = await response.json();
+            return {
+                metadata: data?.metadata || {},
+                files: data?.files || []
+            };
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error('Internet Archive metadata failed');
+            if (attempt < ARCHIVE_FETCH_RETRIES) {
+                await sleep(500 * (attempt + 1));
+            }
+        }
     }
 
-    const data = await response.json();
-    return {
-        metadata: data?.metadata || {},
-        files: data?.files || []
-    };
+    try {
+        const fallback = await fetchDetailsFallback(identifier);
+        if (fallback.files.length > 0) return fallback;
+    } catch {
+        // Preserve the original metadata error; the fallback is best-effort.
+    }
+
+    throw lastError || new Error('Internet Archive metadata failed');
 }
 
 export function rankPlayableFiles(files: ArchiveFile[], allowMkv: boolean) {

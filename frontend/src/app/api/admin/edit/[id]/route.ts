@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import prisma from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
 import { recordAdminAction } from '@/lib/admin-actions';
@@ -71,6 +72,12 @@ export async function PUT(
             title,
             description,
             type,
+            playbackType,
+            s3KeyPlayback,
+            cloudfrontPath,
+            s3Url,
+            archiveIdentifier,
+            duration,
             seriesTitle,
             seasonNumber,
             episodeNumber,
@@ -107,6 +114,22 @@ export async function PUT(
         const previousThumbnailUrl = video.thumbnailUrl || null;
         const thumbnailChanged = nextThumbnailUrl !== previousThumbnailUrl;
         const nextType = type === 'series' ? 'series' : 'movie';
+        const nextPlaybackType = playbackType === 'hls' ? 'hls' : 'mp4';
+        const nextS3KeyPlayback = typeof s3KeyPlayback === 'string' && s3KeyPlayback.trim()
+            ? s3KeyPlayback.trim()
+            : video.s3KeyPlayback;
+        const nextCloudfrontPath = typeof cloudfrontPath === 'string' && cloudfrontPath.trim()
+            ? cloudfrontPath.trim()
+            : video.cloudfrontPath;
+        const nextS3Url = typeof s3Url === 'string' && s3Url.trim()
+            ? s3Url.trim()
+            : null;
+        const nextArchiveIdentifier = typeof archiveIdentifier === 'string' && archiveIdentifier.trim()
+            ? archiveIdentifier.trim()
+            : video.archiveIdentifier;
+        const nextDuration = duration !== null && duration !== undefined && `${duration}`.trim() !== ''
+            ? Number(duration)
+            : null;
         const isSeriesEdit = editScope === 'series' && video.type === 'series';
         const nextSeasonNumber = nextType === 'series' && seasonNumber !== null && seasonNumber !== undefined && `${seasonNumber}`.trim() !== ''
             ? Number(seasonNumber)
@@ -163,17 +186,20 @@ export async function PUT(
                     update: parentData,
                 });
 
+            const seriesWhere = {
+                type: 'series',
+                OR: [
+                    { seriesId: seriesRecord.id },
+                    ...(currentSeriesTitle ? [{ seriesTitle: currentSeriesTitle }] : []),
+                ],
+            };
+
             const mirroredEpisodeData = {
                 seriesId: seriesRecord.id,
                 seriesTitle: nextSeriesTitle,
                 description: parentData.description,
                 releaseYear: parentData.releaseYear,
                 tmdbId: parentData.tmdbId,
-                thumbnailUrl: parentData.thumbnailUrl,
-                thumbnailSource: parentData.thumbnailSource,
-                thumbnailLocked: parentData.thumbnailLocked,
-                thumbnailUpdatedByUserId: parentData.thumbnailUpdatedByUserId,
-                thumbnailUpdatedAt: parentData.thumbnailUpdatedAt,
                 genre: parentData.genre,
                 rating: parentData.rating,
                 sourceProvider: parentData.sourceProvider,
@@ -184,15 +210,26 @@ export async function PUT(
             };
 
             const updateResult = await prisma.video.updateMany({
-                where: {
-                    type: 'series',
-                    OR: [
-                        { seriesId: seriesRecord.id },
-                        ...(currentSeriesTitle ? [{ seriesTitle: currentSeriesTitle }] : []),
-                    ],
-                },
+                where: seriesWhere,
                 data: mirroredEpisodeData,
             });
+
+            let thumbnailUpdateCount = 0;
+            if (thumbnailChanged && nextThumbnailUrl) {
+                const thumbnailResult = await prisma.video.updateMany({
+                    where: {
+                        ...seriesWhere,
+                        thumbnailLocked: false,
+                    },
+                    data: {
+                        thumbnailUrl: nextThumbnailUrl,
+                        thumbnailSource: 'manual',
+                        thumbnailUpdatedByUserId: auth.user?.id || null,
+                        thumbnailUpdatedAt: new Date(),
+                    },
+                });
+                thumbnailUpdateCount = thumbnailResult.count;
+            }
 
             if (updateResult.count === 0) {
                 return NextResponse.json(
@@ -224,6 +261,7 @@ export async function PUT(
                     previousSeriesTitle: currentSeriesTitle,
                     nextSeriesTitle,
                     updatedCount: updateResult.count,
+                    thumbnailUpdateCount,
                     thumbnailChanged,
                     previousThumbnailUrl,
                     nextThumbnailUrl,
@@ -250,10 +288,16 @@ export async function PUT(
                 title,
                 description: typeof description === 'string' ? description : null,
                 type: nextType,
+                playbackType: nextPlaybackType,
+                s3KeyPlayback: nextS3KeyPlayback,
+                cloudfrontPath: nextCloudfrontPath,
+                s3Url: nextS3Url,
+                archiveIdentifier: nextArchiveIdentifier,
                 seriesId: episodeSeries?.id || null,
                 seriesTitle: nextType === 'series' && typeof seriesTitle === 'string' && seriesTitle.trim() ? seriesTitle.trim() : null,
                 seasonNumber: Number.isFinite(nextSeasonNumber) ? nextSeasonNumber : null,
                 episodeNumber: Number.isFinite(nextEpisodeNumber) ? nextEpisodeNumber : null,
+                duration: Number.isFinite(nextDuration) ? nextDuration : null,
                 releaseYear: releaseYear ? Number(releaseYear) : null,
                 tmdbId: typeof tmdbId === 'string' && tmdbId.trim() ? tmdbId.trim() : null,
                 thumbnailUrl: nextThumbnailUrl,
@@ -285,11 +329,34 @@ export async function PUT(
             });
         }
 
+        await recordAdminAction({
+            actorId: auth.user?.id,
+            action: 'video.metadata.update',
+            entityType: 'Video',
+            entityId: id,
+            videoId: id,
+            metadata: {
+                type: nextType,
+                playbackType: nextPlaybackType,
+                s3KeyPlaybackChanged: nextS3KeyPlayback !== video.s3KeyPlayback,
+                cloudfrontPathChanged: nextCloudfrontPath !== video.cloudfrontPath,
+                archiveIdentifierChanged: nextArchiveIdentifier !== video.archiveIdentifier,
+                seasonNumber: Number.isFinite(nextSeasonNumber) ? nextSeasonNumber : null,
+                episodeNumber: Number.isFinite(nextEpisodeNumber) ? nextEpisodeNumber : null,
+            },
+        });
+
         // Serialize the response to handle BigInt values
         const serialized = serializeData(updated);
         return NextResponse.json({ video: serialized });
     } catch (error) {
         console.error('Error updating video:', error);
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+            return NextResponse.json(
+                { error: 'Another video already uses that playback key or Archive identifier' },
+                { status: 409 }
+            );
+        }
         return NextResponse.json(
             { error: 'Failed to update video', details: (error as Error).message },
             { status: 500 }

@@ -195,7 +195,6 @@ const isGenericBundleTitle = (value?: string) => {
         || normalized === 'publicmovies212';
 };
 
-const DEFAULT_POSTER_URL = 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
 const POSTER_CONTENT_TYPES = new Map([
     ['image/jpeg', 'jpg'],
     ['image/jpg', 'jpg'],
@@ -265,21 +264,6 @@ const storeImportedPoster = async (posterUrl: string | null, archiveIdentifier: 
         console.warn('Failed to store imported poster locally:', error);
         return posterUrl;
     }
-};
-
-const findThumbnailForFile = (files: any[], identifier: string, fileName: string) => {
-    if (!fileName) return null;
-    const base = fileName.replace(/\.[a-z0-9]+$/i, '').toLowerCase();
-    const imageCandidates = files.filter((file) => {
-        const name = (file?.name || '').toLowerCase();
-        if (!name) return false;
-        if (!name.includes(base)) return false;
-        return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
-    });
-
-    const best = imageCandidates[0];
-    if (!best) return null;
-    return buildArchiveDownloadUrl(identifier, best.name);
 };
 
 const buildArchiveIdentifier = (identifier: string, fileName: string | null, bundleIdentifier?: string, contentType?: 'movie' | 'series') => {
@@ -1494,16 +1478,12 @@ export async function POST(request: NextRequest) {
                 const resolvedReleaseYear = releaseYear ?? posterMatch?.releaseYear ?? omdbYear ?? null;
                 const tmdbId = posterMatch?.tmdbId || null;
                 const archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, preset.bundleIdentifier, contentType);
-                const posterSourceUrl = posterMatch?.posterUrl || (
-                    contentType === 'series'
-                        ? DEFAULT_POSTER_URL
-                        : isBundleItem
-                        ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
-                        : `https://archive.org/services/img/${identifier}`
-                );
+                const posterSourceUrl = posterMatch?.posterUrl || null;
                 const thumbnailUrl = dryRun
                     ? posterSourceUrl
-                    : await storeImportedPoster(posterSourceUrl, archiveIdentifier, bestFile.name);
+                    : posterSourceUrl
+                        ? await storeImportedPoster(posterSourceUrl, archiveIdentifier, bestFile.name)
+                        : null;
                 const s3KeyPlayback = `ia:${identifier}/${bestFile.name}`;
 
                 if (!dryRun) {
@@ -1516,7 +1496,9 @@ export async function POST(request: NextRequest) {
                         },
                     });
                     const shouldUpdateThumbnail = !existing?.thumbnailLocked;
-                    const thumbnailSource = thumbnailUrl?.startsWith('/media/thumbnails/') ? 'import' : 'external';
+                    const thumbnailSource = thumbnailUrl
+                        ? (thumbnailUrl.startsWith('/media/thumbnails/') ? 'import' : 'external')
+                        : null;
                     const series = contentType === 'series'
                         ? await ensureSeriesMetadata({
                             title: seriesTitle,

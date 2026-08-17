@@ -513,8 +513,6 @@ const isGenericBundleTitle = (value) => {
         || normalized === 'publicmovies212';
 };
 
-const DEFAULT_POSTER_URL = 'https://images.unsplash.com/photo-1485846234645-a62644f84728?auto=format&fit=crop&q=80&w=400';
-
 const findThumbnailForFile = (files, identifier, fileName) => {
     if (!fileName) return null;
     const base = fileName.replace(/\.[a-z0-9]+$/i, '').toLowerCase();
@@ -686,11 +684,11 @@ app.post('/reconcile', async (req, res) => {
                         type: 'movie'
                     });
                     const tmdbId = posterMatch?.tmdbId || null;
-                    const posterSourceUrl = posterMatch?.posterUrl
-                        || findThumbnailForFile(files, bundleIdentifier, fileName)
-                        || DEFAULT_POSTER_URL;
+                    const posterSourceUrl = posterMatch?.posterUrl || null;
                     const archiveIdentifier = buildArchiveIdentifier(bundleIdentifier, fileName, bundleIdentifier);
-                    const thumbnailUrl = await storePosterImage(posterSourceUrl, archiveIdentifier, fileName);
+                    const thumbnailUrl = posterSourceUrl
+                        ? await storePosterImage(posterSourceUrl, archiveIdentifier, fileName)
+                        : null;
 
                     await upsertVideo({
                         title,
@@ -1137,20 +1135,16 @@ app.post('/import', async (req, res) => {
                 });
                 const tmdbId = posterMatch?.tmdbId || null;
                 let archiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier, contentType);
-                const posterSourceUrl = posterMatch?.posterUrl || (
-                    contentType === 'series'
-                        ? DEFAULT_POSTER_URL
-                        : isBundleItem
-                        ? (findThumbnailForFile(files, identifier, bestFile.name) || DEFAULT_POSTER_URL)
-                        : `https://archive.org/services/img/${identifier}`
-                );
+                const posterSourceUrl = posterMatch?.posterUrl || null;
                 const existingByKey = await findVideoByS3KeyPlayback(s3KeyPlayback);
                 if (existingByKey?.archiveIdentifier
                     && existingByKey.archiveIdentifier !== archiveIdentifier
                     && !(contentType === 'series' && existingByKey.archiveIdentifier === identifier)) {
                     archiveIdentifier = existingByKey.archiveIdentifier;
                 }
-                const thumbnailUrl = await storePosterImage(posterSourceUrl, archiveIdentifier, bestFile.name);
+                const thumbnailUrl = posterSourceUrl
+                    ? await storePosterImage(posterSourceUrl, archiveIdentifier, bestFile.name)
+                    : null;
 
                 const dbRow = await upsertVideo({
                     title,

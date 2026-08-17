@@ -205,10 +205,16 @@ interface Video {
     title: string;
     description?: string;
     type: string;
+    playbackType?: string;
+    s3KeyPlayback?: string;
+    cloudfrontPath?: string;
+    s3Url?: string | null;
+    archiveIdentifier?: string | null;
     seriesId?: string | null;
     seriesTitle?: string | null;
     seasonNumber?: number | null;
     episodeNumber?: number | null;
+    duration?: number | null;
     thumbnailUrl?: string;
     releaseYear?: number;
     tmdbId?: string;
@@ -226,9 +232,15 @@ interface EditFormData {
     title: string;
     description: string;
     type: string;
+    playbackType: string;
+    s3KeyPlayback: string;
+    cloudfrontPath: string;
+    s3Url: string;
+    archiveIdentifier: string;
     seriesTitle: string;
     seasonNumber: string;
     episodeNumber: string;
+    duration: string;
     releaseYear: string;
     tmdbId: string;
     genre: string;
@@ -277,9 +289,15 @@ export default function AdminEditPage() {
         title: '',
         description: '',
         type: 'movie',
+        playbackType: 'mp4',
+        s3KeyPlayback: '',
+        cloudfrontPath: '',
+        s3Url: '',
+        archiveIdentifier: '',
         seriesTitle: '',
         seasonNumber: '',
         episodeNumber: '',
+        duration: '',
         releaseYear: '',
         tmdbId: '',
         genre: '',
@@ -330,9 +348,15 @@ export default function AdminEditPage() {
             title: editableTitle,
             description: video.description || '',
             type: video.type === 'series' ? 'series' : 'movie',
+            playbackType: video.playbackType || 'mp4',
+            s3KeyPlayback: video.s3KeyPlayback || '',
+            cloudfrontPath: video.cloudfrontPath || '',
+            s3Url: video.s3Url || '',
+            archiveIdentifier: video.archiveIdentifier || '',
             seriesTitle: isSeriesMetadataEdit ? editableTitle : video.seriesTitle || '',
             seasonNumber: !isSeriesMetadataEdit && video.seasonNumber ? String(video.seasonNumber) : '',
             episodeNumber: !isSeriesMetadataEdit && video.episodeNumber ? String(video.episodeNumber) : '',
+            duration: !isSeriesMetadataEdit && video.duration ? String(Math.round(video.duration)) : '',
             releaseYear: video.releaseYear ? String(video.releaseYear) : '',
             tmdbId: video.tmdbId || '',
             genre: video.genre || '',
@@ -409,9 +433,15 @@ export default function AdminEditPage() {
                     title: formData.title,
                     description: formData.description,
                     type: formData.type,
+                    playbackType: formData.playbackType,
+                    s3KeyPlayback: editScope === 'episode' ? formData.s3KeyPlayback || null : null,
+                    cloudfrontPath: editScope === 'episode' ? formData.cloudfrontPath || null : null,
+                    s3Url: editScope === 'episode' ? formData.s3Url || null : null,
+                    archiveIdentifier: editScope === 'episode' ? formData.archiveIdentifier || null : null,
                     seriesTitle: formData.type === 'series' ? nextSeriesTitle || null : null,
                     seasonNumber: editScope === 'episode' && formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
                     episodeNumber: editScope === 'episode' && formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
+                    duration: editScope === 'episode' && formData.duration ? Number(formData.duration) : null,
                     releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : null,
                     tmdbId: formData.tmdbId || null,
                     thumbnailUrl: newThumbnailUrl,
@@ -440,9 +470,15 @@ export default function AdminEditPage() {
                 title: formData.title,
                 description: formData.description,
                 type: formData.type,
+                playbackType: formData.playbackType,
+                s3KeyPlayback: editScope === 'episode' ? formData.s3KeyPlayback : current.s3KeyPlayback,
+                cloudfrontPath: editScope === 'episode' ? formData.cloudfrontPath : current.cloudfrontPath,
+                s3Url: editScope === 'episode' ? formData.s3Url : current.s3Url,
+                archiveIdentifier: editScope === 'episode' ? formData.archiveIdentifier : current.archiveIdentifier,
                 seriesTitle: formData.type === 'series' ? nextSeriesTitle : null,
                 seasonNumber: editScope === 'episode' && formData.type === 'series' && formData.seasonNumber ? parseInt(formData.seasonNumber) : null,
                 episodeNumber: editScope === 'episode' && formData.type === 'series' && formData.episodeNumber ? parseInt(formData.episodeNumber) : null,
+                duration: editScope === 'episode' && formData.duration ? Number(formData.duration) : current.duration,
                 releaseYear: formData.releaseYear ? parseInt(formData.releaseYear) : undefined,
                 tmdbId: formData.tmdbId,
                 thumbnailUrl: newThumbnailUrl,
@@ -713,6 +749,84 @@ export default function AdminEditPage() {
                                         style={styles.input}
                                         placeholder="1"
                                         min="1"
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        {!isSeriesMetadataEdit && (
+                            <>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Playback Type</label>
+                                    <select
+                                        name="playbackType"
+                                        value={formData.playbackType}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                    >
+                                        <option value="mp4">MP4</option>
+                                        <option value="hls">HLS</option>
+                                    </select>
+                                </div>
+
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Duration Seconds</label>
+                                    <input
+                                        type="number"
+                                        name="duration"
+                                        value={formData.duration}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="1440"
+                                        min="0"
+                                    />
+                                </div>
+
+                                <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                                    <label style={styles.label}>Playback File Key</label>
+                                    <input
+                                        type="text"
+                                        name="s3KeyPlayback"
+                                        value={formData.s3KeyPlayback}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="ia/series-name/episode-01.mp4"
+                                    />
+                                </div>
+
+                                <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                                    <label style={styles.label}>Cloudfront / Public Path</label>
+                                    <input
+                                        type="text"
+                                        name="cloudfrontPath"
+                                        value={formData.cloudfrontPath}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="/ia/series-name/episode-01.mp4"
+                                    />
+                                </div>
+
+                                <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                                    <label style={styles.label}>Playback URL Override</label>
+                                    <input
+                                        type="text"
+                                        name="s3Url"
+                                        value={formData.s3Url}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="/media/ia/series-name/episode-01.mp4"
+                                    />
+                                </div>
+
+                                <div style={{ ...styles.formGroup, gridColumn: '1 / -1' }}>
+                                    <label style={styles.label}>Archive Identifier</label>
+                                    <input
+                                        type="text"
+                                        name="archiveIdentifier"
+                                        value={formData.archiveIdentifier}
+                                        onChange={handleFormChange}
+                                        style={styles.input}
+                                        placeholder="archive-id:Episode 01.mp4"
                                     />
                                 </div>
                             </>
