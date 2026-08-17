@@ -58,10 +58,56 @@ interface WorkerJobStatus {
     all?: boolean;
     force?: boolean;
     summary?: ImportSummary;
+    failures?: Array<{
+        identifier?: string;
+        fileName?: string | null;
+        title?: string | null;
+        reason?: string | null;
+    }>;
 }
 
 const getErrorMessage = (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback;
+
+type ApiErrorBody = {
+    error?: string;
+    details?: string;
+    results?: ImportResult[];
+    job?: WorkerJobStatus;
+};
+
+const readApiJson = async <T,>(response: Response): Promise<T & ApiErrorBody> => {
+    const text = await response.text();
+    if (!text) return {} as T & ApiErrorBody;
+    try {
+        return JSON.parse(text) as T & ApiErrorBody;
+    } catch {
+        return {
+            error: 'Server returned a non-JSON response',
+            details: text.slice(0, 500),
+        } as T & ApiErrorBody;
+    }
+};
+
+const buildApiErrorMessage = (data: ApiErrorBody, fallback: string) => {
+    const parts = [data.error || fallback];
+    if (data.details) parts.push(data.details);
+
+    const failedResults = (data.results || [])
+        .filter((result) => result.status === 'failed' && result.reason)
+        .slice(0, 3)
+        .map((result) => `${result.title || result.identifier}: ${result.reason}`);
+    const jobFailures = (data.job?.failures || [])
+        .slice(0, 3)
+        .map((failure) => `${failure.title || failure.identifier || 'Item'}: ${failure.reason || 'Failed'}`);
+
+    const failures = failedResults.length > 0 ? failedResults : jobFailures;
+    if (failures.length > 0) {
+        parts.push(failures.join(' | '));
+    }
+
+    return parts.filter(Boolean).join(' - ');
+};
 
 export default function AdminImportPage() {
     const [preset, setPreset] = useState(DEFAULT_ARCHIVE_PRESET_ID);
@@ -128,12 +174,15 @@ export default function AdminImportPage() {
                 })
             });
 
-            const data = await res.json();
+            const data = await readApiJson<{
+                summary?: ImportSummary;
+                results?: ImportResult[];
+            }>(res);
             if (!res.ok) {
-                throw new Error(data.error || 'Import failed');
+                throw new Error(buildApiErrorMessage(data, 'Import failed'));
             }
 
-            setSummary(data.summary);
+            setSummary(data.summary || null);
             setResults(data.results || []);
             if (importType === 'series') {
                 const selected: Record<string, boolean> = {};
@@ -189,12 +238,16 @@ export default function AdminImportPage() {
                 })
             });
 
-            const data = await res.json();
+            const data = await readApiJson<{
+                summary?: ImportSummary;
+                results?: ImportResult[];
+                jobId?: string | null;
+            }>(res);
             if (!res.ok) {
-                throw new Error(data.error || 'Import failed');
+                throw new Error(buildApiErrorMessage(data, 'Import failed'));
             }
 
-            setSummary(data.summary);
+            setSummary(data.summary || null);
             setResults(data.results || []);
             setSelectedIdentifiers({});
             setJobId(data.jobId || null);
@@ -222,9 +275,12 @@ export default function AdminImportPage() {
                 })
             });
 
-            const data = await res.json();
+            const data = await readApiJson<{
+                jobId?: string | null;
+                summary?: ImportSummary;
+            }>(res);
             if (!res.ok) {
-                throw new Error(data.error || 'Reconcile failed');
+                throw new Error(buildApiErrorMessage(data, 'Reconcile failed'));
             }
 
             setJobId(data.jobId || null);
@@ -255,9 +311,13 @@ export default function AdminImportPage() {
                 })
             });
 
-            const data = await res.json();
+            const data = await readApiJson<{
+                jobId?: string | null;
+                summary?: ImportSummary;
+                job?: WorkerJobStatus;
+            }>(res);
             if (!res.ok) {
-                throw new Error(data.error || 'Poster refresh failed');
+                throw new Error(buildApiErrorMessage(data, 'Poster refresh failed'));
             }
 
             setJobId(data.jobId || null);
@@ -279,9 +339,9 @@ export default function AdminImportPage() {
 
     const pollJobStatus = async (id: string) => {
         const res = await fetch(`/api/admin/archive/jobs?jobId=${encodeURIComponent(id)}`);
-        const data = await res.json();
+        const data = await readApiJson<{ job?: WorkerJobStatus }>(res);
         if (!res.ok) {
-            throw new Error(data?.error || 'Failed to fetch job status');
+            throw new Error(buildApiErrorMessage(data, 'Failed to fetch job status'));
         }
         if (data?.job) {
             setJobStatus(data.job);
@@ -705,6 +765,25 @@ export default function AdminImportPage() {
                                 <span>Skipped: {jobStatus?.skipped ?? 0}</span>
                                 <span>Failed: {jobStatus?.failed ?? 0}</span>
                             </div>
+                            {jobStatus?.failures && jobStatus.failures.length > 0 && (
+                                <div style={{
+                                    marginTop: '0.85rem',
+                                    paddingTop: '0.85rem',
+                                    borderTop: '1px solid rgba(248, 113, 113, 0.2)',
+                                    color: '#FCA5A5',
+                                    fontSize: '0.75rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.35rem'
+                                }}>
+                                    <strong style={{ color: '#F87171' }}>Failure samples</strong>
+                                    {jobStatus.failures.slice(0, 5).map((failure, index) => (
+                                        <span key={`${failure.identifier || 'failure'}-${failure.fileName || index}`}>
+                                            {failure.title || failure.identifier || 'Item'}{failure.fileName ? ` / ${failure.fileName}` : ''}: {failure.reason || 'Failed'}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
