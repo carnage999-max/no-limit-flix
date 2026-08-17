@@ -161,6 +161,22 @@ class DownloadFetchError extends Error {
     }
 }
 
+const TRANSIENT_DOWNLOAD_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504, 520, 522, 524]);
+
+const resolveDownloadRetryCount = () => {
+    const configured = Number(process.env.ARCHIVE_DOWNLOAD_RETRIES);
+    if (Number.isFinite(configured) && configured >= 0) return Math.min(Math.round(configured), 10);
+    return 4;
+};
+
+const downloadRetryDelay = (attempt) => {
+    const baseMs = Number(process.env.ARCHIVE_DOWNLOAD_RETRY_BASE_MS);
+    const base = Number.isFinite(baseMs) && baseMs > 0 ? baseMs : 1500;
+    return Math.min(base * (attempt + 1), 15000);
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const toNodeReadable = (body) => {
     if (!body) return null;
     if (typeof body.pipe === 'function') return body;
@@ -170,25 +186,72 @@ const toNodeReadable = (body) => {
     throw new Error('Unable to convert response body to Node stream');
 };
 
-const fetchDownload = async (downloadUrl) => {
-    const response = await fetch(downloadUrl, {
-        headers: {
-            Accept: '*/*',
-            'User-Agent': 'NoLimitFlix-Ingest/1.0'
-        }
-    });
+const fetchDownloadOnce = async (downloadUrl) => {
+    try {
+        return await fetch(downloadUrl, {
+            headers: {
+                Accept: '*/*',
+                'User-Agent': 'NoLimitFlix-Ingest/1.0'
+            }
+        });
+    } catch (error) {
+        const wrapped = new DownloadFetchError(0, `Failed to download source file (${error.message})`);
+        wrapped.cause = error;
+        throw wrapped;
+    }
+};
 
-    if (!response.ok || !response.body) {
+const fetchDownload = async (downloadUrl) => {
+    const maxRetries = resolveDownloadRetryCount();
+    let lastError = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        try {
+            const response = await fetchDownloadOnce(downloadUrl);
+
+            if (response.ok && response.body) {
+                return {
+                    response,
+                    stream: toNodeReadable(response.body)
+                };
+            }
+
+            lastError = new DownloadFetchError(
+                response.status,
+                `Failed to download source file (${response.status})`
+            );
+
+            if (!TRANSIENT_DOWNLOAD_STATUSES.has(response.status) || attempt >= maxRetries) {
+                throw lastError;
+            }
+        } catch (error) {
+            lastError = error instanceof DownloadFetchError
+                ? error
+                : new DownloadFetchError(0, `Failed to download source file (${error.message})`);
+            if (lastError.statusCode && !TRANSIENT_DOWNLOAD_STATUSES.has(lastError.statusCode)) {
+                throw lastError;
+            }
+            if (attempt >= maxRetries) {
+                break;
+            }
+        }
+
+        await sleep(downloadRetryDelay(attempt));
+    }
+
+    if (lastError instanceof DownloadFetchError) {
+        lastError.message = `${lastError.message} after ${maxRetries + 1} attempts`;
+        throw lastError;
+    }
+
+    if (lastError) {
         throw new DownloadFetchError(
-            response.status,
-            `Failed to download source file (${response.status})`
+            lastError.statusCode || 0,
+            `Failed to download source file after ${maxRetries + 1} attempts`
         );
     }
 
-    return {
-        response,
-        stream: toNodeReadable(response.body)
-    };
+    throw new DownloadFetchError(0, `Failed to download source file after ${maxRetries + 1} attempts`);
 };
 
 const downloadToFile = async (downloadUrl, destinationPath) => {

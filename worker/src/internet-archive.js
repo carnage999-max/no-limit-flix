@@ -247,13 +247,12 @@ function rankPlayableFiles(files, allowMkv) {
         const height = normalizeNumber(file.height) || 0;
         const bitrate = normalizeNumber(file.bitrate) || 0;
         const size = normalizeNumber(file.size) || 0;
-        const preferred = isMp4(file) ? 1 : 0;
+        const containerRank = isMp4(file) ? 1 : 0;
         const format = toLower(file.format);
         const mime = inferMimeType(file) || '';
         const duration = normalizeNumber(file.length) || 0;
 
         const codecBoost = format.includes('h.264') || format.includes('h264') || format.includes('avc') ? 500000 : 0;
-        const mp4Boost = preferred ? 1000000 : 0;
         const mimeBoost = mime === 'video/mp4' ? 200000 : 0;
 
         let bitratePenalty = 0;
@@ -263,17 +262,20 @@ function rankPlayableFiles(files, allowMkv) {
             if (computedBitrate > 50000000) bitratePenalty = 400000;
         }
 
-        const score = mp4Boost + codecBoost + mimeBoost
+        const score = codecBoost + mimeBoost
             + (height * 1000)
             + (width * 10)
             + (bitrate * 2)
             + (size / 1024)
             - bitratePenalty;
 
-        return { file, score };
+        return { file, score, containerRank };
     });
 
-    candidates.sort((a, b) => b.score - a.score);
+    candidates.sort((a, b) => {
+        if (a.containerRank !== b.containerRank) return b.containerRank - a.containerRank;
+        return b.score - a.score;
+    });
     return candidates.map((candidate) => candidate.file);
 }
 
