@@ -254,7 +254,16 @@ export const InternalMoviesScreen = () => {
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={28} color={COLORS.text} />
                 </TouchableOpacity>
-                <Text style={styles.title}>Hosted Movies</Text>
+                <View style={styles.titleContainer}>
+                    <Text style={styles.title}>Hosted Movies</Text>
+                    {user && !loading && (
+                        <Text style={styles.subtitle}>
+                            {hasActiveFilters && filteredMovies.length !== movies.length
+                                ? `${filteredMovies.length} of ${movies.length} movies`
+                                : `${movies.length} ${movies.length === 1 ? 'movie' : 'movies'}`}
+                        </Text>
+                    )}
+                </View>
                 <TouchableOpacity
                     onPress={() => {
                         if (viewSize === 'standard') updateViewSize('compact');
@@ -480,10 +489,20 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         letterSpacing: 1,
     },
+    titleContainer: {
+        flex: 1,
+        alignItems: 'center',
+    },
     title: {
         color: COLORS.text,
         fontSize: 20,
         fontWeight: '700',
+    },
+    subtitle: {
+        color: COLORS.silver,
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 2,
     },
     listContent: {
         paddingHorizontal: SPACING.xl,
