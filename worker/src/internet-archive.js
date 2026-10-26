@@ -232,6 +232,9 @@ async function fetchArchiveMetadata(identifier) {
     throw lastError || new Error('Internet Archive metadata failed');
 }
 
+// Disk is the constraint, so rankPlayableFiles prefers the smallest file at or above this height.
+const MIN_PREFERRED_HEIGHT = 360;
+
 function rankPlayableFiles(files, allowMkv) {
     const filtered = files.filter((file) => {
         if (!isVideoCandidate(file)) return false;
@@ -269,11 +272,17 @@ function rankPlayableFiles(files, allowMkv) {
             + (size / 1024)
             - bitratePenalty;
 
-        return { file, score, containerRank };
+        // Smaller files first, but never a clip too low-res or oddly encoded to watch.
+        const watchable = bitratePenalty === 0 && (height === 0 || height >= MIN_PREFERRED_HEIGHT);
+
+        return { file, score, containerRank, watchable, size };
     });
 
     candidates.sort((a, b) => {
         if (a.containerRank !== b.containerRank) return b.containerRank - a.containerRank;
+        if (a.watchable !== b.watchable) return a.watchable ? -1 : 1;
+        if (a.size !== b.size && a.size > 0 && b.size > 0) return a.size - b.size;
+        if ((a.size > 0) !== (b.size > 0)) return a.size > 0 ? -1 : 1;
         return b.score - a.score;
     });
     return candidates.map((candidate) => candidate.file);
@@ -281,7 +290,7 @@ function rankPlayableFiles(files, allowMkv) {
 
 function pickBestPlayableFile(files, allowMkv) {
     const ranked = rankPlayableFiles(files, allowMkv);
-    return ranked[0] || null;
+    return (ranked || [])[0] || null;
 }
 
 module.exports = {

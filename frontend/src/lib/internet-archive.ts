@@ -4,9 +4,19 @@ export interface ArchivePreset {
     query: string;
     description?: string;
     bundleIdentifier?: string;
+    /** Stable ordering so page numbers keep pointing at the same films between runs. */
+    sort?: string;
 }
 
 export const ARCHIVE_PRESETS: ArchivePreset[] = [
+    {
+        id: 'feature-films-archive',
+        label: 'Feature Films Archive (~28k)',
+        query: 'collection:(feature_films) AND mediatype:(movies) AND format:("h.264" OR "MPEG4") AND item_size:[150000000 TO *] AND -title:(trailer OR preview OR teaser OR promo OR commercial OR clip OR newsreel OR sample)',
+        // Smallest first to save disk; item_size is a proxy for file size and the 150MB floor drops shorts.
+        sort: 'item_size asc,identifier asc',
+        description: 'The full Internet Archive feature_films collection, smallest films first. Pages through it and skips films already in the library.'
+    },
     {
         id: 'public-domain-feature-films',
         label: 'Public Domain Feature Films',
@@ -28,7 +38,7 @@ export const ARCHIVE_PRESETS: ArchivePreset[] = [
     }
 ];
 
-export const DEFAULT_ARCHIVE_PRESET_ID = 'public-domain-feature-films';
+export const DEFAULT_ARCHIVE_PRESET_ID = 'feature-films-archive';
 
 export interface ArchiveFile {
     name: string;
@@ -213,7 +223,10 @@ export async function searchArchiveIdentifiers(query: string, limit: number, pag
     url.searchParams.set('page', Math.max(1, page).toString());
     url.searchParams.set('output', 'json');
     if (sort) {
-        url.searchParams.append('sort[]', sort === 'title' ? 'titleSorter asc' : sort);
+        for (const clause of sort.split(',')) {
+            const trimmed = clause.trim();
+            if (trimmed) url.searchParams.append('sort[]', trimmed === 'title' ? 'titleSorter asc' : trimmed);
+        }
     }
 
     const response = await fetch(url.toString(), {
@@ -264,6 +277,9 @@ export async function fetchArchiveMetadata(identifier: string): Promise<ArchiveM
     throw lastError || new Error('Internet Archive metadata failed');
 }
 
+// Disk is the constraint, so rankPlayableFiles prefers the smallest file at or above this height.
+const MIN_PREFERRED_HEIGHT = 360;
+
 export function rankPlayableFiles(files: ArchiveFile[], allowMkv: boolean) {
     const filtered = files.filter((file) => {
         if (!isVideoCandidate(file)) return false;
@@ -301,11 +317,17 @@ export function rankPlayableFiles(files: ArchiveFile[], allowMkv: boolean) {
             + (size / 1024)
             - bitratePenalty;
 
-        return { file, score, containerRank };
+        // Smaller files first, but never a clip too low-res or oddly encoded to watch.
+        const watchable = bitratePenalty === 0 && (height === 0 || height >= MIN_PREFERRED_HEIGHT);
+
+        return { file, score, containerRank, watchable, size };
     });
 
     candidates.sort((a, b) => {
         if (a.containerRank !== b.containerRank) return b.containerRank - a.containerRank;
+        if (a.watchable !== b.watchable) return a.watchable ? -1 : 1;
+        if (a.size !== b.size && a.size > 0 && b.size > 0) return a.size - b.size;
+        if ((a.size > 0) !== (b.size > 0)) return a.size > 0 ? -1 : 1;
         return b.score - a.score;
     });
     return candidates.map((candidate) => candidate.file);

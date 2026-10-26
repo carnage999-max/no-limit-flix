@@ -5,9 +5,17 @@ const { buildMediaPath, buildPublicMediaUrl, resolveMoviePlaybackMode } = requir
 
 test('buildMediaPath creates movie hls manifests under ia/<identifier>/hls', () => {
     assert.equal(
-        buildMediaPath('publicmovies212', 'Karate Kids USA.mp4', { playbackType: 'hls' }),
-        'ia/publicmovies212/hls/master.m3u8'
+        buildMediaPath('some-movie', 'some-movie.mp4', { playbackType: 'hls' }),
+        'ia/some-movie/hls/master.m3u8'
     );
+});
+
+test('buildMediaPath gives each bundle film its own hls folder', () => {
+    const a = buildMediaPath('publicmovies212', 'Karate Kids USA.mp4', { playbackType: 'hls', bundle: true });
+    const b = buildMediaPath('publicmovies212', 'Other Film (1950).mp4', { playbackType: 'hls', bundle: true });
+
+    assert.equal(a, 'ia/publicmovies212/hls/karate-kids-usa/master.m3u8');
+    assert.notEqual(a, b);
 });
 
 test('buildMediaPath keeps reels as mp4 files under ia/reels/<identifier>', () => {

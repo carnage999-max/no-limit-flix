@@ -469,6 +469,42 @@ module.exports = {
         );
         return result.rows[0] || null;
     },
+    findVideoByArchiveIdentifier: async (archiveIdentifier) => {
+        const result = await pool.query(
+            'SELECT id, "status", "playbackType" FROM "Video" WHERE "archiveIdentifier" = $1 LIMIT 1',
+            [archiveIdentifier]
+        );
+        return result.rows[0] || null;
+    },
+    listLocalMp4Videos: async (limit, offset = 0) => {
+        const result = await pool.query(
+            `SELECT id, "s3KeyPlayback", "archiveIdentifier"
+             FROM "Video"
+             WHERE "playbackType" = 'mp4'
+               AND "status" = 'completed'
+               AND "sourceProvider" = 'internet_archive'
+               AND "s3KeyPlayback" NOT LIKE 'ia:%'
+               AND "s3KeyPlayback" ILIKE '%.mp4'
+             ORDER BY "createdAt" ASC
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+        return result.rows;
+    },
+    switchVideoToHls: async (id, manifestPath, publicUrl) => {
+        await pool.query(
+            `UPDATE "Video"
+             SET "playbackType" = 'hls',
+                 "s3KeySource" = "s3KeyPlayback",
+                 "s3KeyPlayback" = $2,
+                 "cloudfrontPath" = $3,
+                 "s3Url" = $4,
+                 "mimeType" = 'application/vnd.apple.mpegurl',
+                 "updatedAt" = NOW()
+             WHERE id = $1`,
+            [id, manifestPath, `/${manifestPath}`, publicUrl]
+        );
+    },
     findReelByS3KeyPlayback: async (s3KeyPlayback) => {
         const result = await pool.query(
             'SELECT id, "archiveIdentifier" FROM "Reel" WHERE "s3KeyPlayback" = $1 LIMIT 1',

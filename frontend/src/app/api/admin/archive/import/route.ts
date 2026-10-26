@@ -10,6 +10,11 @@ import {
     rankPlayableFiles,
     searchArchiveIdentifiers
 } from '@/lib/internet-archive';
+import {
+    buildArchiveIdentifier,
+    collectFreshIdentifiers,
+    findKnownArchiveIdentifiers
+} from '@/lib/archive-candidates';
 import { requireAdmin } from '@/lib/admin-auth';
 import { writeMediaBuffer } from '@/lib/media-storage';
 import { recordAdminAction } from '@/lib/admin-actions';
@@ -264,13 +269,6 @@ const storeImportedPoster = async (posterUrl: string | null, archiveIdentifier: 
         console.warn('Failed to store imported poster locally:', error);
         return posterUrl;
     }
-};
-
-const buildArchiveIdentifier = (identifier: string, fileName: string | null, bundleIdentifier?: string, contentType?: 'movie' | 'series') => {
-    if (fileName && (contentType === 'series' || (bundleIdentifier && identifier === bundleIdentifier))) {
-        return `${identifier}:${fileName}`;
-    }
-    return identifier;
 };
 
 const normalizeText = (value?: string) => {
@@ -1192,6 +1190,11 @@ export async function POST(request: NextRequest) {
         const seasonNumberInput = contentType === 'series' ? Number(body?.seasonNumber) || 1 : null;
         const startEpisodeInput = contentType === 'series' ? Number(body?.startEpisodeNumber) || 1 : null;
         const dryRun = Boolean(body?.dryRun);
+        // `force` re-imports films that are already in the library instead of skipping them.
+        const force = Boolean(body?.force);
+        // Stream (HLS) by default; send playbackMode: 'mp4' to keep a single downloadable file.
+        const playbackMode = body?.playbackMode === 'mp4' ? 'mp4' : 'hls';
+        let skippedExisting = 0;
 
         const preset = ARCHIVE_PRESETS.find((p) => p.id === presetId) || ARCHIVE_PRESETS[0];
         const seriesQuery = preset.query;
@@ -1267,8 +1270,21 @@ export async function POST(request: NextRequest) {
                     return a.name.localeCompare(b.name);
                 });
             }
+            if (!force) {
+                const known = await findKnownArchiveIdentifiers(rankedFiles.map((file) => `${bundleId}:${file.name}`));
+                const fresh = rankedFiles.filter((file) => !known.has(`${bundleId}:${file.name}`));
+                skippedExisting += rankedFiles.length - fresh.length;
+                rankedFiles = fresh;
+            }
             const seedValue = shuffleSeedInput || Date.now().toString();
-            const shuffled = shuffleWithSeed(rankedFiles, toSeedNumber(seedValue));
+            // Smallest films first to conserve disk; an explicit shuffleSeed still gets a random order.
+            const shuffled = shuffleSeedInput || contentType === 'series'
+                ? shuffleWithSeed(rankedFiles, toSeedNumber(seedValue))
+                : [...rankedFiles].sort((a, b) => {
+                    const aSize = Number(a.size) || Number.MAX_SAFE_INTEGER;
+                    const bSize = Number(b.size) || Number.MAX_SAFE_INTEGER;
+                    return aSize - bSize;
+                });
             const start = (page - 1) * limit;
             const end = start + limit;
             const pageItems = shuffled.slice(start, end);
@@ -1295,23 +1311,87 @@ export async function POST(request: NextRequest) {
         const shuffleSeed = bundleResult?.seed || shuffleSeedInput || null;
         const totalAvailable = bundleResult?.total || null;
 
-        const itemsToProcess = providedItems.length > 0
-            ? providedItems
-            : (seriesManifest
-                ? seriesManifest.results.map((item) => ({
-                    identifier: item.identifier,
-                    fileName: item.fileName || null,
-                    title: item.title,
-                    seriesTitle: item.seriesTitle || seriesManifest.seriesTitle,
-                    seasonNumber: item.seasonNumber ?? null,
-                    episodeNumber: item.episodeNumber ?? null,
-                }))
-                : (bundleItems && bundleItems.length > 0
-                ? bundleItems
-                : (providedIdentifiers.length > 0
-                    ? providedIdentifiers.map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null }))
-                    : (await searchArchiveIdentifiers(seriesQuery, limit, page))
-                        .map((identifier: string) => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null })))));
+        type CandidateItem = {
+            identifier: string;
+            fileName: string | null;
+            title?: string | null;
+            seriesTitle?: string | null;
+            seasonNumber: number | null;
+            episodeNumber: number | null;
+        };
+        const bareItem = (identifier: string): CandidateItem => ({ identifier, fileName: null, seasonNumber: null, episodeNumber: null });
+
+        let discovery: { nextPage: number; exhausted: boolean } | null = null;
+        let candidateItems: CandidateItem[];
+
+        if (providedItems.length > 0) {
+            candidateItems = providedItems;
+        } else if (seriesManifest) {
+            candidateItems = seriesManifest.results.map((item) => ({
+                identifier: item.identifier,
+                fileName: item.fileName || null,
+                title: item.title,
+                seriesTitle: item.seriesTitle || seriesManifest.seriesTitle,
+                seasonNumber: item.seasonNumber ?? null,
+                episodeNumber: item.episodeNumber ?? null,
+            }));
+        } else if (bundleItems) {
+            // Bundle presets never fall through to a search: an empty list means every film is imported.
+            candidateItems = bundleItems;
+        } else if (providedIdentifiers.length > 0) {
+            candidateItems = providedIdentifiers.map(bareItem);
+        } else if (force) {
+            candidateItems = (await searchArchiveIdentifiers(seriesQuery, limit, page, preset.sort)).map(bareItem);
+        } else {
+            const fresh = await collectFreshIdentifiers({ query: seriesQuery, sort: preset.sort, limit, startPage: page });
+            skippedExisting += fresh.skippedExisting;
+            discovery = { nextPage: fresh.nextPage, exhausted: fresh.exhausted };
+            candidateItems = fresh.identifiers.map(bareItem);
+        }
+
+        // Explicit lists and series manifests can still name films we already hold.
+        let itemsToProcess: CandidateItem[] = candidateItems;
+        if (!force && candidateItems.length > 0) {
+            const keyFor = (item: CandidateItem) =>
+                (contentType === 'movie' || item.fileName)
+                    ? buildArchiveIdentifier(item.identifier, item.fileName, preset.bundleIdentifier, contentType)
+                    : null;
+            const known = await findKnownArchiveIdentifiers(
+                candidateItems.map(keyFor).filter((key): key is string => Boolean(key))
+            );
+            itemsToProcess = candidateItems.filter((item) => {
+                const key = keyFor(item);
+                return !(key && known.has(key));
+            });
+            skippedExisting += candidateItems.length - itemsToProcess.length;
+        }
+
+        const discoveryInfo = {
+            skippedExisting,
+            nextPage: discovery?.nextPage ?? null,
+            exhausted: discovery?.exhausted ?? false,
+        };
+
+        if (itemsToProcess.length === 0 && !dryRun) {
+            return NextResponse.json({
+                success: true,
+                presetId: preset.id,
+                summary: {
+                    requested: 0,
+                    imported: 0,
+                    updated: 0,
+                    skipped: 0,
+                    failed: 0,
+                    ready: 0,
+                    searchQuery: seriesQuery,
+                    shuffleSeed,
+                    totalAvailable,
+                    page,
+                    ...discoveryInfo,
+                },
+                results: [],
+            });
+        }
 
         const workerUrl = process.env.INGEST_WORKER_URL;
         if (workerUrl && !dryRun) {
@@ -1336,7 +1416,8 @@ export async function POST(request: NextRequest) {
                     seriesTitle: seriesTitleInput || null,
                     seasonNumber: seasonNumberInput,
                     startEpisodeNumber: startEpisodeInput,
-                    playbackMode: 'mp4',
+                    playbackMode,
+                    force,
                     async: true,
                     items: itemsToProcess.map((item: any) => ({
                         identifier: item.identifier,
@@ -1366,7 +1447,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            return NextResponse.json(data || { success: true });
+            return NextResponse.json({ ...(data || { success: true }), discovery: discoveryInfo });
         }
 
         const results: ImportResult[] = [];
@@ -1653,6 +1734,7 @@ export async function POST(request: NextRequest) {
             shuffleSeed,
             totalAvailable,
             page,
+            ...discoveryInfo,
         };
 
         const safeResults = results.map((result) => ({

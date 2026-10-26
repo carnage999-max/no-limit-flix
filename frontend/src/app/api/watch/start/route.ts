@@ -154,7 +154,8 @@ export async function POST(request: NextRequest) {
       const response: WatchStartResponse = {
         success: true,
         playbackUrl,
-        playbackType: 'mp4',
+        // Archive imports can be HLS (worker transcodes them); only the hot-linked ones are plain mp4.
+        playbackType: video.playbackType === 'hls' ? 'hls' : 'mp4',
         expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       };
 

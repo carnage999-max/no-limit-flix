@@ -73,6 +73,45 @@ const normalizeKind = (kind) => String(kind || '').replace(/[^a-z0-9_-]/gi, '').
 const isMp4FileName = (name) => /\.mp4$/i.test(String(name || ''));
 const toMp4Name = (name) => sanitizeFileName(String(name || 'video.mp4').replace(/\.[^.]+$/, '') + '.mp4');
 
+const slugifyFileName = (name) => {
+    const base = String(name || '').replace(/\.[^.]+$/, '');
+    const slug = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
+    return slug || 'video';
+};
+
+const BYTES_PER_GB = 1024 ** 3;
+const DEFAULT_MIN_FREE_GB = 600;
+
+// Free space that imports must leave untouched. The media volume is shared with every other
+// container on the host (databases, builds), so the library may never be allowed to fill it.
+// Set MEDIA_MIN_FREE_GB=0 to disable the guard.
+const getMinFreeBytes = () => {
+    const configured = Number(process.env.MEDIA_MIN_FREE_GB);
+    const gb = Number.isFinite(configured) && configured >= 0 && process.env.MEDIA_MIN_FREE_GB !== undefined && process.env.MEDIA_MIN_FREE_GB !== ''
+        ? configured
+        : DEFAULT_MIN_FREE_GB;
+    return gb * BYTES_PER_GB;
+};
+
+const getFreeDiskBytes = async () => {
+    const stats = await fsp.statfs(getMediaRoot());
+    return Number(stats.bavail) * Number(stats.bsize);
+};
+
+// Peak usage while importing is roughly three copies of the file (download, HLS output, final).
+const IMPORT_SPACE_MULTIPLIER = 3;
+
+const checkDiskSpace = async (incomingBytes = 0) => {
+    const minFreeBytes = getMinFreeBytes();
+    const freeBytes = await getFreeDiskBytes();
+    const needed = minFreeBytes + (Number(incomingBytes) || 0) * IMPORT_SPACE_MULTIPLIER;
+    return {
+        ok: minFreeBytes === 0 || freeBytes >= needed,
+        freeGb: Math.round((freeBytes / BYTES_PER_GB) * 10) / 10,
+        minFreeGb: Math.round((minFreeBytes / BYTES_PER_GB) * 10) / 10
+    };
+};
+
 const resolveMoviePlaybackMode = () => {
     const value = String(process.env.MOVIE_PLAYBACK_MODE || 'mp4').trim().toLowerCase();
     return value === 'hls' ? 'hls' : 'mp4';
@@ -87,6 +126,11 @@ const buildMediaPath = (identifier, fileName, options = {}) => {
     }
 
     if (playbackType === 'hls') {
+        // Bundle items (many films in one archive.org item) share an identifier, so each
+        // film needs its own HLS folder or they overwrite one another's manifest.
+        if (options.bundle) {
+            return normalizeMediaPath(`ia/${identifier}/hls/${slugifyFileName(fileName)}/master.m3u8`);
+        }
         return normalizeMediaPath(`ia/${identifier}/hls/master.m3u8`);
     }
 
@@ -399,6 +443,55 @@ const buildHlsArgs = (inputPath, outputDir) => {
     ];
 };
 
+const buildHlsRemuxArgs = (inputPath, outputDir) => [
+    '-hide_banner',
+    '-loglevel', 'error',
+    '-i', inputPath,
+    '-map', '0:v:0',
+    '-map', '0:a:0?',
+    '-c', 'copy',
+    '-hls_time', String(toPositiveInt(process.env.MOVIE_HLS_SEGMENT_SECONDS, 10)),
+    '-hls_list_size', '0',
+    '-hls_segment_filename', path.join(outputDir, 'segment-%05d.ts'),
+    '-f', 'hls',
+    path.join(outputDir, 'master.m3u8')
+];
+
+// Converts an MP4 already on disk into an HLS folder next to it. Remuxes first (seconds,
+// lossless) and only re-encodes when the streams can't be copied into MPEG-TS.
+const convertLocalMp4ToHls = async (relativeMp4Path) => {
+    if (!checkFfmpegAvailable()) {
+        throw new Error('ffmpeg is required for HLS conversion');
+    }
+
+    const sourcePath = getAbsoluteMediaPath(relativeMp4Path);
+    await fsp.access(sourcePath);
+
+    const manifestPath = normalizeMediaPath(
+        `${path.posix.dirname(relativeMp4Path)}/hls/${slugifyFileName(path.posix.basename(relativeMp4Path))}/master.m3u8`
+    );
+    const finalOutputDir = path.dirname(getAbsoluteMediaPath(manifestPath));
+    const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nlf-hls-convert-'));
+    const tempOutputDir = path.join(workDir, 'output');
+
+    try {
+        await ensureCleanDirectory(tempOutputDir);
+        try {
+            await runFfmpeg(buildHlsRemuxArgs(sourcePath, tempOutputDir));
+        } catch {
+            await ensureCleanDirectory(tempOutputDir);
+            await runFfmpeg(buildHlsArgs(sourcePath, tempOutputDir));
+        }
+        await copyDirectory(tempOutputDir, finalOutputDir);
+        return {
+            manifestPath,
+            publicUrl: buildPublicMediaUrl(manifestPath)
+        };
+    } finally {
+        await cleanupPath(workDir);
+    }
+};
+
 const copyDirectory = async (sourceDir, destinationDir) => {
     await fsp.mkdir(path.dirname(destinationDir), { recursive: true });
     await fsp.rm(destinationDir, { recursive: true, force: true });
@@ -468,7 +561,10 @@ const storeMoviePlayback = async (downloadUrl, identifier, fileMeta, options = {
             return storeFileAtRelativePath(downloadUrl, relativePath, fileMeta, { transcode: false });
         }
 
-        const relativeManifestPath = buildMediaPath(identifier, fileMeta?.name, { playbackType: 'hls' });
+        const relativeManifestPath = buildMediaPath(identifier, fileMeta?.name, {
+            playbackType: 'hls',
+            bundle: Boolean(options.bundle)
+        });
         const finalOutputDir = path.dirname(getAbsoluteMediaPath(relativeManifestPath));
         const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'nlf-hls-'));
         const sourcePath = path.join(workDir, sanitizeFileName(fileMeta?.name || 'source.mp4'));
@@ -545,9 +641,12 @@ module.exports = {
     buildPublicUrl,
     uploadToS3,
     storeMoviePlayback,
+    convertLocalMp4ToHls,
     storePosterImage,
     listS3Objects,
     isTranscoderAvailable,
     resolveMoviePlaybackMode,
+    checkDiskSpace,
+    slugifyFileName,
     DownloadFetchError
 };

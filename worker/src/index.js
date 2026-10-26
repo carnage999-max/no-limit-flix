@@ -15,6 +15,9 @@ const {
     upsertVideo,
     upsertReel,
     findVideoByS3KeyPlayback,
+    findVideoByArchiveIdentifier,
+    listLocalMp4Videos,
+    switchVideoToHls,
     findReelByS3KeyPlayback,
     pool,
     updateVideoPoster,
@@ -25,10 +28,13 @@ const {
     buildS3Key,
     uploadToS3,
     storeMoviePlayback,
+    convertLocalMp4ToHls,
     storePosterImage,
     listS3Objects,
     buildPublicUrl,
     isTranscoderAvailable,
+    resolveMoviePlaybackMode,
+    checkDiskSpace,
     DownloadFetchError
 } = require('./ingest');
 
@@ -576,10 +582,12 @@ const parseSeasonEpisode = (value) => {
     return { season: null, episode: null };
 };
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
+    const disk = await checkDiskSpace().catch(() => null);
     res.json({
         ok: true,
-        ffmpegAvailable: isTranscoderAvailable()
+        ffmpegAvailable: isTranscoderAvailable(),
+        disk
     });
 });
 
@@ -967,6 +975,58 @@ app.post('/refresh-posters', async (req, res) => {
     }
 });
 
+// Re-packages movies that were imported as plain MP4 into HLS so they stream in segments
+// instead of exposing one downloadable file. Run repeatedly until `remaining` is 0.
+app.post('/convert-hls', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        if (!isTranscoderAvailable()) {
+            return res.status(500).json({ error: 'ffmpeg is not available on the worker' });
+        }
+
+        const limit = Math.min(Math.max(Number(req.body?.limit) || 5, 1), 50);
+        // Rows that fail stay mp4; callers pass the running failure count as `offset` to step past them.
+        const offset = Math.max(Number(req.body?.offset) || 0, 0);
+        const rows = await listLocalMp4Videos(limit, offset);
+        const converted = [];
+        const failed = [];
+
+        let stoppedForDisk = false;
+        for (const row of rows) {
+            const disk = await checkDiskSpace();
+            if (!disk.ok) {
+                stoppedForDisk = true;
+                break;
+            }
+            try {
+                const { manifestPath, publicUrl } = await convertLocalMp4ToHls(row.s3KeyPlayback);
+                await switchVideoToHls(row.id, manifestPath, publicUrl);
+                converted.push({ id: row.id, manifestPath });
+            } catch (error) {
+                console.error('HLS conversion failed', { id: row.id, key: row.s3KeyPlayback, reason: error.message });
+                failed.push({ id: row.id, key: row.s3KeyPlayback, reason: error.message });
+            }
+        }
+
+        const remaining = await listLocalMp4Videos(1, offset + failed.length);
+        return res.json({
+            success: true,
+            converted: converted.length,
+            failed: failed.length,
+            failures: failed,
+            nextOffset: offset + failed.length,
+            stoppedForDisk,
+            moreRemaining: remaining.length > 0
+        });
+    } catch (error) {
+        console.error('Worker HLS conversion error:', error);
+        return res.status(500).json({ error: 'HLS conversion failed', details: error.message });
+    }
+});
+
 app.post('/import', async (req, res) => {
     try {
         const authHeader = req.headers.authorization || '';
@@ -983,7 +1043,8 @@ app.post('/import', async (req, res) => {
         const seasonNumberInput = contentType === 'series' ? Number(req.body?.seasonNumber) || 1 : null;
         const startEpisodeInput = contentType === 'series' ? Number(req.body?.startEpisodeNumber) || 1 : null;
         const bundleIdentifier = req.body?.bundleIdentifier ? String(req.body.bundleIdentifier) : null;
-        const playbackMode = String(req.body?.playbackMode || 'mp4').toLowerCase() === 'hls' ? 'hls' : 'mp4';
+        const playbackMode = String(req.body?.playbackMode || resolveMoviePlaybackMode()).toLowerCase() === 'hls' ? 'hls' : 'mp4';
+        const forceReimport = Boolean(req.body?.force);
 
         const requestedItems = Array.isArray(req.body?.items)
             ? req.body.items
@@ -1019,6 +1080,20 @@ app.post('/import', async (req, res) => {
 
         const runImport = async (job) => {
             const results = [];
+            // Once the disk reserve is hit, the rest of the batch is skipped without any fetching.
+            let diskLow = null;
+
+            const recordSkip = (result, reason) => {
+                result.status = 'skipped';
+                result.reason = reason;
+                results.push(result);
+                rememberJobResult(job, result);
+                if (job) {
+                    job.processed += 1;
+                    job.skipped += 1;
+                    job.lastUpdatedAt = Date.now();
+                }
+            };
 
             for (const [index, item] of itemsToProcess.entries()) {
                 const identifier = item.identifier;
@@ -1027,6 +1102,11 @@ app.post('/import', async (req, res) => {
                     title: identifier,
                     status: 'failed'
                 };
+
+                if (diskLow) {
+                    recordSkip(result, `Low disk space (${diskLow.freeGb}GB free, ${diskLow.minFreeGb}GB reserved)`);
+                    continue;
+                }
 
             try {
                 const { metadata, files } = await fetchArchiveMetadata(identifier);
@@ -1063,13 +1143,39 @@ app.post('/import', async (req, res) => {
                     continue;
                 }
 
+                // Check the library before downloading anything: re-fetching and transcoding a
+                // film we already hold just burns bandwidth and never raises the movie count.
+                const candidateArchiveIdentifier = buildArchiveIdentifier(identifier, bestFile.name, bundleIdentifier, contentType);
+                if (!forceReimport) {
+                    const alreadyImported = await findVideoByArchiveIdentifier(candidateArchiveIdentifier);
+                    if (alreadyImported?.status === 'completed') {
+                        result.fileName = bestFile.name;
+                        recordSkip(result, 'Already in library');
+                        continue;
+                    }
+                }
+
+                const disk = await checkDiskSpace(Number(bestFile.size) || 0);
+                if (!disk.ok) {
+                    // Only stop the whole batch when the reserve itself is gone; a single huge
+                    // file that doesn't fit shouldn't block smaller ones after it.
+                    const reserve = await checkDiskSpace();
+                    if (!reserve.ok) diskLow = reserve;
+                    result.fileName = bestFile.name;
+                    recordSkip(result, `Low disk space (${disk.freeGb}GB free, ${disk.minFreeGb}GB reserved)`);
+                    continue;
+                }
+
                 const playbackUrl = buildArchiveDownloadUrl(identifier, bestFile.name);
                 const {
                     s3Url,
                     relativePath: s3KeyPlayback,
                     contentType: uploadedContentType,
                     playbackType
-                } = await storeMoviePlayback(playbackUrl, identifier, bestFile, { playbackType: playbackMode });
+                } = await storeMoviePlayback(playbackUrl, identifier, bestFile, {
+                    playbackType: playbackMode,
+                    bundle: Boolean(bundleIdentifier && identifier === bundleIdentifier)
+                });
                 const sourcePageUrl = `https://archive.org/details/${identifier}`;
 
                 let title = contentType === 'series' && item.title
@@ -1220,6 +1326,8 @@ app.post('/import', async (req, res) => {
                 updated: results.filter((r) => r.status === 'updated').length,
                 skipped: results.filter((r) => r.status === 'skipped').length,
                 failed: results.filter((r) => r.status === 'failed').length,
+                stoppedForDisk: Boolean(diskLow),
+                diskFreeGb: diskLow ? diskLow.freeGb : null,
                 failures: results
                     .filter((r) => r.status === 'failed')
                     .slice(0, MAX_JOB_FAILURE_SAMPLES)
