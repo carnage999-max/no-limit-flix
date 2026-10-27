@@ -44,3 +44,46 @@ test('returns the url unchanged when no signing secret is configured', async () 
   assert.equal(signMediaUrl('/media/ia/x/hls/master.m3u8', NOW), '/media/ia/x/hls/master.m3u8');
   process.env.MEDIA_SIGNING_SECRET = saved;
 });
+
+const { verifyMediaRequest } = await import('../src/lib/media-signing.ts');
+
+test('verifyMediaRequest accepts the playlist and its segments from a signed folder', () => {
+  const signed = signMediaUrl('/media/ia/some-film/hls/master.m3u8', NOW);
+  const segment = signed.replace('master.m3u8', 'segment-00007.ts');
+
+  assert.deepEqual(verifyMediaRequest(signed, 'test-secret', NOW), { ok: true });
+  assert.deepEqual(verifyMediaRequest(segment, 'test-secret', NOW), { ok: true });
+});
+
+test('verifyMediaRequest accepts url-encoded paths (spaces) for single files', () => {
+  const signed = signMediaUrl('/media/ia/bundle/Film A (1950).mp4', NOW);
+  const encoded = encodeURI(signed);
+
+  assert.deepEqual(verifyMediaRequest(encoded, 'test-secret', NOW), { ok: true });
+});
+
+test('verifyMediaRequest rejects expired, tampered, wrong-secret and wrong-file requests', () => {
+  const signed = signMediaUrl('/media/ia/some-film/hls/master.m3u8', NOW);
+
+  assert.deepEqual(verifyMediaRequest(signed, 'test-secret', NOW + 601_000), { ok: false, reason: 'expired' });
+  assert.deepEqual(verifyMediaRequest(signed, 'other-secret', NOW), { ok: false, reason: 'bad-signature' });
+  assert.deepEqual(
+    verifyMediaRequest(signed.replace('some-film', 'another-film'), 'test-secret', NOW),
+    { ok: false, reason: 'bad-signature' }
+  );
+  assert.deepEqual(verifyMediaRequest('/media/ia/some-film/hls/master.m3u8', 'test-secret', NOW), { ok: false, reason: 'malformed' });
+});
+
+test('a folder token does not unlock an mp4 in that folder, and mp4 tokens are per file', () => {
+  const folder = signMediaUrl('/media/ia/bundle/hls/master.m3u8', NOW);
+  const mp4Attempt = folder.replace('hls/master.m3u8', 'hls/movie.mp4');
+  const a = signMediaUrl('/media/ia/bundle/a.mp4', NOW);
+
+  assert.equal(verifyMediaRequest(mp4Attempt, 'test-secret', NOW).ok, false);
+  assert.equal(verifyMediaRequest(a.replace('a.mp4', 'b.mp4'), 'test-secret', NOW).ok, false);
+});
+
+test('verifyMediaRequest rejects path traversal', () => {
+  const signed = signMediaUrl('/media/ia/x/a.mp4', NOW);
+  assert.equal(verifyMediaRequest(signed.replace('ia/x/a.mp4', 'ia/x/../../etc/a.mp4'), 'test-secret', NOW).ok, false);
+});
