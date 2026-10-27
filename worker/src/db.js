@@ -482,6 +482,7 @@ module.exports = {
              FROM "Video"
              WHERE "playbackType" = 'mp4'
                AND "status" = 'completed'
+               AND "type" = 'movie'
                AND "sourceProvider" = 'internet_archive'
                AND "s3KeyPlayback" NOT LIKE 'ia:%'
                AND "s3KeyPlayback" ILIKE '%.mp4'
