@@ -18,6 +18,13 @@ curl -X POST http://127.0.0.1:8080/convert-hls \
 
 It remuxes without re-encoding where possible, switches the DB row to `hls`, and leaves the original MP4 on disk. Repeat until `moreRemaining` is `false`; if any item failed, pass the returned `nextOffset` as `offset` so the next call steps past it.
 
+Freeing disk after conversion: `scripts/cleanup-mp4.sh` deletes the original MP4 of every converted movie (calls `POST /cleanup-mp4`). It is a dry run unless you set `DRY_RUN=0`, so run it once to see how much it would free. It only removes imported `ia/` MP4s, and only when the HLS playlist is complete (end marker present, every listed segment on disk) and no other video points at the file. Uploaded files and series are never touched.
+
+```bash
+WORKER_ENV_FILE=/path/to/worker/.env worker/scripts/cleanup-mp4.sh            # report only
+WORKER_ENV_FILE=/path/to/worker/.env DRY_RUN=0 worker/scripts/cleanup-mp4.sh  # delete
+```
+
 Reels:
 - stay `MP4`
 - can still be compressed through ffmpeg before being written to disk

@@ -506,6 +506,33 @@ module.exports = {
             [id, manifestPath, `/${manifestPath}`, publicUrl]
         );
     },
+    listConvertedMp4Sources: async (limit, offset = 0) => {
+        const result = await pool.query(
+            `SELECT id, "s3KeyPlayback", "s3KeySource"
+             FROM "Video"
+             WHERE "playbackType" = 'hls'
+               AND "status" = 'completed'
+               AND "type" = 'movie'
+               AND "sourceProvider" = 'internet_archive'
+               AND "s3KeySource" ILIKE '%.mp4'
+             ORDER BY "createdAt" ASC
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+        return result.rows;
+    },
+    isMediaPathReferencedElsewhere: async (id, mediaPath) => {
+        const result = await pool.query(
+            `SELECT 1 FROM "Video"
+             WHERE id <> $1 AND ("s3KeyPlayback" = $2 OR "s3KeySource" = $2)
+             LIMIT 1`,
+            [id, mediaPath]
+        );
+        return result.rowCount > 0;
+    },
+    clearVideoSource: async (id) => {
+        await pool.query('UPDATE "Video" SET "s3KeySource" = NULL, "updatedAt" = NOW() WHERE id = $1', [id]);
+    },
     findReelByS3KeyPlayback: async (s3KeyPlayback) => {
         const result = await pool.query(
             'SELECT id, "archiveIdentifier" FROM "Reel" WHERE "s3KeyPlayback" = $1 LIMIT 1',
