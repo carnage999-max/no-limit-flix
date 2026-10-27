@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
+import { getSessionUser } from '@/lib/auth-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,12 @@ export async function GET(
     context: { params: Promise<{ id: string }> }
 ) {
     const { id: assetId } = await context.params;
+
+    // This route re-encodes and serves a whole film; it must never be open to anonymous callers.
+    const sessionUser = await getSessionUser(request);
+    if (!sessionUser) {
+        return new Response('Unauthorized', { status: 401 });
+    }
 
     try {
         const video = await (prisma.video as any).findUnique({

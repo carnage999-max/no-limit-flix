@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
+import { signMediaUrl } from '@/lib/media-signing';
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -65,7 +66,7 @@ const isAuthorized = (request: NextRequest) => {
 };
 
 const buildPlaybackUrl = (row: ReelRow) => {
-    return resolveMediaUrl(row.s3Url || row.cloudfrontPath);
+    return signMediaUrl(resolveMediaUrl(row.s3Url || row.cloudfrontPath));
 };
 
 export async function GET(request: NextRequest) {

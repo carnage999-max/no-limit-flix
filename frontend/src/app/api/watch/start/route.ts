@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 import { resolveMediaUrl } from '@/lib/media';
+import { getMediaUrlTtlSeconds, signMediaUrl } from '@/lib/media-signing';
 import { getSessionUser } from '@/lib/auth-server';
 import { isReviewSafeVideo } from '@/lib/review-safety';
 import { getAssetReferenceCandidates, normalizeAssetReference } from '@/lib/watch-asset';
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const playbackUrl = resolveMediaUrl(reel.s3Url || reel.cloudfrontPath || reel.s3KeyPlayback);
+      const playbackUrl = signMediaUrl(resolveMediaUrl(reel.s3Url || reel.cloudfrontPath || reel.s3KeyPlayback));
       if (!playbackUrl) {
         return NextResponse.json(
           { error: 'Playback URL missing for reel asset' },
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
         success: true,
         playbackUrl,
         playbackType,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + getMediaUrlTtlSeconds() * 1000).toISOString(),
       };
 
       return NextResponse.json(response, { status: 200 });
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (video.sourceType === 'external_legal' || video.sourceProvider === 'internet_archive') {
-      const playbackUrl = resolveMediaUrl(video.s3Url || video.cloudfrontPath);
+      const playbackUrl = signMediaUrl(resolveMediaUrl(video.s3Url || video.cloudfrontPath));
       if (!playbackUrl) {
         return NextResponse.json(
           { error: 'Playback URL missing for external asset' },
@@ -156,13 +157,13 @@ export async function POST(request: NextRequest) {
         playbackUrl,
         // Archive imports can be HLS (worker transcodes them); only the hot-linked ones are plain mp4.
         playbackType: video.playbackType === 'hls' ? 'hls' : 'mp4',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + getMediaUrlTtlSeconds() * 1000).toISOString(),
       };
 
       return NextResponse.json(response, { status: 200 });
     }
 
-    const playbackUrl = resolveMediaUrl(video.s3Url || video.cloudfrontPath || video.s3KeyPlayback);
+    const playbackUrl = signMediaUrl(resolveMediaUrl(video.s3Url || video.cloudfrontPath || video.s3KeyPlayback));
     if (!playbackUrl) {
       return NextResponse.json(
         { error: 'Playback configuration error' },
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
       success: true,
       playbackUrl,
       playbackType: video.playbackType as 'mp4' | 'hls',
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      expiresAt: new Date(Date.now() + getMediaUrlTtlSeconds() * 1000).toISOString(),
     };
 
     return NextResponse.json(response, { status: 200 });
