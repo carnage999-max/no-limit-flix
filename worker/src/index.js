@@ -18,6 +18,9 @@ const {
     findVideoByArchiveIdentifier,
     listLocalMp4Videos,
     switchVideoToHls,
+    listConvertedMp4Sources,
+    isMediaPathReferencedElsewhere,
+    clearVideoSource,
     findReelByS3KeyPlayback,
     pool,
     updateVideoPoster,
@@ -35,8 +38,10 @@ const {
     isTranscoderAvailable,
     resolveMoviePlaybackMode,
     checkDiskSpace,
+    getAbsoluteMediaPath,
     DownloadFetchError
 } = require('./ingest');
+const { cleanupConvertedMp4 } = require('./cleanup');
 
 const PORT = Number(process.env.PORT) || 8080;
 const ADMIN_SECRET = process.env.INGEST_WORKER_SECRET;
@@ -1024,6 +1029,59 @@ app.post('/convert-hls', async (req, res) => {
     } catch (error) {
         console.error('Worker HLS conversion error:', error);
         return res.status(500).json({ error: 'HLS conversion failed', details: error.message });
+    }
+});
+
+// Frees disk by deleting the original MP4 of movies already converted to HLS. Dry run unless the
+// body says `"dryRun": false`. Skipped rows stay in the list, so callers pass `nextOffset` back.
+app.post('/cleanup-mp4', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization || '';
+        if (authHeader !== `Bearer ${ADMIN_SECRET}`) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const dryRun = req.body?.dryRun !== false;
+        const limit = Math.min(Math.max(Number(req.body?.limit) || 50, 1), 200);
+        const offset = Math.max(Number(req.body?.offset) || 0, 0);
+        const rows = await listConvertedMp4Sources(limit, offset);
+
+        const counts = { deleted: 0, wouldDelete: 0, gone: 0 };
+        let freedBytes = 0;
+        const skips = [];
+        for (const row of rows) {
+            const outcome = await cleanupConvertedMp4(row, {
+                resolvePath: getAbsoluteMediaPath,
+                isReferencedElsewhere: isMediaPathReferencedElsewhere,
+                dryRun
+            });
+            if (outcome.status === 'skipped') {
+                skips.push({ id: row.id, key: row.s3KeySource, reason: outcome.reason });
+                continue;
+            }
+            if (outcome.status === 'would-delete') counts.wouldDelete += 1;
+            if (outcome.status === 'deleted') counts.deleted += 1;
+            if (outcome.status === 'gone') counts.gone += 1;
+            freedBytes += outcome.bytes || 0;
+            if (!dryRun) await clearVideoSource(row.id);
+        }
+
+        // Rows that were cleared drop out of the list; skipped rows (and every row in a dry run) stay.
+        const nextOffset = offset + (dryRun ? rows.length : skips.length);
+        const remaining = await listConvertedMp4Sources(1, nextOffset);
+        return res.json({
+            success: true,
+            dryRun,
+            ...counts,
+            skipped: skips.length,
+            skips,
+            freedGb: Math.round((freedBytes / 1024 ** 3) * 10) / 10,
+            nextOffset,
+            moreRemaining: remaining.length > 0
+        });
+    } catch (error) {
+        console.error('Worker MP4 cleanup error:', error);
+        return res.status(500).json({ error: 'MP4 cleanup failed', details: error.message });
     }
 });
 

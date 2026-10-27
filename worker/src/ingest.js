@@ -457,8 +457,19 @@ const buildHlsRemuxArgs = (inputPath, outputDir) => [
     path.join(outputDir, 'master.m3u8')
 ];
 
-// Converts an MP4 already on disk into an HLS folder next to it. Remuxes first (seconds,
-// lossless) and only re-encodes when the streams can't be copied into MPEG-TS.
+// Remuxes first (seconds, lossless) and only re-encodes when the streams can't be copied into
+// MPEG-TS. Re-encoding a feature film takes many minutes, so it is the fallback, not the default.
+const encodeHls = async (sourcePath, outputDir) => {
+    await ensureCleanDirectory(outputDir);
+    try {
+        await runFfmpeg(buildHlsRemuxArgs(sourcePath, outputDir));
+    } catch {
+        await ensureCleanDirectory(outputDir);
+        await runFfmpeg(buildHlsArgs(sourcePath, outputDir));
+    }
+};
+
+// Converts an MP4 already on disk into an HLS folder next to it.
 const convertLocalMp4ToHls = async (relativeMp4Path) => {
     if (!checkFfmpegAvailable()) {
         throw new Error('ffmpeg is required for HLS conversion');
@@ -475,13 +486,7 @@ const convertLocalMp4ToHls = async (relativeMp4Path) => {
     const tempOutputDir = path.join(workDir, 'output');
 
     try {
-        await ensureCleanDirectory(tempOutputDir);
-        try {
-            await runFfmpeg(buildHlsRemuxArgs(sourcePath, tempOutputDir));
-        } catch {
-            await ensureCleanDirectory(tempOutputDir);
-            await runFfmpeg(buildHlsArgs(sourcePath, tempOutputDir));
-        }
+        await encodeHls(sourcePath, tempOutputDir);
         await copyDirectory(tempOutputDir, finalOutputDir);
         return {
             manifestPath,
@@ -572,8 +577,7 @@ const storeMoviePlayback = async (downloadUrl, identifier, fileMeta, options = {
 
         try {
             await downloadToFile(downloadUrl, sourcePath);
-            await ensureCleanDirectory(tempOutputDir);
-            await runFfmpeg(buildHlsArgs(sourcePath, tempOutputDir));
+            await encodeHls(sourcePath, tempOutputDir);
             await copyDirectory(tempOutputDir, finalOutputDir);
 
             return {
@@ -648,5 +652,6 @@ module.exports = {
     resolveMoviePlaybackMode,
     checkDiskSpace,
     slugifyFileName,
+    getAbsoluteMediaPath,
     DownloadFetchError
 };
