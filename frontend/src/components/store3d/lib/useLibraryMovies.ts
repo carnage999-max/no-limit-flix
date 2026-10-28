@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Movie } from "../data/types";
-import { primaryGenre, assignShelfGenres, type ShelfGenreAssignment } from "./genreBuckets";
+import { primaryGenre } from "./genreBuckets";
+import { buildStoreShelves, type ShelfPlan } from "../data/shelfLayout";
 import { paletteFor } from "./palette";
 
 interface RawLibraryMovie {
@@ -62,8 +63,8 @@ export interface LibraryMovies {
   featuredMovies: Movie[];
   /** One movie per standee cut-out spot (data/layout.ts STANDEE_SPOTS), picked from the featured set. */
   standeeMovies: Movie[];
-  /** Which genre hangs over which shelf run. */
-  shelfGenres: ShelfGenreAssignment;
+  /** Where every case sits on the shelves, plus the genre label for each overhead sign. */
+  shelfPlan: ShelfPlan;
 }
 
 const EMPTY: LibraryMovies = {
@@ -72,7 +73,7 @@ const EMPTY: LibraryMovies = {
   movies: [],
   featuredMovies: [],
   standeeMovies: [],
-  shelfGenres: { signed: [], back: null },
+  shelfPlan: { placements: [], signLabels: [] },
 };
 
 /** Loads the real catalog once and shapes it for the 3D store. No sample data anywhere in this path. */
@@ -98,9 +99,9 @@ export function useLibraryMovies(): LibraryMovies {
 
         const featuredMovies = movies.slice(0, Math.min(6, movies.length));
         const standeeMovies = featuredMovies.length > 0 ? [featuredMovies[0], featuredMovies[featuredMovies.length - 1]] : [];
-        const shelfGenres = assignShelfGenres(movies);
+        const shelfPlan = buildStoreShelves(movies);
 
-        setState({ loading: false, error: null, movies, featuredMovies, standeeMovies, shelfGenres });
+        setState({ loading: false, error: null, movies, featuredMovies, standeeMovies, shelfPlan });
       } catch (err) {
         if (controller.signal.aborted) return;
         setState({ ...EMPTY, loading: false, error: err instanceof Error ? err.message : "Failed to load the library." });

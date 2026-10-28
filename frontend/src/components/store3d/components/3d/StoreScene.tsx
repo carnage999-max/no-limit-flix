@@ -34,7 +34,7 @@ function ResponsiveCamera() {
 }
 
 function SceneContents() {
-  const { shelfGenres, standeeMovies } = useMovieSelection();
+  const { shelfPlan, standeeMovies } = useMovieSelection();
 
   return (
     <>
@@ -57,9 +57,12 @@ function SceneContents() {
 
       <CentralDisplay />
       <NeonSign />
-      {GENRE_SIGN_SPOTS.map((spot, i) => (
-        <GenreSign key={`${spot.x}-${spot.z}`} label={(shelfGenres.signed[i] ?? "").toUpperCase()} x={spot.x} z={spot.z} />
-      ))}
+      {GENRE_SIGN_SPOTS.map((spot, i) => {
+        const label = shelfPlan.signLabels[i];
+        // A thin library may not fill every aisle — better no sign than an empty one.
+        if (!label) return null;
+        return <GenreSign key={`${spot.x}-${spot.z}`} label={label.toUpperCase()} x={spot.x} z={spot.z} />;
+      })}
       {STANDEE_SPOTS.map((spot, i) => {
         const movie = standeeMovies[i];
         if (!movie) return null;
