@@ -2,6 +2,10 @@
 .env
 private.pem
 public.pem
+.DS_Store
+# Coding-agent tooling metadata — references absolute paths from whatever machine generated it,
+# never meant to be shared between machines/contributors.
+skills-lock.json
 /hls-temp/
 /tmp/hls-*
 about.txt
