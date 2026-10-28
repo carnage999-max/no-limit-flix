@@ -1,29 +1,26 @@
-import {
-  Home,
-  Clapperboard,
-  LibraryBig,
-  Film,
-  Tv,
-  Baby,
-  ListVideo,
-  Clock,
-  Star,
-  Settings,
-  X,
-} from "lucide-react";
+import Link from "next/link";
+import { Home, Clapperboard, Film, Tv, Clock, Star, Settings, User, X } from "lucide-react";
 
-const NAV_ITEMS = [
-  { label: "Home", icon: Home },
-  { label: "Video Store", icon: Clapperboard, active: true },
-  { label: "My Library", icon: LibraryBig },
-  { label: "Movies", icon: Film },
-  { label: "TV Shows", icon: Tv },
-  { label: "Kids", icon: Baby },
-  { label: "Playlists", icon: ListVideo },
-  { label: "Recently Added", icon: Clock },
-  { label: "Favorites", icon: Star },
-  { label: "Settings", icon: Settings },
+/**
+ * Only routes that actually exist on the site — an aisle sign pointing at a room we don't have
+ * is worse than no sign. "Video Store" is this page, so it has no href.
+ */
+const NAV_ITEMS: { label: string; icon: typeof Home; href?: string }[] = [
+  { label: "Home", icon: Home, href: "/" },
+  { label: "Video Store", icon: Clapperboard },
+  { label: "Movies", icon: Film, href: "/collections/internal-movies" },
+  { label: "TV Shows", icon: Tv, href: "/collections/internal-tv" },
+  { label: "Favorites", icon: Star, href: "/account/favorites" },
+  { label: "Continue watching", icon: Clock, href: "/watch-history" },
+  { label: "Profile", icon: User, href: "/profile" },
+  { label: "Settings", icon: Settings, href: "/settings" },
 ];
+
+const ITEM_BASE =
+  "s3d-nav-item flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold tracking-wide justify-center lg:justify-start max-md:justify-start";
+const ITEM_ACTIVE =
+  "bg-gradient-to-r from-nlf-gold/20 to-nlf-gold/5 text-nlf-gold-light border border-nlf-gold/50 shadow-[0_0_18px_rgba(245,196,82,0.18)]";
+const ITEM_IDLE = "text-nlf-muted border border-transparent hover:bg-white/5 hover:text-white";
 
 interface SidebarProps {
   open?: boolean;
@@ -69,19 +66,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex flex-col gap-0.5 w-full">
-          {NAV_ITEMS.map(({ label, icon: Icon, active }) => (
-            <button
-              key={label}
-              className={`s3d-nav-item flex items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-semibold tracking-wide justify-center lg:justify-start max-md:justify-start ${
-                active
-                  ? "bg-gradient-to-r from-nlf-gold/20 to-nlf-gold/5 text-nlf-gold-light border border-nlf-gold/50 shadow-[0_0_18px_rgba(245,196,82,0.18)]"
-                  : "text-nlf-muted border border-transparent hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <Icon size={18} strokeWidth={2} className="shrink-0" />
-              <span className="hidden lg:inline max-md:inline uppercase text-[12px]">{label}</span>
-            </button>
-          ))}
+          {NAV_ITEMS.map(({ label, icon: Icon, href }) => {
+            const body = (
+              <>
+                <Icon size={18} strokeWidth={2} className="shrink-0" />
+                <span className="hidden lg:inline max-md:inline uppercase text-[12px]">{label}</span>
+              </>
+            );
+            return href ? (
+              <Link key={label} href={href} onClick={onClose} className={`${ITEM_BASE} ${ITEM_IDLE}`} title={label}>
+                {body}
+              </Link>
+            ) : (
+              <span key={label} aria-current="page" className={`${ITEM_BASE} ${ITEM_ACTIVE}`} title={label}>
+                {body}
+              </span>
+            );
+          })}
         </nav>
       </aside>
     </>

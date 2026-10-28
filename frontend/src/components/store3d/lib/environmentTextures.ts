@@ -5,9 +5,9 @@ import * as THREE from "three";
 // docs/3d-store-texture-prompts.md for exact prompts — and it's picked up automatically on the
 // next load; until then the room uses the generated canvas texture it always has.
 const REAL_TEXTURE_PATHS = {
-  floor: "/3d/textures/floor.jpg",
-  wall: "/3d/textures/wall.jpg",
-  ceiling: "/3d/textures/ceiling.jpg",
+  floor: "/3d/textures/floor.png",
+  wall: "/3d/textures/wall.png",
+  ceiling: "/3d/textures/ceiling.png",
 } as const;
 
 type SurfaceKey = keyof typeof REAL_TEXTURE_PATHS;

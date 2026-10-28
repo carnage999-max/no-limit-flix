@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import type { Movie } from "../data/types";
 import { useLibraryMovies } from "../lib/useLibraryMovies";
-import type { ShelfGenreAssignment } from "../lib/genreBuckets";
+import type { ShelfPlan } from "../data/shelfLayout";
 
 interface MovieSelectionContextValue {
   loading: boolean;
@@ -9,7 +9,7 @@ interface MovieSelectionContextValue {
   movies: Movie[];
   featuredMovies: Movie[];
   standeeMovies: Movie[];
-  shelfGenres: ShelfGenreAssignment;
+  shelfPlan: ShelfPlan;
   selectedMovie: Movie | null;
   selectedId: string | null;
   hoveredId: string | null;
@@ -61,7 +61,7 @@ export function MovieSelectionProvider({ children, onPlay }: MovieSelectionProvi
       movies: library.movies,
       featuredMovies: library.featuredMovies,
       standeeMovies: library.standeeMovies,
-      shelfGenres: library.shelfGenres,
+      shelfPlan: library.shelfPlan,
       selectedMovie,
       selectedId,
       hoveredId,

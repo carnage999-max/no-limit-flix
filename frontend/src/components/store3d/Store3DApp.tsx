@@ -15,7 +15,6 @@ import { TopBar } from "./components/ui/TopBar";
 import { MovieSelectionProvider, useMovieSelection } from "./hooks/useMovieSelection";
 import { useKeyboardControls } from "./hooks/useKeyboardControls";
 import type { Movie } from "./data/types";
-import "./store3d.css";
 
 function ExitButton() {
   return (
