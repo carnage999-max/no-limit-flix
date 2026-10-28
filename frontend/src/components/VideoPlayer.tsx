@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MediaPlayer, MediaProvider } from '@vidstack/react';
+import { MediaPlayer, MediaProvider, useMediaRemote, useMediaState } from '@vidstack/react';
 import type { MediaPlayerInstance, PlayerSrc } from '@vidstack/react';
 import { DefaultVideoLayout, defaultLayoutIcons } from '@vidstack/react/player/layouts/default';
-import { AlertTriangle, Smartphone, Monitor } from 'lucide-react';
+import { AlertTriangle, Smartphone, Monitor, Play } from 'lucide-react';
 import '@vidstack/react/player/styles/default/theme.css';
 import '@vidstack/react/player/styles/default/layouts/video.css';
 
@@ -40,6 +40,57 @@ const restrictNativeVideoDownloads = (provider: unknown) => {
     video.setAttribute('disableRemotePlayback', '');
     video.setAttribute('draggable', 'false');
 };
+
+// Shown over a paused video, matching the mobile app's pause screen. Only the play button takes
+// clicks; the rest lets them through so the seek bar and the player's own tap handling keep working.
+function PauseScreen() {
+    const remote = useMediaRemote();
+    const paused = useMediaState('paused');
+    const started = useMediaState('started');
+    const ended = useMediaState('ended');
+    const seeking = useMediaState('seeking');
+    const waiting = useMediaState('waiting');
+
+    if (!started || !paused || ended || seeking || waiting) return null;
+
+    return (
+        <div
+            style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 5,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.75rem',
+                background: 'rgba(0, 0, 0, 0.4)',
+                pointerEvents: 'none',
+            }}
+        >
+            <button
+                type="button"
+                aria-label="Resume playback"
+                onClick={() => remote.play()}
+                style={{
+                    pointerEvents: 'auto',
+                    width: '100px',
+                    height: '100px',
+                    borderRadius: '50%',
+                    border: '2px solid #D4AF37',
+                    background: 'rgba(255, 193, 7, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                }}
+            >
+                <Play size={50} color="#fff" fill="#fff" style={{ marginLeft: '5px' }} />
+            </button>
+            <span style={{ color: '#fff', fontSize: '14px', fontWeight: 900, letterSpacing: '4px', opacity: 0.8 }}>PAUSED</span>
+        </div>
+    );
+}
 
 export default function VideoPlayer({ src, assetId, poster, onReady, title, enableWatchTracking = true }: VideoPlayerProps) {
     const playerRef = useRef<MediaPlayerInstance | null>(null);
@@ -94,9 +145,14 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
 
     const playbackUrl = signedPlaybackUrl || src;
     const effectivePlaybackType = playbackType || (playbackUrl.toLowerCase().includes('.m3u8') ? 'hls' : 'mp4');
-    const playerSrc: PlayerSrc = effectivePlaybackType === 'hls'
-        ? { src: playbackUrl, type: 'application/x-mpegurl' }
-        : playbackUrl;
+    // A new object on every render makes the player treat it as a new source and reload the video,
+    // which can resume playback right after the viewer pauses.
+    const playerSrc = useMemo<PlayerSrc>(
+        () => (effectivePlaybackType === 'hls'
+            ? { src: playbackUrl, type: 'application/x-mpegurl' }
+            : playbackUrl),
+        [effectivePlaybackType, playbackUrl]
+    );
 
     useEffect(() => {
         const video = containerRef.current?.querySelector('video') || null;
@@ -193,7 +249,6 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
                 poster={poster}
                 autoPlay={false}
                 playsInline
-                controls
                 onProviderChange={(provider) => restrictNativeVideoDownloads(provider)}
                 onCanPlay={() => onReady && onReady(playerRef.current)}
                 onTimeUpdate={() => handleWatchProgress(false)}
@@ -205,6 +260,7 @@ export default function VideoPlayer({ src, assetId, poster, onReady, title, enab
             >
                 <MediaProvider />
                 <DefaultVideoLayout icons={defaultLayoutIcons} />
+                <PauseScreen />
             </MediaPlayer>
             <style jsx global>{`
                 .vds-media-player {
