@@ -7,6 +7,7 @@ import {
     BarChart3,
     Clapperboard,
     FilePenLine,
+    Flag,
     Gauge,
     Import,
     Settings,
@@ -47,6 +48,7 @@ const actionLinks = [
     { href: '/account/dashboard', label: 'Full analytics', icon: BarChart3 },
     { href: '/admin/settings', label: 'Admin settings', icon: Settings },
     { href: '/admin/edit', label: 'Edit metadata', icon: FilePenLine },
+    { href: '/admin/flags', label: 'Flagged movies', icon: Flag },
 ];
 
 export default function AdminDashboardPage() {

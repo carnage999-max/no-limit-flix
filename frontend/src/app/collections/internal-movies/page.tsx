@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { ArrowRight, ArrowUp, Clapperboard, Filter, LayoutGrid, List, Search, Star, X } from 'lucide-react';
 import { buildWatchHref } from '@/lib/watch-asset';
 import type { RatingSummary } from '@/types';
+import { FlagMovieButton } from '@/components';
+import { useSession } from '@/context/SessionContext';
+import { useVideoFlags } from '@/lib/use-video-flags';
 
 interface MovieItem {
     id: string;
@@ -79,6 +82,9 @@ const buildMoviesUrl = (page: number, category: string, sortMode: SortMode, quer
 };
 
 export default function InternalMoviesPage() {
+    const { user } = useSession();
+    const isAdmin = user?.role === 'admin';
+    const { flaggedIds, busyId, error: flagError, flag, unflag } = useVideoFlags(isAdmin);
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -552,7 +558,7 @@ export default function InternalMoviesPage() {
                                         ?? movie.averageRating
                                         ?? null;
                                     return (
-                                        <li key={movie.id}>
+                                        <li key={movie.id} style={{ borderBottom: '1px solid rgba(167, 171, 180, 0.12)' }}>
                                             <Link
                                                 href={buildWatchHref(movie.id)}
                                                 style={{
@@ -562,7 +568,6 @@ export default function InternalMoviesPage() {
                                                     gap: '1rem',
                                                     minHeight: '116px',
                                                     padding: '0.95rem 0',
-                                                    borderBottom: '1px solid rgba(167, 171, 180, 0.12)',
                                                     color: 'inherit',
                                                     textDecoration: 'none',
                                                 }}
@@ -650,6 +655,16 @@ export default function InternalMoviesPage() {
                                                     </span>
                                                 </span>
                                             </Link>
+                                            {isAdmin && (
+                                                <div style={{ padding: '0 0 0.85rem calc(4.25rem + 72px + 2rem)' }}>
+                                                    <FlagMovieButton
+                                                        flagged={flaggedIds.has(movie.id)}
+                                                        busy={busyId === movie.id}
+                                                        onFlag={(reason) => flag(movie.id, reason)}
+                                                        onUnflag={() => unflag(movie.id)}
+                                                    />
+                                                </div>
+                                            )}
                                         </li>
                                     );
                                 })}
@@ -777,6 +792,16 @@ export default function InternalMoviesPage() {
                                                         </span>
                                                     </span>
                                                 </Link>
+                                                {isAdmin && (
+                                                    <div style={{ marginTop: '0.5rem' }}>
+                                                        <FlagMovieButton
+                                                            flagged={flaggedIds.has(movie.id)}
+                                                            busy={busyId === movie.id}
+                                                            onFlag={(reason) => flag(movie.id, reason)}
+                                                            onUnflag={() => unflag(movie.id)}
+                                                        />
+                                                    </div>
+                                                )}
                                             </li>
                                         );
                                     })}
@@ -816,6 +841,12 @@ export default function InternalMoviesPage() {
                         </div>
                     )}
                 </section>
+
+                {flagError ? (
+                    <p style={{ color: '#FFB3BB', fontSize: '0.9rem', marginTop: '1rem', textAlign: 'center' }}>
+                        {flagError}
+                    </p>
+                ) : null}
 
                 {error && movies.length > 0 ? (
                     <p style={{ color: '#FFB3BB', fontSize: '0.9rem', marginTop: '1rem', textAlign: 'center' }}>

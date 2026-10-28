@@ -76,6 +76,7 @@ model Video {
   actors       ActorOnVideo[]
   userRatings  UserRating[]
   adminActions AdminActionLog[]
+  flags        VideoFlag[]
   series       Series? @relation(fields: [seriesId], references: [id], onDelete: SetNull)
 }
 
@@ -177,6 +178,7 @@ model User {
   subscriptions     BillingSubscription[]
   ratings           UserRating[]
   adminActions      AdminActionLog[]
+  videoFlags        VideoFlag[]
 
   @@index([email])
   @@index([username])
@@ -389,6 +391,23 @@ model IssueReport {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+// An admin's note that a movie's metadata (title, poster, description, year) looks wrong.
+model VideoFlag {
+  id          String    @id @default(cuid())
+  videoId     String
+  flaggedById String?
+  reason      String?
+  status      String    @default("open") // open, resolved
+  createdAt   DateTime  @default(now())
+  resolvedAt  DateTime?
+
+  video       Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  flaggedBy   User?     @relation(fields: [flaggedById], references: [id], onDelete: SetNull)
+
+  @@index([videoId])
+  @@index([status])
 }
 
 model Reel {
