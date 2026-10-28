@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useSession } from '@/context/SessionContext';
 import { ConfirmModal } from '@/components';
 import CinematicRibbonBanner from './CinematicRibbonBanner';
-import { BarChart3, LogIn, ArrowLeft, User, Settings, Bookmark, CreditCard, LogOut } from 'lucide-react';
+import { BarChart3, Box, LogIn, ArrowLeft, User, Settings, Bookmark, CreditCard, LogOut } from 'lucide-react';
 
 const menuLinkStyle: CSSProperties = {
     display: 'flex',
@@ -77,6 +77,15 @@ export default function Navbar() {
                 </div>
 
                 <div className="app-topbar__actions">
+                    <Link
+                        href="/3d"
+                        className="app-topbar__icon-button"
+                        aria-label="Browse the 3D video store"
+                        title="3D Store"
+                    >
+                        <Box size={18} />
+                    </Link>
+
                     {userRole === 'admin' ? (
                         <Link
                             href="/account/dashboard"
