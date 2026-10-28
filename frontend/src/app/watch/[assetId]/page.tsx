@@ -3,11 +3,12 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { UserRatingPanel, VideoPlayer } from '@/components';
+import { FlagMovieButton, UserRatingPanel, VideoPlayer } from '@/components';
 import { PLAY_STORE_URL } from '@/lib/constants';
 import { ExternalLink, Loader2, ArrowLeft, ListVideo, Play } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { buildWatchHref, normalizeAssetReference } from '@/lib/watch-asset';
+import { useVideoFlags } from '@/lib/use-video-flags';
 
 interface Video {
     id: string;
@@ -62,6 +63,8 @@ export default function WatchPage() {
     const [error, setError] = useState<string | null>(null);
     const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
     const { user, loading: sessionLoading } = useSession();
+    const isAdmin = user?.role === 'admin';
+    const { flaggedIds, busyId, error: flagError, flag, unflag } = useVideoFlags(isAdmin);
 
     // Check authentication on mount
     useEffect(() => {
@@ -174,6 +177,10 @@ export default function WatchPage() {
         <>
             <style>{`
                 @media (max-width: 1024px) {
+                    .watch-meta-grid {
+                        grid-template-columns: 1fr !important;
+                        gap: 1.5rem !important;
+                    }
                     .watch-grid {
                         grid-template-columns: 1fr !important;
                         gap: 2rem !important;
@@ -241,7 +248,7 @@ export default function WatchPage() {
                 <div
                     className="watch-content"
                     style={{
-                        maxWidth: '1200px',
+                        maxWidth: '1500px',
                         ...(isSeries ? { maxWidth: '1600px' } : {}),
                         margin: '-200px auto 0',
                         padding: '0 2rem 4rem',
@@ -254,8 +261,8 @@ export default function WatchPage() {
                         className="watch-grid"
                         style={{
                             display: 'grid',
-                            gridTemplateColumns: isSeries ? 'minmax(0, 1fr) 360px' : '1fr 1fr',
-                            gap: isSeries ? '1.25rem' : '4rem',
+                            gridTemplateColumns: isSeries ? 'minmax(0, 1fr) 360px' : 'minmax(0, 1fr)',
+                            gap: isSeries ? '1.25rem' : '2.5rem',
                             alignItems: 'start'
                         }}
                     >
@@ -268,6 +275,9 @@ export default function WatchPage() {
                                     background: '#000',
                                     boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
                                     aspectRatio: '16 / 9',
+                                    // Fill the column, but stay inside the window so the controls are never pushed off-screen.
+                                    width: 'min(100%, calc((100vh - 96px) * 16 / 9))',
+                                    margin: '0 auto',
                                 }}
                             >
                                 <VideoPlayer
@@ -310,6 +320,16 @@ export default function WatchPage() {
                                         </p>
                                     )}
                                     <UserRatingPanel videoId={video.id} />
+                                    {isAdmin && (
+                                        <div style={{ marginTop: '1rem' }}>
+                                            <FlagMovieButton
+                                                flagged={flaggedIds.has(video.id)}
+                                                busy={busyId === video.id}
+                                                onFlag={(reason) => flag(video.id, reason)}
+                                                onUnflag={() => unflag(video.id)}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -404,7 +424,11 @@ export default function WatchPage() {
                                 )}
                             </aside>
                         ) : (
-                        <div>
+                        <div
+                            className="watch-meta-grid"
+                            style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(0, 1fr)', gap: '3rem', alignItems: 'start' }}
+                        >
+                            <div>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
                                 <span style={{
                                     padding: '0.4rem 0.75rem',
@@ -452,6 +476,22 @@ export default function WatchPage() {
 
                             <UserRatingPanel videoId={video.id} />
 
+                            {isAdmin && (
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <FlagMovieButton
+                                        flagged={flaggedIds.has(video.id)}
+                                        busy={busyId === video.id}
+                                        onFlag={(reason) => flag(video.id, reason)}
+                                        onUnflag={() => unflag(video.id)}
+                                    />
+                                    {flagError && (
+                                        <div style={{ color: '#FFB3BB', fontSize: '0.8rem', marginTop: '0.5rem' }}>{flagError}</div>
+                                    )}
+                                </div>
+                            )}
+                            </div>
+
+                            <div>
                             {video.sourceProvider === 'internet_archive' && (
                                 <div style={{
                                     marginBottom: '2rem',
@@ -506,6 +546,7 @@ export default function WatchPage() {
                                 <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 'auto', textDecoration: 'none' }}>
                                     <img src="/google-play.svg" alt="Google Play" style={{ height: '40px', width: 'auto' }} />
                                 </a>
+                            </div>
                             </div>
                         </div>
                         )}

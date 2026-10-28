@@ -1,3 +1,5 @@
+import { releaseYearOf } from './title-key.ts';
+
 export interface ArchivePreset {
     id: string;
     label: string;
@@ -214,11 +216,11 @@ export const buildArchiveDownloadUrl = (identifier: string, fileName: string) =>
     return `${IA_BASE}/download/${identifier}/${encodedName}`;
 };
 
-export async function searchArchiveIdentifiers(query: string, limit: number, page = 1, sort?: string | null) {
+export async function searchArchiveDocs(query: string, limit: number, page = 1, sort?: string | null) {
     const rows = Math.min(Math.max(limit, 1), 100);
     const url = new URL(`${IA_BASE}/advancedsearch.php`);
     url.searchParams.set('q', query);
-    url.searchParams.set('fl[]', 'identifier');
+    for (const field of ['identifier', 'title', 'year']) url.searchParams.append('fl[]', field);
     url.searchParams.set('rows', rows.toString());
     url.searchParams.set('page', Math.max(1, page).toString());
     url.searchParams.set('output', 'json');
@@ -238,8 +240,23 @@ export async function searchArchiveIdentifiers(query: string, limit: number, pag
     }
 
     const data = await response.json();
-    const docs = data?.response?.docs || [];
-    return docs.map((doc: { identifier?: string }) => doc.identifier).filter(Boolean);
+    const docs: Array<{ identifier?: string; title?: string | string[]; year?: string | number }> =
+        data?.response?.docs || [];
+    return docs
+        .filter((doc) => doc.identifier)
+        .map((doc) => {
+            const title = Array.isArray(doc.title) ? doc.title[0] : doc.title;
+            return {
+                identifier: doc.identifier as string,
+                title: title ? String(title) : null,
+                year: releaseYearOf(doc.year, title ? String(title) : null),
+            };
+        });
+}
+
+export async function searchArchiveIdentifiers(query: string, limit: number, page = 1, sort?: string | null) {
+    const docs = await searchArchiveDocs(query, limit, page, sort);
+    return docs.map((doc) => doc.identifier);
 }
 
 export async function fetchArchiveMetadata(identifier: string): Promise<ArchiveMetadataResponse> {

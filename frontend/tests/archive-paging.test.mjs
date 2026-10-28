@@ -52,3 +52,35 @@ test('stops scanning after the per-request page cap', async () => {
   assert.equal(result.nextPage, 21);
   assert.equal(result.exhausted, false);
 });
+
+const { collectFreshDocs } = await import('../src/lib/archive-paging.ts');
+
+const docsArchive = archive.map((identifier) => ({ identifier, title: identifier, year: null }));
+const searchDocs = async (_query, rows, page) => docsArchive.slice((page - 1) * rows, page * rows);
+const knownDocs = (ids) => async (batch) => new Set(batch.map((d) => d.identifier).filter((id) => ids.has(id)));
+
+test('collectFreshDocs resumes exactly after the last film it returned', async () => {
+  const first = await collectFreshDocs({
+    query: 'q', limit: 30, startPage: 1, search: searchDocs, findKnown: knownDocs(new Set(['film-001'])),
+  });
+  assert.equal(first.docs.length, 30);
+  assert.equal(first.docs[0].identifier, 'film-000');
+  assert.equal(first.docs[1].identifier, 'film-002');
+  assert.equal(first.skippedExisting, 1);
+
+  const second = await collectFreshDocs({
+    query: 'q', limit: 5, startPage: first.nextPage, startOffset: first.nextOffset,
+    search: searchDocs, findKnown: knownDocs(new Set()),
+  });
+  assert.deepEqual(second.docs.map((d) => d.identifier), ['film-031', 'film-032', 'film-033', 'film-034', 'film-035']);
+});
+
+test('collectFreshDocs rolls over to the next page and reports exhaustion', async () => {
+  const result = await collectFreshDocs({
+    query: 'q', limit: 500, startPage: 2, startOffset: 90, search: searchDocs, findKnown: knownDocs(new Set()),
+  });
+
+  assert.equal(result.docs.length, 250 - 190);
+  assert.equal(result.docs[0].identifier, 'film-190');
+  assert.equal(result.exhausted, true);
+});

@@ -23,3 +23,4 @@ export { default as ConfirmModal } from './ConfirmModal';
 export { AppBanner } from './AppBanner';
 export { Toast, useToast } from './Toast';
 export type { ToastType } from './Toast';
+export { default as FlagMovieButton } from './FlagMovieButton';
