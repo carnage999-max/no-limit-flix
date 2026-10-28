@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ButtonPrimary } from '@/components';
 import { ARCHIVE_PRESETS, DEFAULT_ARCHIVE_PRESET_ID } from '@/lib/internet-archive';
@@ -17,9 +17,28 @@ interface ImportResult {
     fileSize?: string | null;
     duration?: number | null;
     sourcePageUrl?: string;
+    titleKey?: string | null;
     status: 'imported' | 'updated' | 'skipped' | 'failed' | 'ready' | 'queued' | 'reconciled' | 'existing';
     reason?: string;
 }
+
+interface SearchCursor {
+    page: number;
+    offset: number;
+}
+
+// Films examined per request while searching; small enough that results appear within a few seconds.
+const SCAN_BATCH_SIZE = 40;
+
+const FILTER_LABELS: Record<string, string> = {
+    alreadyInLibrary: 'already in the library',
+    duplicateTitle: 'duplicate titles',
+    excludedTitle: 'trailers, shorts or clips',
+    tooShort: 'too short for a feature',
+    noPlayableFile: 'no playable file',
+    notAMovie: 'not a movie',
+    lookupFailed: 'archive lookup failed',
+};
 
 interface ImportSummary {
     requested?: number;
@@ -38,6 +57,11 @@ interface ImportSummary {
     seriesTitle?: string | null;
     shuffleSeed?: string | null;
     totalAvailable?: number | null;
+    scanned?: number;
+    filtered?: Record<string, number>;
+    filteredTotal?: number;
+    cursor?: SearchCursor;
+    exhausted?: boolean;
 }
 
 interface WorkerJobStatus {
@@ -127,6 +151,11 @@ export default function AdminImportPage() {
     const [jobStatus, setJobStatus] = useState<WorkerJobStatus | null>(null);
     const [reconcileLoading, setReconcileLoading] = useState(false);
     const [refreshLoading, setRefreshLoading] = useState(false);
+    const [cursor, setCursor] = useState<SearchCursor | null>(null);
+    const [exhausted, setExhausted] = useState(false);
+    const [scanning, setScanning] = useState(false);
+    const [scanStats, setScanStats] = useState<{ scanned: number; filtered: Record<string, number> }>({ scanned: 0, filtered: {} });
+    const stopRequested = useRef(false);
 
     const presetOptions = useMemo(() => ARCHIVE_PRESETS, []);
 
@@ -202,6 +231,95 @@ export default function AdminImportPage() {
             setError(getErrorMessage(err, 'Import failed'));
         } finally {
             setLoading(false);
+        }
+    };
+
+    // Movie search: keeps asking the server for the next batch from a cursor until `limit` new films
+    // are found, showing each batch as it arrives instead of waiting for one long request.
+    const runFind = async (reset: boolean) => {
+        stopRequested.current = false;
+        setScanning(true);
+        setError('');
+        if (reset) {
+            setSelectedIdentifiers({});
+            setJobId(null);
+            setJobStatus(null);
+        }
+
+        let collected = reset ? [] : results;
+        let position: SearchCursor = reset || !cursor ? { page: 1, offset: 0 } : cursor;
+        let stats = reset ? { scanned: 0, filtered: {} as Record<string, number> } : scanStats;
+        const target = collected.length + limit;
+        const knownTitles = new Set(collected.map((item) => item.titleKey).filter(Boolean));
+        const knownIds = new Set(collected.map((item) => item.identifier));
+        let selectBudget = limit;
+        if (reset) {
+            setResults([]);
+            setExhausted(false);
+            setScanStats(stats);
+        }
+
+        try {
+            while (!stopRequested.current && collected.length < target) {
+                const res = await fetch('/api/admin/archive/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        preset,
+                        limit: SCAN_BATCH_SIZE,
+                        allowMkv,
+                        importType: 'movie',
+                        cursor: position,
+                        dryRun: true
+                    })
+                });
+                const data = await readApiJson<{ summary?: ImportSummary; results?: ImportResult[] }>(res);
+                if (!res.ok) {
+                    throw new Error(buildApiErrorMessage(data, 'Search failed'));
+                }
+
+                const filtered = { ...stats.filtered };
+                const fresh: ImportResult[] = [];
+                for (const item of data.results || []) {
+                    const duplicate = knownIds.has(item.identifier) || (item.titleKey && knownTitles.has(item.titleKey));
+                    if (duplicate) {
+                        filtered.duplicateTitle = (filtered.duplicateTitle || 0) + 1;
+                        continue;
+                    }
+                    knownIds.add(item.identifier);
+                    if (item.titleKey) knownTitles.add(item.titleKey);
+                    fresh.push(item);
+                }
+                for (const [reason, count] of Object.entries(data.summary?.filtered || {})) {
+                    filtered[reason] = (filtered[reason] || 0) + count;
+                }
+                stats = { scanned: stats.scanned + (data.summary?.scanned ?? 0), filtered };
+
+                collected = [...collected, ...fresh];
+                const autoSelect = fresh.slice(0, Math.max(selectBudget, 0));
+                selectBudget -= autoSelect.length;
+                setResults(collected);
+                setSelectedIdentifiers((prev) => {
+                    const next = { ...prev };
+                    autoSelect.forEach((item) => {
+                        next[getRowKey(item)] = true;
+                    });
+                    return next;
+                });
+                setScanStats(stats);
+                setSummary({ ready: collected.length, searchQuery: data.summary?.searchQuery });
+
+                position = data.summary?.cursor || position;
+                setCursor(position);
+                if (data.summary?.exhausted) {
+                    setExhausted(true);
+                    break;
+                }
+            }
+        } catch (err: unknown) {
+            setError(getErrorMessage(err, 'Search failed'));
+        } finally {
+            setScanning(false);
         }
     };
 
@@ -375,6 +493,22 @@ export default function AdminImportPage() {
         setTotalAvailable(null);
     }, [preset, importType, seriesListUrl, limit]);
 
+    useEffect(() => {
+        stopRequested.current = true;
+        setCursor(null);
+        setExhausted(false);
+        setScanStats({ scanned: 0, filtered: {} });
+    }, [preset, importType]);
+
+    // Rows the admin cannot act on (already owned, unplayable, ...) are never listed.
+    const visibleResults = useMemo(() => results.filter((item) => item.status !== 'skipped'), [results]);
+    const busy = loading || scanning;
+    const filteredTotal = Object.values(scanStats.filtered).reduce((sum, count) => sum + count, 0);
+    const filteredBreakdown = Object.entries(scanStats.filtered)
+        .filter(([, count]) => count > 0)
+        .map(([reason, count]) => `${count} ${FILTER_LABELS[reason] || reason}`)
+        .join(', ');
+
     const toggleSelectAll = () => {
         if (readyIdentifiers.length === 0) return;
         if (allReadySelected) {
@@ -520,7 +654,7 @@ export default function AdminImportPage() {
                     <input
                         type="number"
                         min={1}
-                        max={200}
+                        max={1000}
                         value={limit}
                         onChange={(e) => setLimit(Number(e.target.value))}
                         style={{
@@ -535,9 +669,10 @@ export default function AdminImportPage() {
                     />
                 </div>
 
+                {importType === 'series' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                        {importType === 'series' ? 'Discovery Page' : 'Page'}
+                        Discovery Page
                     </label>
                     <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <button
@@ -595,9 +730,10 @@ export default function AdminImportPage() {
                         )}
                     </div>
                     <span style={{ color: '#A7ABB4', fontSize: '0.75rem' }}>
-                        {importType === 'series' ? 'Use Next if you want a different detected series.' : 'Use Preview to load this page.'}
+                        {importType === 'series' ? 'Use Next if you want a different detected series.' : ''}
                     </span>
                 </div>
+                )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <label style={{ fontSize: '0.75rem', color: '#A7ABB4', letterSpacing: '0.12em', textTransform: 'uppercase' }}>File Preference</label>
@@ -615,21 +751,40 @@ export default function AdminImportPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: '0.75rem' }}>
                     <ButtonPrimary
-                        onClick={() => handlePreview()}
-                        disabled={loading || (importType === 'series' && !seriesListUrl.trim())}
+                        onClick={() => (importType === 'movie' ? runFind(true) : handlePreview())}
+                        disabled={busy || (importType === 'series' && !seriesListUrl.trim())}
                         fullWidth
                     >
-                        {loading ? (
+                        {busy ? (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Loading...
+                                {scanning ? `Searching... ${results.length} found` : 'Loading...'}
                             </span>
-                        ) : 'Preview'}
+                        ) : importType === 'movie' ? 'Find films' : 'Preview'}
                     </ButtonPrimary>
+                    {scanning && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                stopRequested.current = true;
+                            }}
+                            style={{
+                                padding: '0.6rem 1rem',
+                                borderRadius: '0.75rem',
+                                background: 'transparent',
+                                border: '1px solid rgba(167, 171, 180, 0.3)',
+                                color: '#A7ABB4',
+                                fontSize: '0.9rem',
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Stop searching
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={handleImportSelected}
-                        disabled={loading || readyIdentifiers.length === 0 || !readyIdentifiers.some((id) => selectedIdentifiers[id])}
+                        disabled={busy || readyIdentifiers.length === 0 || !readyIdentifiers.some((id) => selectedIdentifiers[id])}
                         style={{
                             padding: '0.75rem 1rem',
                             borderRadius: '0.75rem',
@@ -638,8 +793,8 @@ export default function AdminImportPage() {
                             color: '#D4AF37',
                             fontWeight: 600,
                             fontSize: '0.95rem',
-                            cursor: loading ? 'not-allowed' : 'pointer',
-                            opacity: loading || readyIdentifiers.length === 0 || !readyIdentifiers.some((id) => selectedIdentifiers[id]) ? 0.5 : 1
+                            cursor: busy ? 'not-allowed' : 'pointer',
+                            opacity: busy || readyIdentifiers.length === 0 || !readyIdentifiers.some((id) => selectedIdentifiers[id]) ? 0.5 : 1
                         }}
                     >
                         Import Selected
@@ -820,13 +975,13 @@ export default function AdminImportPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {results.length === 0 ? (
+                            {visibleResults.length === 0 ? (
                                 <tr>
                                     <td colSpan={8} style={{ padding: '1.5rem', color: '#A7ABB4' }}>
-                                        No results yet.
+                                        {scanning ? 'Searching the archive...' : exhausted ? 'No new films left for this preset.' : 'No results yet.'}
                                     </td>
                                 </tr>
-                            ) : results.map((result) => (
+                            ) : visibleResults.map((result) => (
                                 <tr key={`${result.identifier}-${result.fileName || 'none'}`} style={{ borderTop: '1px solid rgba(167, 171, 180, 0.05)' }}>
                                     <td style={{ padding: '1rem' }}>
                                         {result.status === 'ready' ? (
@@ -922,6 +1077,33 @@ export default function AdminImportPage() {
                         </tbody>
                     </table>
                 </div>
+                {importType === 'movie' && (scanStats.scanned > 0 || scanning) && (
+                    <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                        <span style={{ color: '#A7ABB4', fontSize: '0.8rem' }} title={filteredBreakdown}>
+                            {visibleResults.length} new films found after checking {scanStats.scanned}
+                            {filteredTotal > 0 ? ` (${filteredTotal} not importable${filteredBreakdown ? `: ${filteredBreakdown}` : ''})` : ''}
+                        </span>
+                        {!scanning && !exhausted && cursor && (
+                            <button
+                                type="button"
+                                onClick={() => runFind(false)}
+                                disabled={busy}
+                                style={{
+                                    padding: '0.6rem 1rem',
+                                    borderRadius: '0.75rem',
+                                    background: 'rgba(212, 175, 55, 0.15)',
+                                    border: '1px solid rgba(212, 175, 55, 0.35)',
+                                    color: '#D4AF37',
+                                    fontWeight: 600,
+                                    fontSize: '0.85rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Find {limit} more
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

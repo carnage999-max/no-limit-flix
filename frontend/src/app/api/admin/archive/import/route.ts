@@ -12,9 +12,13 @@ import {
 } from '@/lib/internet-archive';
 import {
     buildArchiveIdentifier,
+    collectFreshDocs,
     collectFreshIdentifiers,
-    findKnownArchiveIdentifiers
+    findKnownArchiveIdentifiers,
+    loadLibraryTitleIndex
 } from '@/lib/archive-candidates';
+import { mapWithConcurrency } from '@/lib/concurrency';
+import { isKnownFilm, titleKey } from '@/lib/title-key';
 import { requireAdmin } from '@/lib/admin-auth';
 import { writeMediaBuffer } from '@/lib/media-storage';
 import { recordAdminAction } from '@/lib/admin-actions';
@@ -40,6 +44,8 @@ interface ImportResult {
     fileSize?: string | null;
     duration?: number | null;
     sourcePageUrl?: string;
+    /** Normalised title, so a client can drop the same film found under a second archive item. */
+    titleKey?: string;
     status: ImportResultStatus;
     reason?: string;
 }
@@ -1251,6 +1257,97 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Movie preview: walk the archive from a cursor and return only films that can be imported.
+        // Everything else (already owned, trailers, too short, no playable file) is counted, not listed.
+        if (dryRun && contentType === 'movie' && !preset.bundleIdentifier && !force
+            && providedItems.length === 0 && providedIdentifiers.length === 0) {
+            const scanSize = Math.min(Math.max(Number(body?.limit) || 40, 1), 100);
+            const fresh = await collectFreshDocs({
+                query: preset.query,
+                sort: preset.sort,
+                limit: scanSize,
+                startPage: Math.max(Number(body?.cursor?.page) || 1, 1),
+                startOffset: Math.max(Number(body?.cursor?.offset) || 0, 0),
+            });
+
+            const filtered: Record<string, number> = {};
+            const filterOut = (reason: string) => {
+                filtered[reason] = (filtered[reason] || 0) + 1;
+            };
+            if (fresh.skippedExisting > 0) filtered.alreadyInLibrary = fresh.skippedExisting;
+
+            const library = await loadLibraryTitleIndex();
+            const seenTitles = new Set<string>();
+            const candidates = fresh.docs.filter((doc) => {
+                if (isExcludedTitle(doc.title || undefined)) {
+                    filterOut('excludedTitle');
+                    return false;
+                }
+                const key = titleKey(doc.title);
+                if (key && seenTitles.has(key)) {
+                    filterOut('duplicateTitle');
+                    return false;
+                }
+                if (key) seenTitles.add(key);
+                return true;
+            });
+
+            // Only the archive's own metadata is needed to decide; posters and OMDb lookups happen at import.
+            const evaluated = await mapWithConcurrency(candidates, 6, async (doc): Promise<ImportResult | { skip: string }> => {
+                try {
+                    const { metadata, files } = await fetchArchiveMetadata(doc.identifier);
+                    if (metadata?.mediatype && String(metadata.mediatype).toLowerCase() !== 'movies') {
+                        return { skip: 'notAMovie' };
+                    }
+                    const bestFile = pickBestPlayableFile(files, allowMkv);
+                    if (!bestFile) return { skip: 'noPlayableFile' };
+
+                    const title = stringifyMetadata(metadata?.title) || doc.identifier;
+                    if (isExcludedTitle(title) || isExcludedTitle(bestFile.name)) return { skip: 'excludedTitle' };
+
+                    const duration = parseDurationSeconds(bestFile.length)
+                        || parseDurationSeconds(stringifyMetadata(metadata?.length) || undefined);
+                    if (duration && duration < MIN_FEATURE_DURATION_SECONDS) return { skip: 'tooShort' };
+                    if (isKnownFilm(library, title, doc.year)) return { skip: 'alreadyInLibrary' };
+
+                    return {
+                        identifier: doc.identifier,
+                        title,
+                        fileName: bestFile.name,
+                        playbackUrl: buildArchiveDownloadUrl(doc.identifier, bestFile.name),
+                        fileSize: bestFile.size ? String(bestFile.size) : null,
+                        duration,
+                        sourcePageUrl: `https://archive.org/details/${doc.identifier}`,
+                        titleKey: titleKey(title),
+                        status: 'ready',
+                    };
+                } catch {
+                    return { skip: 'lookupFailed' };
+                }
+            });
+
+            const ready: ImportResult[] = [];
+            for (const outcome of evaluated) {
+                if ('skip' in outcome) filterOut(outcome.skip);
+                else ready.push(outcome);
+            }
+
+            return NextResponse.json({
+                success: true,
+                presetId: preset.id,
+                results: ready,
+                summary: {
+                    ready: ready.length,
+                    scanned: fresh.docs.length + fresh.skippedExisting,
+                    filtered,
+                    filteredTotal: Object.values(filtered).reduce((sum, count) => sum + count, 0),
+                    searchQuery: preset.query,
+                    cursor: { page: fresh.nextPage, offset: fresh.nextOffset },
+                    exhausted: fresh.exhausted,
+                },
+            });
+        }
+
         const hydrateBundleItems = async () => {
             if (!preset.bundleIdentifier) return null;
             const bundleId = preset.bundleIdentifier;
@@ -1748,6 +1845,7 @@ export async function POST(request: NextRequest) {
             fileSize: result.fileSize ?? null,
             duration: result.duration ?? null,
             sourcePageUrl: result.sourcePageUrl ?? null,
+            titleKey: result.titleKey ?? null,
             status: result.status,
             reason: result.reason ?? null
         }));
