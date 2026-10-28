@@ -17,7 +17,6 @@
     "@aws-sdk/s3-request-presigner": "^3.992.0",
     "@openrouter/sdk": "^0.4.0",
     "@prisma/client": "^6.3.0",
-    "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@react-three/postprocessing": "^3.0.5",
     "@stripe/react-stripe-js": "^6.3.0",
