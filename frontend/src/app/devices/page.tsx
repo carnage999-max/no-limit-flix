@@ -6,6 +6,7 @@ import { Monitor, Smartphone, LogOut, RefreshCcw, Pencil } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { useToast } from '@/components/Toast';
 import ConfirmModal from '@/components/ConfirmModal';
+import { formatRelativeTime } from '@/lib/format';
 
 interface DeviceSession {
     id: string;
@@ -343,7 +344,7 @@ export default function DevicesPage() {
                                             {formatLocation(session)}
                                         </div>
                                         <div style={{ color: '#8C9099', fontSize: '0.75rem', marginTop: '0.35rem' }}>
-                                            Last active {new Date(session.lastUsedAt).toLocaleString()} {session.ipAddress ? `· ${session.ipAddress}` : ''}
+                                            Last active {formatRelativeTime(session.lastUsedAt)} {session.ipAddress ? `· ${session.ipAddress}` : ''}
                                         </div>
                                     </div>
                                     <div style={{ position: 'relative' }}>
@@ -506,7 +507,7 @@ export default function DevicesPage() {
                                                 {session.deviceName || getDeviceLabel(session)}
                                             </div>
                                             <div style={{ marginTop: '0.25rem' }}>
-                                                Last active {new Date(session.lastUsedAt).toLocaleString()}
+                                                Last active {formatRelativeTime(session.lastUsedAt)}
                                             </div>
                                         </div>
                                     ))}

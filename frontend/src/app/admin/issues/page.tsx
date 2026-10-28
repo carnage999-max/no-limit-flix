@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { formatDateTime } from '@/lib/format';
 
 interface IssueItem {
     id: string;
@@ -203,7 +204,7 @@ export default function AdminIssuesPage() {
                             <div style={{ display: 'grid', gap: '0.4rem' }}>
                                 <div style={{ fontWeight: 700 }}>{issue.issue}</div>
                                 <div style={{ color: '#A7ABB4', fontSize: '0.85rem' }}>
-                                    {issue.name || 'Anonymous'} · {issue.email || 'no email'} · {new Date(issue.createdAt).toLocaleString()}
+                                    {issue.name || 'Anonymous'} · {issue.email || 'no email'} · {formatDateTime(issue.createdAt)}
                                 </div>
                                 {issue.attachments?.length ? (
                                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.3rem' }}>

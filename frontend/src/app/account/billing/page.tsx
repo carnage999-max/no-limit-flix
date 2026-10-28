@@ -6,6 +6,7 @@ import { CreditCard, ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucid
 import { useSession } from '@/context/SessionContext';
 import SubscriptionGateScreen from '@/components/SubscriptionGateScreen';
 import { useToast } from '@/components/Toast';
+import { formatDate } from '@/lib/format';
 
 interface BillingSummary {
     plan: {
@@ -354,7 +355,7 @@ function BillingPageContent() {
                             {summary?.billing.currentPeriodEnd && (
                                 <div style={{ color: '#A7ABB4', fontSize: '0.85rem', marginTop: '0.55rem', lineHeight: 1.5 }}>
                                     {summary.billing.cancelAtPeriodEnd ? 'Access ends' : 'Renews'} on{' '}
-                                    {new Date(summary.billing.currentPeriodEnd).toLocaleDateString()}
+                                    {formatDate(summary.billing.currentPeriodEnd)}
                                 </div>
                             )}
                         </div>
@@ -542,12 +543,12 @@ function BillingPageContent() {
                             </div>
                             {summary.subscription?.trialEnd && (
                                 <div style={{ color: '#F6D365', fontSize: '0.92rem' }}>
-                                    Trial ends on {new Date(summary.subscription.trialEnd).toLocaleDateString()}.
+                                    Trial ends on {formatDate(summary.subscription.trialEnd)}.
                                 </div>
                             )}
                             {summary.subscription?.currentPeriodEnd && (
                                 <div style={{ color: '#D1D5DB', fontSize: '0.92rem' }}>
-                                    {summary.subscription.cancelAtPeriodEnd ? 'Membership ends' : 'Next renewal'} on {new Date(summary.subscription.currentPeriodEnd).toLocaleDateString()}.
+                                    {summary.subscription.cancelAtPeriodEnd ? 'Membership ends' : 'Next renewal'} on {formatDate(summary.subscription.currentPeriodEnd)}.
                                 </div>
                             )}
                         </section>
