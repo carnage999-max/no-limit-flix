@@ -10,6 +10,10 @@
 !.yarn/releases
 !.yarn/versions
 
+# This project uses npm (package-lock.json is the tracked lockfile); a stray pnpm-lock.yaml
+# from someone running `pnpm install` here by habit should stay untracked, not get committed.
+/pnpm-lock.yaml
+
 # testing
 /coverage
 
