@@ -6,9 +6,11 @@ import { Heart } from 'lucide-react';
 import type { MoviePick } from '@/types';
 import { useFavorites } from '@/context/FavoritesContext';
 import { useSession } from '@/context/SessionContext';
+import { useVideoFlags } from '@/context/VideoFlagsContext';
 import { useToast } from './Toast';
 import { buildWatchHref } from '@/lib/watch-asset';
 import RatingBadge from './RatingBadge';
+import FlagMovieButton from './FlagMovieButton';
 
 interface TitleTileProps {
     movie: MoviePick;
@@ -19,6 +21,7 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
     const { isFavorite, toggleFavorite } = useFavorites();
     const { showToast } = useToast();
     const { user } = useSession();
+    const { canFlag, flaggedIds, busyId, flag, unflag } = useVideoFlags();
     const [isFav, setIsFav] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [posterSrc, setPosterSrc] = useState(movie.poster || '/poster-placeholder.svg');
@@ -216,6 +219,27 @@ export default function TitleTile({ movie, progressPercent }: TitleTileProps) {
                                 style={{ transition: 'all 0.2s' }}
                             />
                         </button>
+                    )}
+
+                    {/* Admins can flag wrong metadata straight from the list, without opening the movie.
+                        Series tiles link to a season page rather than one video, so they're left out. */}
+                    {canFlag && movie.assetId && !isSeries && (
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: user ? '3.25rem' : '0.5rem',
+                                right: '0.5rem',
+                                zIndex: 2,
+                            }}
+                        >
+                            <FlagMovieButton
+                                compact
+                                flagged={flaggedIds.has(movie.assetId)}
+                                busy={busyId === movie.assetId}
+                                onFlag={() => flag(movie.assetId as string)}
+                                onUnflag={() => unflag(movie.assetId as string)}
+                            />
+                        </div>
                     )}
                 </div>
 

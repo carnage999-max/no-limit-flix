@@ -8,7 +8,7 @@ import { buildWatchHref } from '@/lib/watch-asset';
 import type { RatingSummary } from '@/types';
 import { FlagMovieButton } from '@/components';
 import { useSession } from '@/context/SessionContext';
-import { useVideoFlags } from '@/lib/use-video-flags';
+import { useVideoFlags } from '@/context/VideoFlagsContext';
 
 interface MovieItem {
     id: string;
@@ -84,7 +84,7 @@ const buildMoviesUrl = (page: number, category: string, sortMode: SortMode, quer
 export default function InternalMoviesPage() {
     const { user } = useSession();
     const isAdmin = user?.role === 'admin';
-    const { flaggedIds, busyId, error: flagError, flag, unflag } = useVideoFlags(isAdmin);
+    const { flaggedIds, busyId, error: flagError, flag, unflag } = useVideoFlags();
     const [movies, setMovies] = useState<MovieItem[]>([]);
     const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
     const [categoryFilter, setCategoryFilter] = useState('all');
@@ -660,7 +660,7 @@ export default function InternalMoviesPage() {
                                                     <FlagMovieButton
                                                         flagged={flaggedIds.has(movie.id)}
                                                         busy={busyId === movie.id}
-                                                        onFlag={(reason) => flag(movie.id, reason)}
+                                                        onFlag={() => flag(movie.id)}
                                                         onUnflag={() => unflag(movie.id)}
                                                     />
                                                 </div>
@@ -797,7 +797,7 @@ export default function InternalMoviesPage() {
                                                         <FlagMovieButton
                                                             flagged={flaggedIds.has(movie.id)}
                                                             busy={busyId === movie.id}
-                                                            onFlag={(reason) => flag(movie.id, reason)}
+                                                            onFlag={() => flag(movie.id)}
                                                             onUnflag={() => unflag(movie.id)}
                                                         />
                                                     </div>

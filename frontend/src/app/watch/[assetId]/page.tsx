@@ -8,7 +8,7 @@ import { PLAY_STORE_URL } from '@/lib/constants';
 import { ExternalLink, Loader2, ArrowLeft, ListVideo, Play } from 'lucide-react';
 import { useSession } from '@/context/SessionContext';
 import { buildWatchHref, normalizeAssetReference } from '@/lib/watch-asset';
-import { useVideoFlags } from '@/lib/use-video-flags';
+import { useVideoFlags } from '@/context/VideoFlagsContext';
 
 interface Video {
     id: string;
@@ -64,7 +64,7 @@ export default function WatchPage() {
     const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
     const { user, loading: sessionLoading } = useSession();
     const isAdmin = user?.role === 'admin';
-    const { flaggedIds, busyId, error: flagError, flag, unflag } = useVideoFlags(isAdmin);
+    const { flaggedIds, busyId, error: flagError, flag, unflag } = useVideoFlags();
 
     // Check authentication on mount
     useEffect(() => {
@@ -325,7 +325,7 @@ export default function WatchPage() {
                                             <FlagMovieButton
                                                 flagged={flaggedIds.has(video.id)}
                                                 busy={busyId === video.id}
-                                                onFlag={(reason) => flag(video.id, reason)}
+                                                onFlag={() => flag(video.id)}
                                                 onUnflag={() => unflag(video.id)}
                                             />
                                         </div>
@@ -481,7 +481,7 @@ export default function WatchPage() {
                                     <FlagMovieButton
                                         flagged={flaggedIds.has(video.id)}
                                         busy={busyId === video.id}
-                                        onFlag={(reason) => flag(video.id, reason)}
+                                        onFlag={() => flag(video.id)}
                                         onUnflag={() => unflag(video.id)}
                                     />
                                     {flagError && (

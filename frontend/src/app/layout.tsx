@@ -55,6 +55,7 @@ import { SearchProvider } from "@/context/SearchContext";
 import { FavoritesProvider } from "@/context/FavoritesContext";
 import { CardViewProvider } from "@/context/CardViewContext";
 import { SessionProvider } from "@/context/SessionContext";
+import { VideoFlagsProvider } from "@/context/VideoFlagsContext";
 
 // ... (keep metadata exports)
 
@@ -80,8 +81,10 @@ export default function RootLayout({
           <SessionProvider>
             <SearchProvider>
               <FavoritesProvider>
-                <AppFrame>{children}</AppFrame>
-                <ToastContainer />
+                <VideoFlagsProvider>
+                  <AppFrame>{children}</AppFrame>
+                  <ToastContainer />
+                </VideoFlagsProvider>
               </FavoritesProvider>
             </SearchProvider>
           </SessionProvider>
