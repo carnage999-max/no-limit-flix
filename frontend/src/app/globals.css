@@ -11,6 +11,7 @@
   --accent-blue: #2fc2ff;
   --accent-teal: #26d0ce;
   --accent-rose: #ff49bc;
+  --nlf-red: #ff2d3d;
   --surface-soft: rgba(18, 18, 24, 0.78);
   --surface-strong: rgba(10, 10, 16, 0.92);
   --border-soft: rgba(255, 213, 130, 0.14);
@@ -42,6 +43,16 @@
   --color-accent-teal: var(--accent-teal);
   --color-accent-rose: var(--accent-rose);
   --font-sans: var(--font-display);
+
+  /* Aliases so the 3D store (components/store3d) can use nlf-* utility
+     classes while staying on the site's one color system. */
+  --color-nlf-black: var(--background);
+  --color-nlf-text: var(--foreground);
+  --color-nlf-muted: var(--silver);
+  --color-nlf-gold: var(--gold-mid);
+  --color-nlf-gold-light: var(--gold-light);
+  --color-nlf-gold-dark: var(--gold-dark);
+  --color-nlf-red: var(--nlf-red);
 }
 
 * {

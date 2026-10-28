@@ -13,6 +13,9 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
     const shouldHideChrome = !loading && Boolean(user) && billing?.requiresSubscription && !billing.access;
     const isBillingPage = pathname === '/account/billing';
     const showAdminButton = !loading && user?.role === 'admin' && !pathname.startsWith('/admin');
+    // The 3D store is a full-bleed immersive view with its own top bar and navigation —
+    // the regular nav would just double up and eat into its canvas.
+    const isImmersiveStore = pathname.startsWith('/3d');
 
     if (shouldHideChrome) {
         return (
@@ -20,6 +23,10 @@ export default function AppFrame({ children }: { children: React.ReactNode }) {
                 {isBillingPage ? children : null}
             </SubscriptionGate>
         );
+    }
+
+    if (isImmersiveStore) {
+        return <SubscriptionGate>{children}</SubscriptionGate>;
     }
 
     return (

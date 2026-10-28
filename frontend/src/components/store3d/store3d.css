@@ -1,0 +1,121 @@
+/*
+ * Styles scoped to the 3D store (/3d). Classes are prefixed s3d- so they can
+ * never collide with the rest of the site's CSS (which already defines a
+ * differently-tuned .glass-panel, for example). Color tokens come from the
+ * site-wide nlf-* theme aliases in app/globals.css, not from local variables,
+ * so this view always matches the rest of the brand.
+ */
+
+.s3d-page {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--nlf-black);
+}
+
+.s3d-glass-panel {
+  background: linear-gradient(180deg, rgba(20, 17, 13, 0.92), rgba(6, 5, 4, 0.88));
+  border: 1px solid rgba(255, 200, 90, 0.16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.s3d-text-glow-gold {
+  text-shadow: 0 0 18px rgba(245, 196, 82, 0.45);
+}
+
+.s3d-text-glow-red {
+  text-shadow: 0 0 12px rgba(255, 45, 61, 0.8), 0 0 28px rgba(255, 45, 61, 0.5);
+}
+
+@keyframes s3d-pulse-arrow {
+  0%,
+  100% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+.s3d-arrow-pulse {
+  animation: s3d-pulse-arrow 2.2s ease-in-out infinite;
+}
+
+@keyframes s3d-flicker {
+  0%,
+  19%,
+  21%,
+  23%,
+  54%,
+  56%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  22%,
+  55%,
+  57% {
+    opacity: 0.6;
+  }
+}
+
+.s3d-neon-flicker {
+  animation: s3d-flicker 6s infinite;
+}
+
+@keyframes s3d-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.s3d-panel-in {
+  animation: s3d-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes s3d-drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.s3d-drawer-backdrop {
+  animation: s3d-drawer-backdrop-in 200ms ease-out;
+}
+
+.s3d-btn-press {
+  transition:
+    transform 150ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 200ms ease,
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+
+.s3d-btn-press:active {
+  transform: scale(0.96);
+}
+
+.s3d-nav-item {
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease,
+    box-shadow 250ms ease;
+}
+
+.s3d-page canvas {
+  touch-action: none;
+}
